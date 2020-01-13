@@ -3,7 +3,7 @@ jobs:
    build-linux:
      working_directory: ~/please
      docker:
-       - image: thoughtmachine/please-servers:20190113
+       - image: thoughtmachine/please-servers:20190114
      steps:
        - checkout
        - restore_cache:
