@@ -1,0 +1,15 @@
+; This is a set of config properties for local development
+; (use `plz runlocal` to start the servers in that mode)
+[remote]
+url = localhost:7778
+casurl = localhost:7777
+instance = mettle
+secure = false
+numexecutors = 10
+displayurl = http://localhost:7779
+
+[build]
+hashfunction = sha256
+
+[please]
+location = ~/.please
