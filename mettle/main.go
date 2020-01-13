@@ -21,8 +21,9 @@ var opts = struct {
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
 	Queues struct {
-		RequestQueue  string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-		ResponseQueue string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+		RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+		ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+		ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
 	} `group:"Options controlling the pub/sub queues"`
 	Storage struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
@@ -85,6 +86,7 @@ func main() {
 	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
 	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
 	go metrics.Serve(opts.MetricsPort)
+	opts.Queues.ResponseQueue += opts.Queues.ResponseQueueSuffix
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(opts.Queues.RequestQueue)
