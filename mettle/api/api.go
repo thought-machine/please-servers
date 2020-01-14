@@ -50,6 +50,7 @@ func init() {
 	prometheus.MustRegister(totalRequests)
 	prometheus.MustRegister(cachedRequests)
 	prometheus.MustRegister(currentRequests)
+	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.

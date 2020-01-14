@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"time"
 
 	// Necessary to register providers that we'll use.
 	_ "gocloud.dev/blob/fileblob"
@@ -48,10 +49,35 @@ var bytesServed = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "bytes_served_total",
 })
+var readLatencies = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "elan",
+	Name:      "read_latency_seconds",
+	Buckets:   prometheus.DefBuckets,
+})
+var writeLatencies = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "elan",
+	Name:      "write_latency_seconds",
+	Buckets:   prometheus.DefBuckets,
+})
+var readDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "elan",
+	Name:      "read_duration_seconds",
+	Buckets:   prometheus.DefBuckets,
+})
+var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "elan",
+	Name:      "write_duration_seconds",
+	Buckets:   prometheus.DefBuckets,
+})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(bytesServed)
+	prometheus.MustRegister(readLatencies)
+	prometheus.MustRegister(writeLatencies)
+	prometheus.MustRegister(readDurations)
+	prometheus.MustRegister(writeDurations)
+	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.
@@ -210,6 +236,8 @@ func (s *server) GetTree(*pb.GetTreeRequest, pb.ContentAddressableStorage_GetTre
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
+	start := time.Now()
+	defer readDurations.Observe(time.Since(start).Seconds())
 	digest, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
@@ -240,6 +268,8 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
+	start := time.Now()
+	defer writeDurations.Observe(time.Since(start).Seconds())
 	req, err := srv.Recv()
 	if err != nil {
 		return err
@@ -269,6 +299,8 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 }
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
+	start := time.Now()
+	defer readLatencies.Observe(time.Since(start).Seconds())
 	r, err := s.bucket.NewRangeReader(ctx, s.key(prefix, digest), offset, length, nil)
 	if err != nil {
 		if gcerrors.Code(err) == gcerrors.NotFound {
@@ -280,6 +312,8 @@ func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest,
 }
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
+	start := time.Now()
+	defer readDurations.Observe(time.Since(start).Seconds())
 	r, err := s.readBlob(ctx, prefix, digest, 0, -1)
 	if err != nil {
 		return nil, err
@@ -298,6 +332,8 @@ func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest 
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
+	start := time.Now()
+	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	w, err := s.bucket.NewWriter(ctx, s.key(prefix, digest), nil)
@@ -314,6 +350,8 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 }
 
 func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
+	start := time.Now()
+	defer writeDurations.Observe(time.Since(start).Seconds())
 	b, err := proto.Marshal(message)
 	if err != nil {
 		return err
