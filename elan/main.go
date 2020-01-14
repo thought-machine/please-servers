@@ -2,6 +2,7 @@
 package main
 
 import (
+	"github.com/dustin/go-humanize"
 	"github.com/peterebden/go-cli-init"
 	"gopkg.in/op/go-logging.v1"
 
@@ -25,6 +26,11 @@ var opts = struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	} `group:"Options controlling TLS for the gRPC server"`
+	Cache struct {
+		MaxSize     ByteSize `long:"max_size" default:"10M" description:"Max size of in-memory cache"`
+		MaxItemSize ByteSize `long:"max_item_size" default:"100K" description:"Max size of any single item in the cache"`
+		NumCounters int64    `long:"num_counters" description:"Number of cache counters. Should be approx 10x the max number of items you expect it to hold"`
+	} `group:"Options controlling in-memory caching of blobs." namespace:"cache"`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
@@ -43,5 +49,16 @@ func main() {
 	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
 	go metrics.Serve(opts.MetricsPort)
 	log.Notice("Serving on :%d", opts.Port)
-	rpc.ServeForever(opts.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile)
+	rpc.ServeForever(opts.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, uint64(opts.Cache.MaxSize), uint64(opts.Cache.MaxItemSize), opts.Cache.NumCounters)
+}
+
+// A ByteSize is used for flags that represent some quantity of bytes that can be
+// passed as human-readable quantities (eg. "10G").
+type ByteSize uint64
+
+// UnmarshalFlag implements the flags.Unmarshaler interface.
+func (b *ByteSize) UnmarshalFlag(in string) error {
+	b2, err := humanize.ParseBytes(in)
+	*b = ByteSize(b2)
+	return err
 }

@@ -22,6 +22,7 @@ import (
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
+	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -69,6 +70,14 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:      "write_duration_seconds",
 	Buckets:   prometheus.DefBuckets,
 })
+var cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "cache_hits_total",
+})
+var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "cache_misses_total",
+})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -77,11 +86,13 @@ func init() {
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
 	prometheus.MustRegister(writeDurations)
+	prometheus.MustRegister(cacheHits)
+	prometheus.MustRegister(cacheMisses)
 	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, storage, keyFile, certFile string) {
+func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, maxCacheItemSize uint64, numCounters int64) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
@@ -94,6 +105,21 @@ func ServeForever(port int, storage, keyFile, certFile string) {
 		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		bucket:       bucket,
 	}
+	if numCounters == 0 {
+		// Assume that average object size is 1kb, so num counters will be * 10/1000 of that.
+		numCounters = int64(maxCacheSize) / 100
+	}
+	c, err := ristretto.NewCache(&ristretto.Config{
+		NumCounters: numCounters,
+		MaxCost:     int64(maxCacheSize),
+		BufferItems: 64, // recommended by upstream
+	})
+	if err != nil {
+		log.Fatalf("Failed to create cache: %s", err)
+	}
+	srv.cache = c
+	srv.maxCacheItemSize = int64(maxCacheItemSize)
+	log.Info("Initialised empty cache, max size %d, max item size %d", maxCacheSize, maxCacheItemSize)
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			logUnaryRequests,
@@ -116,8 +142,10 @@ func ServeForever(port int, storage, keyFile, certFile string) {
 }
 
 type server struct {
-	bucket       *blob.Bucket
-	bytestreamRe *regexp.Regexp
+	bucket           *blob.Bucket
+	bytestreamRe     *regexp.Regexp
+	cache            *ristretto.Cache
+	maxCacheItemSize int64
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -164,11 +192,14 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid hash '%s'", d.Hash)
 		}
 		go func(d *pb.Digest) {
-			if exists, _ := s.bucket.Exists(ctx, s.key("cas", d)); !exists {
-				mutex.Lock()
-				resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
-				mutex.Unlock()
-				log.Debug("Blob %s found to be missing", d.Hash)
+			key := s.key("cas", d)
+			if _, present := s.cachedBlob(key); !present {
+				if exists, _ := s.bucket.Exists(ctx, key); !exists {
+					mutex.Lock()
+					resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
+					mutex.Unlock()
+					log.Debug("Blob %s found to be missing", d.Hash)
+				}
 			}
 			wg.Done()
 		}(d)
@@ -299,22 +330,37 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 }
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
+	key := s.key(prefix, digest)
+	if blob, present := s.cachedBlob(key); present {
+		if length > 0 {
+			blob = blob[offset : offset+length]
+		}
+		return &countingReader{ioutil.NopCloser(bytes.NewReader(blob))}, nil
+	}
+	return s.readBlobUncached(ctx, key, digest, offset, length)
+}
+
+func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
 	start := time.Now()
 	defer func() { readLatencies.Observe(time.Since(start).Seconds()) }()
-	r, err := s.bucket.NewRangeReader(ctx, s.key(prefix, digest), offset, length, nil)
+	r, err := s.bucket.NewRangeReader(ctx, key, offset, length, nil)
 	if err != nil {
 		if gcerrors.Code(err) == gcerrors.NotFound {
 			return nil, status.Errorf(codes.NotFound, "Blob %s not found", digest.Hash)
 		}
 		return nil, err
 	}
-	return &countingReader{r: r}, err
+	return &countingReader{r: r}, nil
 }
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
+	key := s.key(prefix, digest)
+	if blob, present := s.cachedBlob(key); present {
+		return blob, nil
+	}
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	r, err := s.readBlob(ctx, prefix, digest, 0, -1)
+	r, err := s.readBlobUncached(ctx, key, digest, 0, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -331,22 +377,48 @@ func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest 
 	return nil
 }
 
+func (s *server) key(prefix string, digest *pb.Digest) string {
+	return fmt.Sprintf("%s/%c%c/%s", prefix, digest.Hash[0], digest.Hash[1], digest.Hash)
+}
+
+func (s *server) cachedBlob(key string) ([]byte, bool) {
+	if blob, present := s.cache.Get(key); present {
+		cacheHits.Inc()
+		return blob.([]byte), true
+	}
+	cacheMisses.Inc()
+	return nil, false
+}
+
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
+	key := s.key(prefix, digest)
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	w, err := s.bucket.NewWriter(ctx, s.key(prefix, digest), nil)
+	w, err := s.bucket.NewWriter(ctx, key, nil)
 	if err != nil {
 		return err
 	}
-	n, err := io.Copy(w, r)
+	var buf bytes.Buffer
+	var wc io.WriteCloser = w
+	var wr io.Writer = w
+	if digest.SizeBytes < s.maxCacheItemSize {
+		wr = io.MultiWriter(w, &buf)
+	}
+	n, err := io.Copy(wr, r)
 	bytesReceived.Add(float64(n))
 	if err != nil {
-		w.Close()
+		wc.Close()
 		return err
 	}
-	return w.Close()
+	if err := wc.Close(); err != nil {
+		return err
+	}
+	if digest.SizeBytes < s.maxCacheItemSize {
+		s.cache.Set(key, buf.Bytes(), digest.SizeBytes)
+	}
+	return nil
 }
 
 func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
@@ -357,10 +429,6 @@ func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Dig
 		return err
 	}
 	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b))
-}
-
-func (s *server) key(prefix string, digest *pb.Digest) string {
-	return fmt.Sprintf("%s/%c%c/%s", prefix, digest.Hash[0], digest.Hash[1], digest.Hash)
 }
 
 // bytestreamDigest returns the digest corresponding to a bytestream resource name.

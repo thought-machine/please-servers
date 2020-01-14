@@ -326,3 +326,22 @@ go_get(
     revision = "v1.2.0",
     deps = [":uuid"],
 )
+
+go_get(
+    name = "ristretto",
+    get = "github.com/dgraph-io/ristretto/...",
+    revision = "v0.0.1",
+    deps = [":xxhash"],
+)
+
+go_get(
+    name = "xxhash",
+    get = "github.com/cespare/xxhash",
+    revision = "v2.1.1",
+)
+
+go_get(
+    name = "humanize",
+    get = "github.com/dustin/go-humanize",
+    revision = "v1.0.0",
+)

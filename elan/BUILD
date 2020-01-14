@@ -6,6 +6,7 @@ go_binary(
         "//metrics",
         "//third_party/go:cli-init",
         "//third_party/go:logging",
+        "//third_party/go:humanize",
     ],
 )
 
