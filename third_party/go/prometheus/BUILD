@@ -21,8 +21,8 @@ go_get(
 
 go_get(
     name = "grpc-prometheus",
-    get = "github.com/grpc-ecosystem/go-grpc-prometheus",
-    revision = "v1.2.0",
+    get = "github.com/grpc-ecosystem/go-grpc-prometheus/...",
+    revision = "6af20e3a5340d5e6bde20c8a7a78699efe19ac0a",
     deps = [
         ":prometheus",
         "//third_party/go:grpc",

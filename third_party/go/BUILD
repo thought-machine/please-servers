@@ -62,13 +62,12 @@ go_get(
         "",
         "balancer",
         "balancer/base",
+        "balancer/grpclb/...",
         "balancer/roundrobin",
         "binarylog/...",
         "codes",
         "connectivity",
-        "credentials",
-        "credentials/internal",
-        "credentials/oauth",
+        "credentials/...",
         "encoding",
         "encoding/gzip",
         "encoding/proto",
@@ -113,16 +112,6 @@ go_get(
     strip = [
         "proto/proto3_proto",
         "conformance",
-    ],
-)
-
-go_get(
-    name = "protoc-gen-go",
-    binary = True,
-    get = [],
-    install = ["github.com/golang/protobuf/protoc-gen-go"],
-    deps = [
-        ":protobuf",
     ],
 )
 

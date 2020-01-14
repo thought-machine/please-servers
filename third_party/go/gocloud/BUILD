@@ -43,7 +43,7 @@ go_get(
 go_get(
     name = "cloud-storage",
     get = "cloud.google.com/go/storage",
-    revision = "v0.40.0",
+    revision = "v0.46.3",
     deps = [
         ":cloud-iam",
         ":cloud-internal",
@@ -53,7 +53,7 @@ go_get(
 go_get(
     name = "cloud-iam",
     get = "cloud.google.com/go/iam",
-    revision = "v0.40.0",
+    revision = "v0.46.3",
     deps = [
         ":api",
         ":cloud-metadata",
@@ -72,7 +72,7 @@ go_get(
         "trace",
         "version",
     ],
-    revision = "v0.40.0",
+    revision = "v0.46.3",
     deps = [
         ":genproto",
         ":api",
@@ -84,7 +84,7 @@ go_get(
 go_get(
     name = "cloud-metadata",
     get = "cloud.google.com/go/compute/metadata",
-    revision = "v0.40.0",
+    revision = "v0.46.3",
 )
 
 go_get(
@@ -94,10 +94,11 @@ go_get(
         "",
         "apiv1",
     ],
-    revision = "v0.40.0",
+    revision = "v0.46.3",
     deps = [
         ":cloud-iam",
         ":cloud-internal",
+        ":genproto",
         ":semaphore",
         "//third_party/go:errgroup",
     ],
@@ -113,24 +114,32 @@ go_get(
     name = "api",
     get = "google.golang.org/api/...",
     install = [
-        "gensupport",
+        "calendar/v3",
         "googleapi",
         "googleapi/internal/uritemplates",
         "googleapi/transport",
         "internal",
+        "internal/gensupport",
         "iterator",
         "option",
         "storage/v1",
         "sheets/v4",
+        "support/bundler",
         "transport",
         "transport/grpc",
         "transport/http",
         "transport/http/internal/propagation",
         "dataflow/...",
+        "compute/v1",
+        "container/v1",
+        "drive/v3",
     ],
-    revision = "583d854617af4d2080b5d2a24d72f7fc5a128ab2",
+    repo = "https://github.com/googleapis/google-api-go-client",
+    revision = "v0.11.0",
     deps = [
+        ":gax-go",
         ":go.opencensus.io",
+        ":semaphore",
         "//third_party/go:grpc",
         ":oauth2",
     ],
@@ -151,29 +160,22 @@ go_get(
 
 go_get(
     name = "go.opencensus.io",
-    get = "go.opencensus.io",
-    install = [
-        "",
-        "exemplar",
-        "internal",
-        "internal/tagencoding",
-        "plugin/ocgrpc",
-        "plugin/ochttp",
-        "plugin/ochttp/propagation/b3",
-        "stats",
-        "stats/internal",
-        "stats/view",
-        "tag",
-        "trace",
-        "trace/internal",
-        "trace/propagation",
-        "trace/tracestate",
-    ],
-    revision = "8b95f1c9dfabe8d924e11cf1c30c71c19a7ac35c",
+    get = "go.opencensus.io/...",
+    revision = "v0.22.1",
     deps = [
+        ":groupcache",
         "//third_party/go:grpc",
         "//third_party/go:net",
     ],
+)
+
+go_get(
+    name = "groupcache",
+    get = "github.com/golang/groupcache",
+    install = [
+        "lru",
+    ],
+    revision = "404acd9df4cc9859d64fb9eed42e5c026187287a",
 )
 
 go_get(
@@ -197,7 +199,7 @@ go_get(
 go_get(
     name = "genproto",
     get = "google.golang.org/genproto/...",
-    revision = "bd9b4fb69e2ffd37621a6caa54dcbead29b546f2",
+    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         "//third_party/go:protobuf",
         "//third_party/go:net",
