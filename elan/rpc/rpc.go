@@ -237,7 +237,7 @@ func (s *server) GetTree(*pb.GetTreeRequest, pb.ContentAddressableStorage_GetTre
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	start := time.Now()
-	defer readDurations.Observe(time.Since(start).Seconds())
+	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	digest, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
@@ -269,7 +269,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	start := time.Now()
-	defer writeDurations.Observe(time.Since(start).Seconds())
+	defer func() { writeDurations.Observe(time.Since(start).Seconds()) }()
 	req, err := srv.Recv()
 	if err != nil {
 		return err
@@ -300,7 +300,7 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
 	start := time.Now()
-	defer readLatencies.Observe(time.Since(start).Seconds())
+	defer func() { readLatencies.Observe(time.Since(start).Seconds()) }()
 	r, err := s.bucket.NewRangeReader(ctx, s.key(prefix, digest), offset, length, nil)
 	if err != nil {
 		if gcerrors.Code(err) == gcerrors.NotFound {
@@ -313,7 +313,7 @@ func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest,
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
 	start := time.Now()
-	defer readDurations.Observe(time.Since(start).Seconds())
+	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	r, err := s.readBlob(ctx, prefix, digest, 0, -1)
 	if err != nil {
 		return nil, err
