@@ -350,6 +350,9 @@ func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Di
 		}
 		return nil, err
 	}
+	if digest.SizeBytes <= s.maxCacheItemSize {
+		return &countingReader{r: &cachingReader{r: r, s: s, key: key}}, nil
+	}
 	return &countingReader{r: r}, nil
 }
 
@@ -494,6 +497,34 @@ func (r *countingReader) Read(buf []byte) (int, error) {
 
 func (r *countingReader) Close() error {
 	return r.r.Close()
+}
+
+// A cachingReader wraps a ReadCloser to cache the result when it is done.
+type cachingReader struct {
+	s   *server
+	r   io.ReadCloser
+	key string
+	buf bytes.Buffer
+	err error
+}
+
+func (r *cachingReader) Read(buf []byte) (int, error) {
+	n, err := r.r.Read(buf)
+	if err != nil {
+		r.err = err
+	} else {
+		r.buf.Write(buf)
+	}
+	return n, err
+}
+
+func (r *cachingReader) Close() error {
+	err := r.r.Close()
+	if err == nil && r.err == nil {
+		blob := r.buf.Bytes()
+		r.s.cache.Set(r.key, blob, int64(len(blob)))
+	}
+	return err
 }
 
 func logUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
