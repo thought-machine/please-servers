@@ -513,7 +513,7 @@ func (r *cachingReader) Read(buf []byte) (int, error) {
 	if err != nil {
 		r.err = err
 	} else {
-		r.buf.Write(buf)
+		r.buf.Write(buf[:n])
 	}
 	return n, err
 }
