@@ -4,6 +4,7 @@ package metrics
 import (
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/op/go-logging.v1"
