@@ -27,10 +27,10 @@ var opts = struct {
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	} `group:"Options controlling TLS for the gRPC server"`
 	Cache struct {
-		MaxSize     ByteSize `long:"max_size" default:"10M" description:"Max size of in-memory cache"`
-		MaxItemSize ByteSize `long:"max_item_size" default:"100K" description:"Max size of any single item in the cache"`
-		NumCounters int64    `long:"num_counters" description:"Number of cache counters. Should be approx 10x the max number of items you expect it to hold"`
-	} `group:"Options controlling in-memory caching of blobs." namespace:"cache"`
+		MaxSize     ByteSize `long:"cache_max_size" default:"10M" description:"Max size of in-memory cache"`
+		MaxItemSize ByteSize `long:"cache_max_item_size" default:"100K" description:"Max size of any single item in the cache"`
+		NumCounters int64    `long:"cache_num_counters" description:"Number of cache counters. Should be approx 10x the max number of items you expect it to hold"`
+	} `group:"Options controlling in-memory caching of blobs"`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
