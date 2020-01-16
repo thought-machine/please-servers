@@ -25,6 +25,7 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"gopkg.in/op/go-logging.v1"
 
@@ -95,6 +96,7 @@ func runForever(requestQueue, responseQueue, storage, dir string, clean, secureS
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
+		DialOpts:           []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))},
 	})
 	if err != nil {
 		return err

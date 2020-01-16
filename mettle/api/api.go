@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
@@ -19,7 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
-	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -54,14 +52,14 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, requestQueue, responseQueue, storage string, secureStorage bool, keyFile, certFile string) {
-	if err := serveForever(port, requestQueue, responseQueue, storage, secureStorage, keyFile, certFile); err != nil {
+func ServeForever(port int, requestQueue, responseQueue, keyFile, certFile string) {
+	if err := serveForever(port, requestQueue, responseQueue, keyFile, certFile); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
 
-func serveForever(port int, requestQueue, responseQueue, storage string, secureStorage bool, keyFile, certFile string) error {
-	s, lis, err := serve(port, requestQueue, responseQueue, storage, secureStorage, keyFile, certFile)
+func serveForever(port int, requestQueue, responseQueue, keyFile, certFile string) error {
+	s, lis, err := serve(port, requestQueue, responseQueue, keyFile, certFile)
 	if err != nil {
 		return err
 	}
@@ -69,24 +67,15 @@ func serveForever(port int, requestQueue, responseQueue, storage string, secureS
 	return s.Serve(lis)
 }
 
-func serve(port int, requestQueue, responseQueue, storage string, secureStorage bool, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
-	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
-		Service:            storage,
-		NoSecurity:         !secureStorage,
-		TransportCredsOnly: secureStorage,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
+func serve(port int, requestQueue, responseQueue, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to listen on %d: %v", port, err)
 	}
 	srv := &server{
-		requests:      common.MustOpenTopic(requestQueue),
-		responses:     common.MustOpenSubscription(responseQueue),
-		storageClient: client,
-		jobs:          map[string]*job{},
+		requests:  common.MustOpenTopic(requestQueue),
+		responses: common.MustOpenSubscription(responseQueue),
+		jobs:      map[string]*job{},
 	}
 	go srv.Receive()
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
@@ -106,11 +95,10 @@ func serve(port int, requestQueue, responseQueue, storage string, secureStorage 
 }
 
 type server struct {
-	requests      *pubsub.Topic
-	responses     *pubsub.Subscription
-	storageClient *client.Client
-	jobs          map[string]*job
-	mutex         sync.Mutex
+	requests  *pubsub.Topic
+	responses *pubsub.Subscription
+	jobs      map[string]*job
+	mutex     sync.Mutex
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -131,39 +119,10 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	log.Debug("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
 	totalRequests.Inc()
 	currentRequests.Inc()
-	if !req.SkipCacheLookup {
-		// Check cache upfront in case this has already happened.
-		// This may be a waste of time since Please does this check itself, so we could just ditch this code...
-		ctx, cancel := context.WithTimeout(stream.Context(), timeout)
-		defer cancel()
-		if ar, err := s.storageClient.GetActionResult(ctx, &pb.GetActionResultRequest{
-			ActionDigest: req.ActionDigest,
-			// Unfortunately we don't seem to have a sensible way of knowing here whether we
-			// should inline stdout / stderr or not.
-		}); err != nil {
-			if status.Code(err) != codes.NotFound {
-				log.Warning("Failed to contact action cache: %s", err)
-			}
-		} else {
-			defer cachedRequests.Inc()
-			defer currentRequests.Dec()
-			metadata, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
-				Stage:        pb.ExecutionStage_COMPLETED,
-				ActionDigest: req.ActionDigest,
-			})
-			response, _ := ptypes.MarshalAny(&pb.ExecuteResponse{
-				Result:       ar,
-				CachedResult: true,
-				Status:       &rpcstatus.Status{Code: int32(codes.OK)},
-			})
-			return stream.Send(&longrunning.Operation{
-				Name:     req.ActionDigest.Hash,
-				Metadata: metadata,
-				Done:     true,
-				Result:   &longrunning.Operation_Response{Response: response},
-			})
-		}
-	}
+	// N.B. We never try a cache lookup here because Please always tells us not to; it's not
+	//      clear to me that is ever useful (because a good client will try to optimise by
+	//      not uploading sources unnecessarily, and to work out that it can not do that it
+	//      needs to contact the action cache itself anyway).
 	ch := s.eventStream(req.ActionDigest, true)
 	b, _ := proto.Marshal(req)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

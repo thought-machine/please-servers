@@ -105,6 +105,7 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		bucket:       bucket,
 	}
+	srv.pool = newPool(srv, 10)
 	if numCounters == 0 {
 		// Assume that average object size is 1kb, so num counters will be * 10/1000 of that.
 		numCounters = int64(maxCacheSize) / 100
@@ -131,6 +132,8 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 			grpc_prometheus.StreamServerInterceptor,
 			grpc_recovery.StreamServerInterceptor(),
 		)),
+		grpc.MaxRecvMsgSize(419430400), // 400MB
+		grpc.MaxSendMsgSize(419430400),
 	)...)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
@@ -144,6 +147,7 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 type server struct {
 	bucket           *blob.Bucket
 	bytestreamRe     *regexp.Regexp
+	pool             *treePool
 	cache            *ristretto.Cache
 	maxCacheItemSize int64
 }
@@ -158,7 +162,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
 				UpdateEnabled: true,
 			},
-			MaxBatchTotalSizeBytes: 4012000, // 4000 Kelly-Bootle standard units
+			MaxBatchTotalSizeBytes: 404800000, // 400000 Kelly-Bootle standard units
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 0},
@@ -262,8 +266,20 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	return resp, nil
 }
 
-func (s *server) GetTree(*pb.GetTreeRequest, pb.ContentAddressableStorage_GetTreeServer) error {
-	return status.Errorf(codes.Unimplemented, "GetTree not implemented")
+func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorage_GetTreeServer) error {
+	if req.PageSize > 0 {
+		return status.Errorf(codes.Unimplemented, "page_size not implemented for GetTree")
+	} else if req.PageToken != "" {
+		return status.Errorf(codes.Unimplemented, "page tokens not implemented for GetTree")
+	}
+	resp := &pb.GetTreeResponse{}
+	for r := range s.pool.GetTree(req.RootDigest) {
+		if r.Err != nil {
+			return r.Err
+		}
+		resp.Directories = append(resp.Directories, r.Dir)
+	}
+	return srv.Send(resp)
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {

@@ -25,10 +25,6 @@ var opts = struct {
 		ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 		ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
 	} `group:"Options controlling the pub/sub queues"`
-	Storage struct {
-		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
-	} `group:"Options controlling communication with the CAS server"`
 	MetricsPort int `short:"m" long:"metrics_port" description:"Port to serve Prometheus metrics on"`
 	API         struct {
 		Port int `short:"p" long:"port" default:"7778" description:"Port to serve on"`
@@ -40,6 +36,10 @@ var opts = struct {
 	Worker struct {
 		Dir     string `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		NoClean bool   `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Storage struct {
+			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		} `group:"Options controlling communication with the CAS server"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
 		Port       int    `short:"p" long:"port" default:"7778" description:"Port to serve on"`
@@ -50,6 +50,10 @@ var opts = struct {
 			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 			CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 		} `group:"Options controlling TLS for the gRPC server"`
+		Storage struct {
+			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		} `group:"Options controlling communication with the CAS server"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 }{
 	Usage: `
@@ -92,12 +96,12 @@ func main() {
 		common.MustOpenTopic(opts.Queues.RequestQueue)
 		common.MustOpenTopic(opts.Queues.ResponseQueue)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Storage.Storage, opts.Dual.Dir, !opts.Dual.NoClean, opts.Storage.TLS)
+			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.Storage.Storage, opts.Dual.Dir, !opts.Dual.NoClean, opts.Dual.Storage.TLS)
 		}
-		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Storage.Storage, opts.Storage.TLS, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
+		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Storage.Storage, opts.Worker.Dir, !opts.Worker.NoClean, opts.Storage.TLS)
+		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Storage.Storage, opts.Worker.Dir, !opts.Worker.NoClean, opts.Worker.Storage.TLS)
 	} else {
-		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Storage.Storage, opts.Storage.TLS, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
+		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	}
 }

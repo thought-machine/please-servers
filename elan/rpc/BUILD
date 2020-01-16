@@ -1,6 +1,9 @@
 go_library(
     name = "rpc",
-    srcs = ["rpc.go"],
+    srcs = [
+        "rpc.go",
+        "tree.go",
+    ],
     deps = [
         "//creds",
         "//third_party/go/gocloud",
@@ -15,6 +18,5 @@ go_library(
         "//third_party/go:remote-apis",
         "//third_party/go:ristretto",
         "//third_party/go:rpcstatus",
-    ],
-    visibility = ["//elan/..."],
+    ],    visibility = ["//elan/..."],
 )
