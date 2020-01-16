@@ -3,8 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"net"
-	"os"
 	"testing"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -57,25 +55,6 @@ func TestUncached(t *testing.T) {
 	assert.EqualValues(t, 0, response.Result.ExitCode)
 }
 
-func TestCached(t *testing.T) {
-	client, _, s := setupServers(t, 9998, "mem://requests2", "mem://responses2")
-	defer s.Stop()
-
-	digest := &pb.Digest{Hash: cachedHash}
-	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
-		ActionDigest: digest,
-	})
-	assert.NoError(t, err)
-	op, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_COMPLETED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	response := &pb.ExecuteResponse{}
-	err = ptypes.UnmarshalAny(op.GetResponse(), response)
-	assert.NoError(t, err)
-	assert.NotNil(t, response.Result)
-	assert.EqualValues(t, 0, response.Result.ExitCode)
-}
-
 func TestWaitExecution(t *testing.T) {
 	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
 	defer s.Stop()
@@ -115,7 +94,7 @@ func TestWaitExecution(t *testing.T) {
 func setupServers(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
-	s, lis, err := serve(port, requests, responses, "127.0.0.1:9997", false, "", "")
+	s, lis, err := serve(port, requests, responses, "", "")
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
@@ -210,18 +189,4 @@ func (ex *executor) Finish(digest *pb.Digest) {
 		})
 		ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
 	}
-}
-
-func TestMain(m *testing.M) {
-	lis, err := net.Listen("tcp", ":9997")
-	if err != nil {
-		log.Fatalf("Failed to listen on %s: %v", lis.Addr(), err)
-	}
-	s := grpc.NewServer()
-	ac := &actionCache{}
-	pb.RegisterActionCacheServer(s, ac)
-	go s.Serve(lis)
-	code := m.Run()
-	s.Stop()
-	os.Exit(code)
 }
