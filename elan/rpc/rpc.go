@@ -162,7 +162,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
 				UpdateEnabled: true,
 			},
-			MaxBatchTotalSizeBytes: 404800000, // 400000 Kelly-Bootle standard units
+			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 0},
