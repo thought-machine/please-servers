@@ -140,18 +140,6 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	return nil
 }
 
-// readProto reads a protobuf from the remote CAS.
-// TODO(peterebden): replace with w.client.ReadProto once merged upstream.
-func (w *worker) readProto(digest *pb.Digest, msg proto.Message) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	bytes, err := w.client.ReadBlob(ctx, sdkdigest.NewFromProtoUnvalidated(digest))
-	if err != nil {
-		return err
-	}
-	return proto.Unmarshal(bytes, msg)
-}
-
 // makeDirIfNeeded makes a new subdir if the given name specifies a subdir (i.e. contains a path separator)
 func makeDirIfNeeded(root, name string) error {
 	if strings.ContainsRune(name, '/') {
