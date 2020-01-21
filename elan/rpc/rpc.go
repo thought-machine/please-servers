@@ -40,6 +40,8 @@ import (
 	"github.com/thought-machine/please-servers/creds"
 )
 
+const timeout = 2 * time.Minute
+
 var log = logging.MustGetLogger("rpc")
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
@@ -172,6 +174,8 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 }
 
 func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (*pb.ActionResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	ar := &pb.ActionResult{}
 	if err := s.readBlobIntoMessage(ctx, "ac", req.ActionDigest, ar); err != nil {
 		return nil, err
@@ -189,6 +193,8 @@ func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionRes
 }
 
 func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsRequest) (*pb.FindMissingBlobsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	resp := &pb.FindMissingBlobsResponse{}
 	var wg sync.WaitGroup
 	wg.Add(len(req.BlobDigests))
@@ -224,6 +230,8 @@ func (s *server) blobExists(ctx context.Context, key string) bool {
 }
 
 func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsRequest) (*pb.BatchUpdateBlobsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	resp := &pb.BatchUpdateBlobsResponse{
 		Responses: make([]*pb.BatchUpdateBlobsResponse_Response, len(req.Requests)),
 	}
@@ -254,6 +262,8 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	resp := &pb.BatchReadBlobsResponse{
 		Responses: make([]*pb.BatchReadBlobsResponse_Response, len(req.Digests)),
 	}
@@ -298,6 +308,8 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
+	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
+	defer cancel()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	digest, err := s.bytestreamBlobName(req.ResourceName)
@@ -307,7 +319,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if req.ReadLimit == 0 {
 		req.ReadLimit = -1
 	}
-	r, err := s.readBlob(srv.Context(), "cas", digest, req.ReadOffset, req.ReadLimit)
+	r, err := s.readBlob(ctx, "cas", digest, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
@@ -330,6 +342,8 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
+	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
+	defer cancel()
 	start := time.Now()
 	defer func() { writeDurations.Observe(time.Since(start).Seconds()) }()
 	req, err := srv.Recv()
@@ -343,7 +357,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 		return err
 	}
 	r := &bytestreamReader{stream: srv, buf: req.Data}
-	if err := s.writeBlob(srv.Context(), "cas", digest, r); err != nil {
+	if err := s.writeBlob(ctx, "cas", digest, r); err != nil {
 		return err
 	} else if r.TotalSize != digest.SizeBytes {
 		return status.Errorf(codes.InvalidArgument, "invalid digest size (digest: %d, wrote: %d)", digest.SizeBytes, r.TotalSize)
