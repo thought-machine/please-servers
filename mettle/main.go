@@ -2,6 +2,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/peterebden/go-cli-init"
 	"gopkg.in/op/go-logging.v1"
 
@@ -36,6 +38,7 @@ var opts = struct {
 	Worker struct {
 		Dir     string `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		NoClean bool   `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Name    string `short:"n" long:"name" description:"Name of this worker"`
 		Storage struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -96,11 +99,11 @@ func main() {
 		common.MustOpenTopic(opts.Queues.RequestQueue)
 		common.MustOpenTopic(opts.Queues.ResponseQueue)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.Storage.Storage, opts.Dual.Dir, !opts.Dual.NoClean, opts.Dual.Storage.TLS)
+			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, !opts.Dual.NoClean, opts.Dual.Storage.TLS)
 		}
 		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Storage.Storage, opts.Worker.Dir, !opts.Worker.NoClean, opts.Worker.Storage.TLS)
+		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, !opts.Worker.NoClean, opts.Worker.Storage.TLS)
 	} else {
 		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	}

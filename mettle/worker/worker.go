@@ -81,16 +81,24 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, storage, dir string, clean, secureStorage bool) {
-	if err := runForever(requestQueue, responseQueue, storage, dir, clean, secureStorage); err != nil {
+func RunForever(requestQueue, responseQueue, name, storage, dir string, clean, secureStorage bool) {
+	if err := runForever(requestQueue, responseQueue, name, storage, dir, clean, secureStorage); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, storage, dir string, clean, secureStorage bool) error {
+func runForever(requestQueue, responseQueue, name, storage, dir string, clean, secureStorage bool) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
+	}
+	// If no name is given, default to the hostname.
+	if name == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return fmt.Errorf("Failed to determine hostname, must pass --name explicitly: %s", err)
+		}
+		name = hostname
 	}
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,
@@ -116,6 +124,7 @@ func runForever(requestQueue, responseQueue, storage, dir string, clean, secureS
 		rootDir:   abspath,
 		clean:     clean,
 		home:      home,
+		name:      name,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
@@ -140,6 +149,7 @@ type worker struct {
 	client       *client.Client
 	dir, rootDir string
 	home         string
+	name         string
 	actionDigest *pb.Digest
 	metadata     *pb.ExecutedActionMetadata
 	clean        bool
@@ -168,7 +178,10 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 	totalBuilds.Inc()
 	currentBuilds.Inc()
 	defer currentBuilds.Dec()
-	w.metadata = &pb.ExecutedActionMetadata{WorkerStartTimestamp: ptypes.TimestampNow()}
+	w.metadata = &pb.ExecutedActionMetadata{
+		Worker:               w.name,
+		WorkerStartTimestamp: ptypes.TimestampNow(),
+	}
 	req, action, command, status := w.readRequest(msg)
 	if req != nil {
 		w.actionDigest = req.ActionDigest
