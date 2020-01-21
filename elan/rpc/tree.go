@@ -40,10 +40,8 @@ func (p *treePool) GetTree(digest *pb.Digest) chan *dirResponse {
 }
 
 func (p *treePool) fetchDir(digest *pb.Digest, wg *sync.WaitGroup, ch chan *dirResponse) {
-	p.s.limiter <- struct{}{}
 	dir := &pb.Directory{}
 	err := p.s.readBlobIntoMessage(context.Background(), "cas", digest, dir)
-	<-p.s.limiter
 	ch <- &dirResponse{Dir: dir, Err: err}
 	wg.Add(len(dir.Directories))
 	for _, child := range dir.Directories {

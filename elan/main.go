@@ -21,7 +21,6 @@ var opts = struct {
 	} `group:"Options controlling logging output"`
 	Port        int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
 	Storage     string `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
-	Parallelism int    `long:"parallelism" default:"30" description:"Limit on number of concurrent requests in batch operations"`
 	MetricsPort int    `short:"m" long:"metrics_port" description:"Port to serve Prometheus metrics on"`
 	TLS         struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
@@ -50,7 +49,7 @@ func main() {
 	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
 	go metrics.Serve(opts.MetricsPort)
 	log.Notice("Serving on :%d", opts.Port)
-	rpc.ServeForever(opts.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, uint64(opts.Cache.MaxSize), uint64(opts.Cache.MaxItemSize), opts.Cache.NumCounters, opts.Parallelism)
+	rpc.ServeForever(opts.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, uint64(opts.Cache.MaxSize), uint64(opts.Cache.MaxItemSize), opts.Cache.NumCounters)
 }
 
 // A ByteSize is used for flags that represent some quantity of bytes that can be

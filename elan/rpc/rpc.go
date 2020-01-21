@@ -6,6 +6,8 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -94,7 +96,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, maxCacheItemSize uint64, numCounters int64, parallelism int) {
+func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, maxCacheItemSize uint64, numCounters int64) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
@@ -106,7 +108,6 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 	srv := &server{
 		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		bucket:       bucket,
-		limiter:      make(chan struct{}, parallelism),
 	}
 	srv.pool = newPool(srv)
 	if numCounters == 0 {
@@ -223,9 +224,7 @@ func (s *server) blobExists(ctx context.Context, key string) bool {
 	if _, present := s.cachedBlob(key); present {
 		return true
 	}
-	s.limiter <- struct{}{}
 	exists, _ := s.bucket.Exists(ctx, key)
-	<-s.limiter
 	return exists
 }
 
@@ -239,8 +238,6 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 	wg.Add(len(req.Requests))
 	for i, r := range req.Requests {
 		go func(i int, r *pb.BatchUpdateBlobsRequest_Request) {
-			s.limiter <- struct{}{}
-			defer func() { <-s.limiter }()
 			rr := &pb.BatchUpdateBlobsResponse_Response{
 				Status: &rpcstatus.Status{},
 			}
@@ -271,8 +268,6 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	wg.Add(len(req.Digests))
 	for i, d := range req.Digests {
 		go func(i int, d *pb.Digest) {
-			s.limiter <- struct{}{}
-			defer func() { <-s.limiter }()
 			rr := &pb.BatchReadBlobsResponse_Response{
 				Status: &rpcstatus.Status{},
 				Digest: d,
@@ -413,7 +408,11 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 		return nil, err
 	}
 	defer r.Close()
-	return ioutil.ReadAll(r)
+	b, err := ioutil.ReadAll(r)
+	if err == nil {
+		s.cacheBlob(key, b)
+	}
+	return b, err
 }
 
 func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
@@ -438,6 +437,12 @@ func (s *server) cachedBlob(key string) ([]byte, bool) {
 	return nil, false
 }
 
+func (s *server) cacheBlob(key string, blob []byte) {
+	if int64(len(blob)) < s.maxCacheItemSize {
+		s.cache.Set(key, blob, int64(len(blob)))
+	}
+}
+
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
 	if s.blobExists(ctx, key) {
@@ -450,7 +455,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer cancel() // This causes any error before Close() to fail the write.
 	w, err := s.bucket.NewWriter(ctx, key, nil)
 	if err != nil {
 		return err
@@ -461,18 +466,24 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	if digest.SizeBytes < s.maxCacheItemSize {
 		wr = io.MultiWriter(w, &buf)
 	}
+	h := sha256.New()
+	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.
+		wr = io.MultiWriter(wr, h)
+	}
 	n, err := io.Copy(wr, r)
 	bytesReceived.Add(float64(n))
 	if err != nil {
-		wc.Close()
 		return err
+	}
+	if prefix == "cas" {
+		if receivedDigest := hex.EncodeToString(h.Sum(nil)); receivedDigest != digest.Hash {
+			return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, receivedDigest)
+		}
 	}
 	if err := wc.Close(); err != nil {
 		return err
 	}
-	if digest.SizeBytes < s.maxCacheItemSize {
-		s.cache.Set(key, buf.Bytes(), digest.SizeBytes)
-	}
+	s.cacheBlob(key, buf.Bytes())
 	return nil
 }
 
@@ -573,8 +584,7 @@ func (r *cachingReader) Read(buf []byte) (int, error) {
 func (r *cachingReader) Close() error {
 	err := r.r.Close()
 	if err == nil && r.err == nil {
-		blob := r.buf.Bytes()
-		r.s.cache.Set(r.key, blob, int64(len(blob)))
+		r.s.cacheBlob(r.key, r.buf.Bytes())
 	}
 	return err
 }
