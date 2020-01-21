@@ -126,6 +126,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir string, clean, s
 		clean:     clean,
 		home:      home,
 		name:      name,
+		limiter:   make(chan struct{}, downloadParallelism),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
@@ -154,6 +155,9 @@ type worker struct {
 	actionDigest *pb.Digest
 	metadata     *pb.ExecutedActionMetadata
 	clean        bool
+
+	// For limiting parallelism during download actions
+	limiter chan struct{}
 }
 
 // RunTask runs a single task.
