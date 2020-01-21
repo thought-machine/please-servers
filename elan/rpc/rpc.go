@@ -391,7 +391,7 @@ func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Di
 		return nil, err
 	}
 	if digest.SizeBytes <= s.maxCacheItemSize {
-		return &countingReader{r: &cachingReader{r: r, s: s, key: key}}, nil
+		return &countingReader{r: &cachingReader{r: r, s: s, key: key, digest: digest}}, nil
 	}
 	return &countingReader{r: r}, nil
 }
@@ -410,7 +410,7 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	defer r.Close()
 	b, err := ioutil.ReadAll(r)
 	if err == nil {
-		s.cacheBlob(key, b)
+		s.cacheBlob(key, digest, b)
 	}
 	return b, err
 }
@@ -437,9 +437,10 @@ func (s *server) cachedBlob(key string) ([]byte, bool) {
 	return nil, false
 }
 
-func (s *server) cacheBlob(key string, blob []byte) {
-	if int64(len(blob)) < s.maxCacheItemSize {
-		s.cache.Set(key, blob, int64(len(blob)))
+func (s *server) cacheBlob(key string, digest *pb.Digest, blob []byte) {
+	l := int64(len(blob))
+	if l < s.maxCacheItemSize && l == digest.SizeBytes {
+		s.cache.Set(key, blob, l)
 	}
 }
 
@@ -483,7 +484,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	if err := wc.Close(); err != nil {
 		return err
 	}
-	s.cacheBlob(key, buf.Bytes())
+	s.cacheBlob(key, digest, buf.Bytes())
 	return nil
 }
 
@@ -564,11 +565,12 @@ func (r *countingReader) Close() error {
 
 // A cachingReader wraps a ReadCloser to cache the result when it is done.
 type cachingReader struct {
-	s   *server
-	r   io.ReadCloser
-	key string
-	buf bytes.Buffer
-	err error
+	s      *server
+	r      io.ReadCloser
+	key    string
+	digest *pb.Digest
+	buf    bytes.Buffer
+	err    error
 }
 
 func (r *cachingReader) Read(buf []byte) (int, error) {
@@ -584,7 +586,7 @@ func (r *cachingReader) Read(buf []byte) (int, error) {
 func (r *cachingReader) Close() error {
 	err := r.r.Close()
 	if err == nil && r.err == nil {
-		r.s.cacheBlob(r.key, r.buf.Bytes())
+		r.s.cacheBlob(r.key, r.digest, r.buf.Bytes())
 	}
 	return err
 }
