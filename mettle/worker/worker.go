@@ -99,6 +99,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir string, clean, s
 			return fmt.Errorf("Failed to determine hostname, must pass --name explicitly: %s", err)
 		}
 		name = hostname
+		log.Notice("This is %s", name)
 	}
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,
