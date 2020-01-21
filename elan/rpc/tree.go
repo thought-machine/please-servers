@@ -16,14 +16,12 @@ type dirResponse struct {
 // It limits parallelism globally so we don't generate an arbitrarily large number of goroutines
 // all trying to hit up the bucket at once.
 type treePool struct {
-	s  *server
-	ch chan struct{}
+	s *server
 }
 
-func newPool(s *server, capacity int) *treePool {
+func newPool(s *server) *treePool {
 	return &treePool{
-		s:  s,
-		ch: make(chan struct{}, capacity),
+		s: s,
 	}
 }
 
@@ -42,10 +40,10 @@ func (p *treePool) GetTree(digest *pb.Digest) chan *dirResponse {
 }
 
 func (p *treePool) fetchDir(digest *pb.Digest, wg *sync.WaitGroup, ch chan *dirResponse) {
-	p.ch <- struct{}{}
+	p.s.limiter <- struct{}{}
 	dir := &pb.Directory{}
 	err := p.s.readBlobIntoMessage(context.Background(), "cas", digest, dir)
-	<-p.ch
+	<-p.s.limiter
 	ch <- &dirResponse{Dir: dir, Err: err}
 	wg.Add(len(dir.Directories))
 	for _, child := range dir.Directories {
