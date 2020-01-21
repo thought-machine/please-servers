@@ -197,19 +197,26 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 		}
 		go func(d *pb.Digest) {
 			key := s.key("cas", d)
-			if _, present := s.cachedBlob(key); !present {
-				if exists, _ := s.bucket.Exists(ctx, key); !exists {
-					mutex.Lock()
-					resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
-					mutex.Unlock()
-					log.Debug("Blob %s found to be missing", d.Hash)
-				}
+			if !s.blobExists(ctx, key) {
+				mutex.Lock()
+				resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
+				mutex.Unlock()
+				log.Debug("Blob %s found to be missing", d.Hash)
 			}
 			wg.Done()
 		}(d)
 	}
 	wg.Wait()
 	return resp, nil
+}
+
+// blobExists returns true if this blob has been previously uploaded.
+func (s *server) blobExists(ctx context.Context, key string) bool {
+	if _, present := s.cachedBlob(key); present {
+		return true
+	}
+	exists, _ := s.bucket.Exists(ctx, key)
+	return exists
 }
 
 func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsRequest) (*pb.BatchUpdateBlobsResponse, error) {
@@ -411,6 +418,13 @@ func (s *server) cachedBlob(key string) ([]byte, bool) {
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
+	if s.blobExists(ctx, key) {
+		// Read and discard entire content; there is no need to update.
+		// There seems to be no way for the server to signal the caller to abort in this way, so
+		// this seems like the most compatible way.
+		_, err := io.Copy(ioutil.Discard, r)
+		return err
+	}
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
