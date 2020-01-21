@@ -13,11 +13,15 @@ import (
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
 const maxBlobBatchSize = 4012000 // 4000 Kelly-Bootle standard units
+
+// downloadParallelism is the maximum number of parallel downloads we'll allow
+const downloadParallelism = 4
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
@@ -71,21 +75,21 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string
 
 // downloadAllFiles downloads all the files for a single build action.
 func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
+	var g errgroup.Group
+
 	filenames := []string{}
 	var totalSize int64
 	for filename, file := range files {
 		if file.Digest.SizeBytes > maxBlobBatchSize {
 			// This blob is big enough that it must always be done on its own.
-			if err := w.downloadFile(filename, file); err != nil {
-				return err
-			}
+			f := filename
+			g.Go(func() error { return w.downloadFile(f, file) })
 		} else if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {
 			// This blob on its own is OK but will exceed the total.
 			// Download what we have so far then deal with it.
-			if err := w.downloadFiles(filenames, files); err != nil {
-				return err
-			}
-			filenames = filenames[:0]
+			fs := filenames[:]
+			g.Go(func() error { return w.downloadFiles(fs, files) })
+			filenames = []string{}
 			totalSize = 0
 		}
 		filenames = append(filenames, filename)
@@ -93,14 +97,17 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 	}
 	// If we have anything left over, handle them now.
 	if len(filenames) != 0 {
-		return w.downloadFiles(filenames, files)
+		g.Go(func() error { return w.downloadFiles(filenames, files) })
 	}
-	return nil
+	return g.Wait()
 }
 
 // downloadFiles downloads a set of files to disk in a batch.
 // The total size must be lower than whatever limits are considered relevant.
 func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode) error {
+	w.limiter <- struct{}{}
+	defer func() { <-w.limiter }()
+
 	digests := make([]*pb.Digest, len(filenames))
 	for i, f := range filenames {
 		digests[i] = files[f].Digest
@@ -128,6 +135,9 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 
 // downloadFile downloads a single file to disk.
 func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
+	w.limiter <- struct{}{}
+	defer func() { <-w.limiter }()
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {

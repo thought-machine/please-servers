@@ -7,6 +7,7 @@ go_library(
     deps = [
         "//third_party/go/gocloud",
         "//third_party/go:bytestream",
+        "//third_party/go:errgroup",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
         "//third_party/go:longrunning",
@@ -17,5 +18,6 @@ go_library(
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:rpcstatus",
         "//mettle/common",
-    ],    visibility = ["//mettle/..."],
+    ],
+    visibility = ["//mettle/..."],
 )
