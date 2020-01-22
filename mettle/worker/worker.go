@@ -30,6 +30,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 
 	"github.com/thought-machine/please-servers/mettle/common"
+	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 )
 
 var log = logging.MustGetLogger("worker")
@@ -81,13 +82,13 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, name, storage, dir string, clean, secureStorage bool) {
-	if err := runForever(requestQueue, responseQueue, name, storage, dir, clean, secureStorage); err != nil {
+func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL string, clean, secureStorage bool) {
+	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, clean, secureStorage); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, name, storage, dir string, clean, secureStorage bool) error {
+func runForever(requestQueue, responseQueue, name, storage, dir, browserURL string, clean, secureStorage bool) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
@@ -119,14 +120,15 @@ func runForever(requestQueue, responseQueue, name, storage, dir string, clean, s
 		return fmt.Errorf("Failed to make path absolute: %s", err)
 	}
 	w := &worker{
-		requests:  common.MustOpenSubscription(requestQueue),
-		responses: common.MustOpenTopic(responseQueue),
-		client:    client,
-		rootDir:   abspath,
-		clean:     clean,
-		home:      home,
-		name:      name,
-		limiter:   make(chan struct{}, downloadParallelism),
+		requests:   common.MustOpenSubscription(requestQueue),
+		responses:  common.MustOpenTopic(responseQueue),
+		client:     client,
+		rootDir:    abspath,
+		clean:      clean,
+		home:       home,
+		name:       name,
+		limiter:    make(chan struct{}, downloadParallelism),
+		browserURL: browserURL,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
@@ -152,6 +154,7 @@ type worker struct {
 	dir, rootDir string
 	home         string
 	name         string
+	browserURL   string
 	actionDigest *pb.Digest
 	metadata     *pb.ExecutedActionMetadata
 	clean        bool
@@ -317,6 +320,22 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		msg := "Execution failed: " + err.Error()
 		msg = appendStd(msg, "Stdout", stdout.String())
 		msg = appendStd(msg, "Stderr", stderr.String())
+		if w.browserURL != "" {
+			// Attempt to store the failed action result
+			ctx, cancel = context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+			if digest, err := w.client.WriteProto(ctx, &bbcas.UncachedActionResult{
+				ActionDigest: w.actionDigest,
+				ExecuteResponse: &pb.ExecuteResponse{
+					Status: status(codes.Unknown, msg),
+					Result: ar,
+				},
+			}); err != nil {
+				log.Warning("Failed to save uncached action result: %s", err)
+			} else {
+				msg += fmt.Sprintf("\nFailed action details: %s/uncached_action_result/mettle/%s/%d/\n", w.browserURL, digest.Hash, digest.Size)
+			}
+		}
 		return &pb.ExecuteResponse{
 			Status: status(codes.Unknown, msg),
 			Result: ar,

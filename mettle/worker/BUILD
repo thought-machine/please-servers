@@ -17,6 +17,7 @@ go_library(
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:rpcstatus",
+        "//third_party/proto:cas",
         "//mettle/common",
     ],
     visibility = ["//mettle/..."],
