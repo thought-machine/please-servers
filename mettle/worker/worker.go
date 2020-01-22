@@ -312,9 +312,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		ExecutionMetadata: w.metadata,
 	}
 	log.Notice("Completed execution for %s", w.actionDigest.Hash)
-	rusage := cmd.ProcessState.SysUsage().(*syscall.Rusage)
-	peakMemory.Observe(float64(rusage.Maxrss) / 1024.0)                         // maxrss is in kb, we use mb for convenience
-	cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec) / execDuration) // just drop usec, can't be bothered
+	w.observeSysUsage(cmd, execDuration)
 	if err != nil {
 		msg := "Execution failed: " + err.Error()
 		msg = appendStd(msg, "Stdout", stdout.String())
@@ -350,6 +348,22 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
+	}
+}
+
+// observeSysUsage observes some stats from a running process.
+// It's split to a separate function to handle panics; the docs are a little unclear under what
+// circumstances this might happen, but we've definitely seen it.
+func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warning("Failed to observe process sys usage: %s", r)
+		}
+	}()
+	if cmd.ProcessState != nil {
+		rusage := cmd.ProcessState.SysUsage().(*syscall.Rusage)
+		peakMemory.Observe(float64(rusage.Maxrss) / 1024.0)                         // maxrss is in kb, we use mb for convenience
+		cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec) / execDuration) // just drop usec, can't be bothered
 	}
 }
 
