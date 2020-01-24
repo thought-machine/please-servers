@@ -35,7 +35,7 @@ import (
 
 var log = logging.MustGetLogger("worker")
 
-const timeout = 30 * time.Second
+const timeout = 3 * time.Minute
 
 var totalBuilds = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
