@@ -35,10 +35,6 @@ var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
 })
-var cachedRequests = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "mettle",
-	Name:      "cached_total",
-})
 var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "mettle",
 	Name:      "requests_current",
@@ -46,7 +42,6 @@ var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 
 func init() {
 	prometheus.MustRegister(totalRequests)
-	prometheus.MustRegister(cachedRequests)
 	prometheus.MustRegister(currentRequests)
 	grpc_prometheus.EnableHandlingTimeHistogram()
 }
