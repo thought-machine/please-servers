@@ -356,3 +356,25 @@ go_get(
     get = "github.com/dustin/go-humanize",
     revision = "v1.0.0",
 )
+
+go_get(
+    name = "retryablehttp",
+    get = "github.com/hashicorp/go-retryablehttp",
+    revision = "v0.6.1",
+)
+
+go_get(
+    name = "sri",
+    get = "github.com/peterebden/sri",
+    revision = "v1.0.0",
+)
+
+go_get(
+    name = "go-multierror",
+    get = "github.com/hashicorp/go-multierror",
+    install = [
+        "",
+        "vendor/github.com/hashicorp/errwrap",
+    ],
+    revision = "v1.0.0",
+)
