@@ -15,12 +15,13 @@ jobs:
            path: plz-out/results
        - run:
            name: Package
-           command: ./pleasew build //elan //mettle //scripts:gen_release -p --profile ci -v 2
+           command: ./pleasew build //elan //mettle //zeal //scripts:gen_release -p --profile ci -v 2
        - persist_to_workspace:
            root: plz-out/bin
            paths:
              - elan/elan
              - mettle/mettle
+             - zeal/zeal
              - scripts/gen_release.pex
        - store_artifacts:
            path: plz-out/log
@@ -34,10 +35,7 @@ jobs:
      steps:
        - attach_workspace:
            at: /tmp/workspace
-       - add_ssh_keys:
-           fingerprints:
-             - "cc:57:b9:67:31:65:a6:70:8c:e3:e7:90:ca:e6:a6:41"
-       - run: /tmp/workspace/scripts/gen_release.pex /tmp/workspace/elan/elan /tmp/workspace/mettle/mettle
+       - run: /tmp/workspace/scripts/gen_release.pex /tmp/workspace/elan/elan /tmp/workspace/mettle/mettle /tmp/workspace/zeal/zeal
 
 workflows:
   version: 2
