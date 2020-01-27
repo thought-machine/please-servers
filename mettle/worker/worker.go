@@ -82,13 +82,13 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL string, clean, secureStorage bool) {
-	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, clean, secureStorage); err != nil {
+func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool) {
+	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox, clean, secureStorage); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, name, storage, dir, browserURL string, clean, secureStorage bool) error {
+func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
@@ -101,6 +101,12 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL stri
 		}
 		name = hostname
 		log.Notice("This is %s", name)
+	}
+	// Check this exists upfront
+	if sandbox != "" {
+		if _, err := os.Stat(sandbox); err != nil {
+			return fmt.Errorf("Error checking sandbox tool: %s", err)
+		}
 	}
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,
@@ -127,6 +133,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL stri
 		clean:      clean,
 		home:       home,
 		name:       name,
+		sandbox:    sandbox,
 		limiter:    make(chan struct{}, downloadParallelism),
 		browserURL: browserURL,
 	}
@@ -155,6 +162,7 @@ type worker struct {
 	home         string
 	name         string
 	browserURL   string
+	sandbox      string
 	actionDigest *pb.Digest
 	metadata     *pb.ExecutedActionMetadata
 	clean        bool
@@ -267,6 +275,9 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			}
 		}()
 	}
+	if w.sandbox != "" && w.shouldSandbox(command) {
+		command.Arguments = append([]string{w.sandbox}, command.Arguments...)
+	}
 	start := time.Now()
 	w.metadata.ExecutionStartTimestamp = toTimestamp(start)
 	duration, _ := ptypes.Duration(action.Timeout)
@@ -368,6 +379,17 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
 	}
+}
+
+// shouldSandbox returns true if we should sandbox execution of the given command.
+// This is determined by it having a SANDBOX environment variable set to "true".
+func (w *worker) shouldSandbox(command *pb.Command) bool {
+	for _, e := range command.EnvironmentVariables {
+		if e.Name == "SANDBOX" && e.Value == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 // observeSysUsage observes some stats from a running process.
