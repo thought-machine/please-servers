@@ -5,7 +5,10 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"io"
 	"net"
 	"net/http"
@@ -99,13 +102,12 @@ func (s *server) FetchDirectory(ctx context.Context, req *pb.FetchDirectoryReque
 }
 
 func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.FetchBlobResponse, error) {
-	sri, err := sri.NewChecker(s.sriQualifier(req.Qualifiers))
-	if err != nil {
+	if _, err := s.sriChecker(req.Qualifiers); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "Invalid sri.checksum qualifier: %s", err)
 	}
 	var me error
 	for _, u := range req.Uris {
-		digest, err := s.fetchOne(ctx, u, req.Timeout, sri)
+		digest, err := s.fetchOne(ctx, u, req.Timeout, req.Qualifiers)
 		if err == nil {
 			return &pb.FetchBlobResponse{
 				Status:     &rpcstatus.Status{},
@@ -119,18 +121,21 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 	return nil, me
 }
 
-// fetchOne makes a single HTTP request. It checks against the given subresource integrity constraints
-// to verify the content is as expected (note that any one matching is sufficient, not all are required tO)
-func (s *server) fetchOne(ctx context.Context, url string, timeout *duration.Duration, sri *sri.Checker) (*rpb.Digest, error) {
+// fetchOne makes a single HTTP request. It checks against the given subresource
+// integrity constraints to verify the content is as expected.
+func (s *server) fetchOne(ctx context.Context, url string, timeout *duration.Duration, qualifiers []*pb.Qualifier) (*rpb.Digest, error) {
 	if d, err := ptypes.Duration(timeout); err != nil {
 		ctx, cancel := context.WithTimeout(ctx, d)
 		defer cancel()
-		return s.fetchURL(ctx, url, sri)
+		return s.fetchURL(ctx, url, qualifiers)
 	}
-	return s.fetchURL(ctx, url, sri)
+	return s.fetchURL(ctx, url, qualifiers)
 }
 
-func (s *server) fetchURL(ctx context.Context, url string, sri *sri.Checker) (*rpb.Digest, error) {
+func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qualifier) (*rpb.Digest, error) {
+	// N.B. We must construct a new SRI checker each time here since it is stateful per request.
+	//      We've already checked it for errors though.
+	sri, _ := s.sriChecker(qualifiers)
 	start := time.Now()
 	req, err := retryablehttp.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -163,12 +168,52 @@ func (s *server) logHTTPRequests(logger retryablehttp.Logger, req *http.Request,
 	}
 }
 
-// sriQualifier returns the checksum.sri qualifier from a request.
-func (s *server) sriQualifier(qualifiers []*pb.Qualifier) string {
+// sriChecker returns a new SRI checker from the checksum.sri qualifier from a request,
+// or one that always succeeds
+func (s *server) sriChecker(qualifiers []*pb.Qualifier) (checker, error) {
 	for _, q := range qualifiers {
 		if q.Name == "checksum.sri" {
-			return q.Value
+			return sri.NewCheckerForHashes(q.Value, map[string]sri.HashFunc{
+				"sha256": sha256.New,
+				"sha1":   newDoubleSHA1,
+			})
 		}
 	}
-	return ""
+	return nopChecker{}, nil
+}
+
+type checker interface {
+	io.Writer
+	Check() error
+}
+
+type nopChecker struct{}
+
+func (n nopChecker) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+func (n nopChecker) Check() error {
+	return nil
+}
+
+// doubleSHA1 is an implementation of the hash algorithm that "plz hash" uses for its default
+// SHA1 config. Because the output of a rule is not necessarily a single file it hashes all
+// files and then hashes the results of those together. Something has to be done since there is
+// otherwise no clearly-defined approach to hashing more than one file, but here we have to be
+// aware of it to produce the expected results.
+type doubleSHA1 struct {
+	h hash.Hash
+}
+
+func newDoubleSHA1() hash.Hash {
+	return &doubleSHA1{h: sha1.New()}
+}
+
+func (d *doubleSHA1) Write(b []byte) (int, error) { return d.h.Write(b) }
+func (d *doubleSHA1) Reset()                      { d.h.Reset() }
+func (d *doubleSHA1) Size() int                   { return d.h.Size() }
+func (d *doubleSHA1) BlockSize() int              { return d.h.BlockSize() }
+func (d *doubleSHA1) Sum(b []byte) []byte {
+	s := sha1.Sum(d.h.Sum(b))
+	return s[:]
 }
