@@ -5,4 +5,4 @@ importpath = github.com/thought-machine/please-servers
 moduledir = third_party/python
 
 [alias "runlocal"]
-cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local
+cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local

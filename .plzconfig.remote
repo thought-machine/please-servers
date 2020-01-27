@@ -3,6 +3,7 @@
 [remote]
 url = localhost:7778
 casurl = localhost:7777
+asseturl = localhost:7776
 instance = mettle
 secure = false
 numexecutors = 10

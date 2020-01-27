@@ -5,22 +5,23 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"time"
 
-	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	rpb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/golang/protobuf/ptypes/dueration"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/peterebden/sri"
+	"github.com/peterebden/go-sri"
 	"github.com/prometheus/client_golang/prometheus"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
@@ -62,14 +63,14 @@ func ServeForever(port int, keyFile, certFile, storage string, secureStorage boo
 		DialOpts:           []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))},
 	})
 	if err != nil {
-		return err
+		log.Fatalf("Failed to connect to storage backend: %s", err)
 	}
 	srv := &server{
 		client:        retryablehttp.NewClient(),
 		storageClient: client,
 	}
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
-	srv.RequestLogHook = srv.logHTTPRequests
+	srv.client.RequestLogHook = srv.logHTTPRequests
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_prometheus.UnaryServerInterceptor,
@@ -94,13 +95,13 @@ type server struct {
 }
 
 func (s *server) FetchDirectory(ctx context.Context, req *pb.FetchDirectoryRequest) (*pb.FetchDirectoryResponse, error) {
-	return status.Errorf(codes.Unimplemented, "The FetchDirectory RPC is not implemented by this server")
+	return nil, status.Errorf(codes.Unimplemented, "The FetchDirectory RPC is not implemented by this server")
 }
 
 func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.FetchBlobResponse, error) {
 	sri, err := sri.NewChecker(s.sriQualifier(req.Qualifiers))
 	if err != nil {
-		return status.Errorf(codes.InvalidRequest, "Invalid sri.checksum qualifier: %s", err)
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid sri.checksum qualifier: %s", err)
 	}
 	var me error
 	for _, u := range req.Uris {
@@ -109,7 +110,7 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 			return &pb.FetchBlobResponse{
 				Status:     &rpcstatus.Status{},
 				BlobDigest: digest,
-			}
+			}, nil
 		}
 		me = multierror.Append(me, err)
 	}
@@ -129,7 +130,8 @@ func (s *server) fetchOne(ctx context.Context, url string, timeout *duration.Dur
 	return s.fetchURL(ctx, url, sri)
 }
 
-func (s *server) fetchURL(ctx context.Context, url string, timeout *duration.Duration, sri *sri.Checker) (*rpb.Digest, error) {
+func (s *server) fetchURL(ctx context.Context, url string, sri *sri.Checker) (*rpb.Digest, error) {
+	start := time.Now()
 	req, err := retryablehttp.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -139,7 +141,9 @@ func (s *server) fetchURL(ctx context.Context, url string, timeout *duration.Dur
 		return nil, fmt.Errorf("Error making request: %s", err)
 	}
 	var buf bytes.Buffer
-	n, err := io.Copy(io.MultiWriter(buf, sri))
+	n, err := io.Copy(io.MultiWriter(&buf, sri), resp.Body)
+	bytesReceived.Add(float64(n))
+	downloadDurations.Observe(time.Since(start).Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("Error reading response: %s", err)
 	} else if err := sri.Check(); err != nil {
@@ -147,7 +151,8 @@ func (s *server) fetchURL(ctx context.Context, url string, timeout *duration.Dur
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	return s.storageClient.WriteBlob(ctx, buf.Bytes())
+	digest, err := s.storageClient.WriteBlob(ctx, buf.Bytes())
+	return digest.ToProto(), err
 }
 
 func (s *server) logHTTPRequests(logger retryablehttp.Logger, req *http.Request, n int) {
@@ -159,8 +164,8 @@ func (s *server) logHTTPRequests(logger retryablehttp.Logger, req *http.Request,
 }
 
 // sriQualifier returns the checksum.sri qualifier from a request.
-func (s *server) sriQualifier(req *pb.FetchBlobRequest) string {
-	for _, q := range req.Qualifiers {
+func (s *server) sriQualifier(qualifiers []*pb.Qualifier) string {
+	for _, q := range qualifiers {
 		if q.Name == "checksum.sri" {
 			return q.Value
 		}

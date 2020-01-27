@@ -43,6 +43,9 @@ It must communicate with a CAS server to store its eventual blobs.
 
 Requests are downloaded entirely into memory before being uploaded, so the user should ensure there is
 enough memory available for any likely request.
+
+It is partly named to match the ongoing theme of "qualities a person can have", and partly
+for the Paladin skill in Diablo II since its job is to bang things down as fast as possible.
 `,
 }
 
