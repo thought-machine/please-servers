@@ -52,6 +52,14 @@ For local development it can be configured to use either file or memory-based st
 is useful in a production setup.
 
 
+Zeal
+----
+
+Zeal is a partial implementation of the Remote Asset API (specifically just the FetchBlob RPC
+of the Fetch API, it does not support FetchDirectory or the Push service). It has no storage
+and must be connected to a CAS server (typically Elan) to store its results.
+
+
 TLS
 ---
 

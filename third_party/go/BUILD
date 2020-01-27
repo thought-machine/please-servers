@@ -222,7 +222,7 @@ go_get(
 go_get(
     name = "remote-apis",
     get = "github.com/bazelbuild/remote-apis/build/...",
-    revision = "b5123b1bb2853393c7b9aa43236db924d7e32d61",
+    revision = "2846a67ac8feb5001e9f704b66f5acc1e90f1ade",
     deps = [
         ":annotations",
         ":grpc",
@@ -354,4 +354,68 @@ go_get(
     name = "humanize",
     get = "github.com/dustin/go-humanize",
     revision = "v1.0.0",
+)
+
+go_get(
+    name = "retryablehttp",
+    get = "github.com/hashicorp/go-retryablehttp",
+    revision = "v0.6.1",
+    deps = [
+        ":cleanhttp",
+        ":hclog",
+    ],
+)
+
+go_get(
+    name = "sri",
+    get = "github.com/peterebden/go-sri",
+    revision = "v1.0.0",
+)
+
+go_get(
+    name = "go-multierror",
+    get = "github.com/hashicorp/go-multierror",
+    revision = "v1.0.0",
+    deps = [":errwrap"],
+)
+
+go_get(
+    name = "errwrap",
+    get = "github.com/hashicorp/errwrap",
+    revision = "v1.0.0",
+)
+
+go_get(
+    name = "cleanhttp",
+    get = "github.com/hashicorp/go-cleanhttp",
+    revision = "v0.5.1",
+)
+
+go_get(
+    name = "hclog",
+    get = "github.com/hashicorp/go-hclog",
+    revision = "v0.12.0",
+    deps = [
+        ":isatty",
+        ":color",
+    ],
+)
+
+go_get(
+    name = "isatty",
+    get = "github.com/mattn/go-isatty",
+    revision = "v0.0.12",
+    deps = [":unix"],
+)
+
+go_get(
+    name = "color",
+    get = "github.com/fatih/color",
+    install = [
+        "",
+        "vendor/github.com/mattn/go-isatty",
+        "vendor/github.com/mattn/go-colorable",
+        "vendor/golang.org/x/sys/unix",
+    ],
+    revision = "v1.9.0",
 )
