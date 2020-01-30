@@ -15,8 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/chunker"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -352,12 +355,10 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			Result: ar,
 		}
 	}
-	for _, out := range command.OutputPaths {
-		if err := w.collectOutput(ar, out); err != nil {
-			return &pb.ExecuteResponse{
-				Status: status(codes.Unknown, "Failed to collect output %s: %s", out, err),
-				Result: ar,
-			}
+	if err := w.collectOutputs(ar, command); err != nil {
+		return &pb.ExecuteResponse{
+			Status: status(codes.Unknown, "Failed to collect outputs: %s", err),
+			Result: ar,
 		}
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
@@ -408,115 +409,22 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 	}
 }
 
-// collectOutput collects a single output and adds it to the given ActionResult.
-func (w *worker) collectOutput(ar *pb.ActionResult, output string) error {
-	filename := path.Join(w.dir, output)
-	if info, err := os.Lstat(filename); err != nil {
+// collectOutputs collects all the outputs of a command and adds them to the given ActionResult.
+func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
+	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), &filemetadata.NoopFileMetadataCache{})
+	if err != nil {
 		return err
-	} else if mode := info.Mode(); info.IsDir() {
-		dir, _, children, err := w.collectDir(filename)
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		digest, err := w.client.WriteProto(ctx, &pb.Tree{
-			Root:     dir,
-			Children: children,
-		})
-		if err != nil {
-			return err
-		}
-		ar.OutputDirectories = append(ar.OutputDirectories, &pb.OutputDirectory{
-			Path:       output,
-			TreeDigest: digest.ToProto(),
-		})
-	} else if mode&os.ModeSymlink == os.ModeSymlink {
-		target, err := os.Readlink(filename)
-		if err != nil {
-			return err
-		}
-		ar.OutputFileSymlinks = append(ar.OutputFileSymlinks, &pb.OutputSymlink{
-			Path:   output,
-			Target: target,
-		})
-	} else { // regular file
-		digest, err := w.collectFile(filename)
-		if err != nil {
-			return err
-		}
-		ar.OutputFiles = append(ar.OutputFiles, &pb.OutputFile{
-			Path:         output,
-			Digest:       digest,
-			IsExecutable: mode&0100 != 0,
-		})
 	}
-	return nil
-}
-
-// collectDir collects a directory and, recursively, all its descendants.
-func (w *worker) collectDir(dirname string) (*pb.Directory, *pb.Digest, []*pb.Directory, error) {
-	d := &pb.Directory{}
-	var children []*pb.Directory
-	entries, err := ioutil.ReadDir(dirname)
-	if err != nil {
-		return nil, nil, nil, err
+	chomks := make([]*chunker.Chunker, 0, len(m))
+	for _, c := range m {
+		chomks = append(chomks, c)
 	}
-	for _, entry := range entries {
-		name := entry.Name()
-		filename := path.Join(dirname, name)
-		if entry.IsDir() {
-			dir, digest, grandchildren, err := w.collectDir(filename)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			d.Directories = append(d.Directories, &pb.DirectoryNode{
-				Name:   name,
-				Digest: digest,
-			})
-			children = append(children, dir)
-			children = append(children, grandchildren...)
-		} else if mode := entry.Mode(); mode&os.ModeSymlink != 0 {
-			target, err := os.Readlink(filename)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			d.Symlinks = append(d.Symlinks, &pb.SymlinkNode{
-				Name:   name,
-				Target: target,
-			})
-		} else {
-			digest, err := w.collectFile(filename)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			d.Files = append(d.Files, &pb.FileNode{
-				Name:         name,
-				Digest:       digest,
-				IsExecutable: mode&0100 != 0,
-			})
-		}
-	}
-	// now digest and upload this directory
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	digest, err := w.client.WriteProto(ctx, d)
-	return d, digest.ToProto(), children, err
-}
-
-// collectFile collects a single file.
-func (w *worker) collectFile(filename string) (*pb.Digest, error) {
-	// This is a bit crap (reading the whole thing into memory) but the sdk library doesn't
-	// offer much of help here. Fundamentally the only alternative is to double-read it since we
-	// need to have the hash before we upload it.
-	b, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	d, err := w.client.WriteBlob(ctx, b)
-	return d.ToProto(), err
+	err = w.client.UploadIfMissing(context.Background(), chomks...)
+	ar.OutputFiles = ar2.OutputFiles
+	ar.OutputDirectories = ar2.OutputDirectories
+	ar.OutputFileSymlinks = ar2.OutputFileSymlinks
+	ar.OutputDirectorySymlinks = ar2.OutputDirectorySymlinks
+	return err
 }
 
 // update sends an update on the response channel
@@ -543,11 +451,7 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 func (w *worker) readBlobToProto(digest *pb.Digest, msg proto.Message) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	b, err := w.client.ReadBlob(ctx, sdkdigest.NewFromProtoUnvalidated(digest))
-	if err != nil {
-		return err
-	}
-	return proto.Unmarshal(b, msg)
+	return w.client.ReadProto(ctx, sdkdigest.NewFromProtoUnvalidated(digest), msg)
 }
 
 func status(code codes.Code, msg string, args ...interface{}) *rpcstatus.Status {
