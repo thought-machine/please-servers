@@ -38,8 +38,6 @@ import (
 
 var log = logging.MustGetLogger("worker")
 
-const timeout = 3 * time.Minute
-
 var totalBuilds = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "builds_total",
@@ -85,13 +83,13 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool) {
-	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox, clean, secureStorage); err != nil {
+func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration) {
+	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox, clean, secureStorage, timeout); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool) error {
+func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
@@ -139,6 +137,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 		sandbox:    sandbox,
 		limiter:    make(chan struct{}, downloadParallelism),
 		browserURL: browserURL,
+		timeout:    timeout,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
@@ -169,6 +168,7 @@ type worker struct {
 	actionDigest *pb.Digest
 	metadata     *pb.ExecutedActionMetadata
 	clean        bool
+	timeout      time.Duration
 
 	// For limiting parallelism during download actions
 	limiter chan struct{}
@@ -216,8 +216,13 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 	w.actionDigest = req.ActionDigest
 	if status := w.prepareDir(action, command); status != nil {
 		log.Warning("Failed to prepare directory for action digest %s: %s", w.actionDigest.Hash, status)
+		ar := &pb.ActionResult{
+			ExitCode:          255, // Not really but shouldn't look like it was successful
+			ExecutionMetadata: w.metadata,
+		}
+		status.Message += w.writeUncachedResult(ar, status.Message)
 		return &pb.ExecuteResponse{
-			Result: &pb.ActionResult{},
+			Result: ar,
 			Status: status,
 		}
 	}
@@ -242,6 +247,9 @@ func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Co
 // prepareDir prepares the directory for executing this request.
 func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.Status {
 	log.Info("Preparing directory for %s", w.actionDigest.Hash)
+	defer func() {
+		w.metadata.InputFetchCompletedTimestamp = toTimestamp(time.Now())
+	}()
 	w.update(pb.ExecutionStage_EXECUTING, nil)
 	dir, err := ioutil.TempDir(w.rootDir, "mettle")
 	if err != nil {
@@ -261,9 +269,7 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 			}
 		}
 	}
-	end := time.Now()
-	w.metadata.InputFetchCompletedTimestamp = toTimestamp(end)
-	fetchDurations.Observe(end.Sub(start).Seconds())
+	fetchDurations.Observe(time.Since(start).Seconds())
 	log.Info("Prepared directory for %s", w.actionDigest.Hash)
 	return nil
 }
@@ -318,7 +324,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	execDuration := execEnd.Sub(start).Seconds()
 	executeDurations.Observe(execDuration)
 	// Regardless of the result, upload stdout / stderr.
-	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	stdoutDigest, _ := w.client.WriteBlob(ctx, stdout.Bytes())
 	stderrDigest, _ := w.client.WriteBlob(ctx, stderr.Bytes())
@@ -334,22 +340,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		msg := "Execution failed: " + err.Error()
 		msg = appendStd(msg, "Stdout", stdout.String())
 		msg = appendStd(msg, "Stderr", stderr.String())
-		if w.browserURL != "" {
-			// Attempt to store the failed action result
-			ctx, cancel = context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-			if digest, err := w.client.WriteProto(ctx, &bbcas.UncachedActionResult{
-				ActionDigest: w.actionDigest,
-				ExecuteResponse: &pb.ExecuteResponse{
-					Status: status(codes.Unknown, msg),
-					Result: ar,
-				},
-			}); err != nil {
-				log.Warning("Failed to save uncached action result: %s", err)
-			} else {
-				msg += fmt.Sprintf("\nFailed action details: %s/uncached_action_result/mettle/%s/%d/\n", w.browserURL, digest.Hash, digest.Size)
-			}
-		}
+		msg += w.writeUncachedResult(ar, msg)
 		return &pb.ExecuteResponse{
 			Status: status(codes.Unknown, msg),
 			Result: ar,
@@ -361,7 +352,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			Result: ar,
 		}
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	if _, err := w.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
 		InstanceName: w.client.InstanceName,
@@ -380,6 +371,31 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
 	}
+}
+
+// writeUncachedResult attempts to write an uncached action result proto.
+// This is an extension for buildbarn-browser that lets it display results of a failed build.
+// It returns a string that, on success, contains an appropriate message about it (they are
+// communicated back in the human-readable part of the response).
+func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
+	// No point if we don't know where the browser is.
+	if w.browserURL == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
+	defer cancel()
+	digest, err := w.client.WriteProto(ctx, &bbcas.UncachedActionResult{
+		ActionDigest: w.actionDigest,
+		ExecuteResponse: &pb.ExecuteResponse{
+			Status: status(codes.Unknown, msg),
+			Result: ar,
+		},
+	})
+	if err != nil {
+		log.Warning("Failed to save uncached action result: %s", err)
+		return ""
+	}
+	return fmt.Sprintf("\nFailed action details: %s/uncached_action_result/mettle/%s/%d/\n", w.browserURL, digest.Hash, digest.Size)
 }
 
 // shouldSandbox returns true if we should sandbox execution of the given command.
@@ -442,14 +458,14 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 		op.Result = &longrunning.Operation_Response{Response: any}
 	}
 	body, _ := proto.Marshal(op)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	return w.responses.Send(ctx, &pubsub.Message{Body: body})
 }
 
 // readBlobToProto reads an entire blob and deserialises it into a message.
 func (w *worker) readBlobToProto(digest *pb.Digest, msg proto.Message) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	return w.client.ReadProto(ctx, sdkdigest.NewFromProtoUnvalidated(digest), msg)
 }

@@ -25,7 +25,7 @@ const downloadParallelism = 4
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	dirs, err := w.client.GetDirectoryTree(ctx, digest)
 	if err != nil {
@@ -113,7 +113,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	for i, f := range filenames {
 		digests[i] = files[f].Digest
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	resp, err := w.client.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 		InstanceName: w.client.InstanceName,
@@ -139,7 +139,7 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return fmt.Errorf("Failed to download file: %s", err)
