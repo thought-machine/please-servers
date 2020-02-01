@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -17,11 +18,18 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
+// Definition of the Kelly-Bootle Standard Unit per https://xkcd.com/394/
+const kb = 1012
+
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
-const maxBlobBatchSize = 4012000 // 4000 Kelly-Bootle standard units
+const maxBlobBatchSize = 4000 * kb
 
 // downloadParallelism is the maximum number of parallel downloads we'll allow
 const downloadParallelism = 4
+
+// blobChunkSize is the size of a chunk that we will attempt to read in parallel.
+// Under this size we read them linearly.
+const blobChunkSize = 10000 * kb
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
@@ -136,6 +144,10 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 
 // downloadFile downloads a single file to disk.
 func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
+	if file.Digest.SizeBytes > blobChunkSize {
+		return w.downloadFileChunked(filename, file)
+	}
+
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
@@ -149,6 +161,30 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 		}
 	}
 	return nil
+}
+
+// downloadFileChunked downloads a file in multiple pieces in parallel.
+func (w *worker) downloadFileChunked(filename string, file *pb.FileNode) error {
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode(file.IsExecutable))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var g errgroup.Group
+	for i := int64(0); i < file.Digest.SizeBytes; i += blobChunkSize {
+		start := i
+		g.Go(func() error {
+			w.limiter <- struct{}{}
+			defer func() { <-w.limiter }()
+
+			ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
+			defer cancel()
+			wat := writerAt{w: f, off: start}
+			_, err := w.client.ReadBlobRangeStreamed(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), start, blobChunkSize, &wat)
+			return err
+		})
+	}
+	return g.Wait()
 }
 
 // makeDirIfNeeded makes a new subdir if the given name specifies a subdir (i.e. contains a path separator)
@@ -171,4 +207,16 @@ func fileMode(isExecutable bool) os.FileMode {
 		return 0755
 	}
 	return 0644
+}
+
+// A writerAt wraps an io.WriterAt to present an io.Writer that is offset by the appropriate amount.
+type writerAt struct {
+	w   io.WriterAt
+	off int64
+}
+
+func (w *writerAt) Write(b []byte) (int, error) {
+	n, err := w.w.WriteAt(b, w.off)
+	w.off += int64(n)
+	return n, err
 }
