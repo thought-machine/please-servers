@@ -89,6 +89,27 @@ func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 	}
 }
 
+func DownloadBlob(storage, filename, hash string, size int, secureStorage bool) error {
+	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
+		Service:            storage,
+		NoSecurity:         !secureStorage,
+		TransportCredsOnly: secureStorage,
+		DialOpts:           []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))},
+	})
+	if err != nil {
+		return err
+	}
+	w := &worker{
+		client:  client,
+		timeout: 10 * time.Minute,
+	}
+	start := time.Now()
+	defer func() {
+		log.Notice("Blob download complete in %s", time.Since(start))
+	}()
+	return w.downloadFile(filename, &pb.FileNode{Digest: &pb.Digest{Hash: hash, SizeBytes: int64(size)}})
+}
+
 func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {

@@ -65,6 +65,15 @@ var opts = struct {
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		} `group:"Options controlling communication with the CAS server"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
+	Download struct {
+		Output  string `short:"o" long:"output" required:"true" description:"Filename to write blob into"`
+		Hash    string `long:"hash" required:"true" description:"Hex-encoded hash of blob to download"`
+		Size    int    `long:"size" required:"true" description:"Size of blob to download"`
+		Storage struct {
+			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		} `group:"Options controlling communication with the CAS server"`
+	} `command:"download" description:"Download a single file from the CAS server."`
 }{
 	Usage: `
 Mettle is an implementation of the execution service of the Remote Execution API.
@@ -111,6 +120,11 @@ func main() {
 		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
 		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout))
+	} else if cmd == "download" {
+		if err := worker.DownloadBlob(opts.Download.Storage.Storage, opts.Download.Output, opts.Download.Hash, opts.Download.Size, opts.Download.Storage.TLS); err != nil {
+			log.Fatalf("Download failed: %s", err)
+		}
+		log.Notice("Download complete")
 	} else {
 		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	}
