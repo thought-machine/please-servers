@@ -2,36 +2,32 @@ package rpc
 
 import (
 	"context"
+	"reflect"
 	"sync"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 )
 
+var (
+	sizeofFileNode      = int(reflect.TypeOf(pb.FileNode{}).Size())
+	sizeofDirectoryNode = int(reflect.TypeOf(pb.DirectoryNode{}).Size())
+	sizeofSymlinkNode   = int(reflect.TypeOf(pb.SymlinkNode{}).Size())
+	sizeofDirectory     = int(reflect.TypeOf(pb.Directory{}).Size())
+)
+
 type dirResponse struct {
-	Dir *pb.Directory
-	Err error
+	Dir  *pb.Directory
+	Err  error
+	Size int
 }
 
-// A treePool implements the downloading of directories in parallel for the GetTree RPC.
-// It limits parallelism globally so we don't generate an arbitrarily large number of goroutines
-// all trying to hit up the bucket at once.
-type treePool struct {
-	s *server
-}
-
-func newPool(s *server) *treePool {
-	return &treePool{
-		s: s,
-	}
-}
-
-// GetTree returns a channel to iterate over all the directories recursively under the given one.
+// getTree returns a channel to iterate over all the directories recursively under the given one.
 // The responses are not necessarily returned in any particular order.
-func (p *treePool) GetTree(digest *pb.Digest) chan *dirResponse {
+func (s *server) getTree(digest *pb.Digest) chan *dirResponse {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	ch := make(chan *dirResponse, 10)
-	go p.fetchDir(digest, &wg, ch)
+	go s.fetchDir(digest, &wg, ch)
 	go func() {
 		wg.Wait()
 		close(ch)
@@ -39,13 +35,14 @@ func (p *treePool) GetTree(digest *pb.Digest) chan *dirResponse {
 	return ch
 }
 
-func (p *treePool) fetchDir(digest *pb.Digest, wg *sync.WaitGroup, ch chan *dirResponse) {
+func (s *server) fetchDir(digest *pb.Digest, wg *sync.WaitGroup, ch chan *dirResponse) {
 	dir := &pb.Directory{}
-	err := p.s.readBlobIntoMessage(context.Background(), "cas", digest, dir)
-	ch <- &dirResponse{Dir: dir, Err: err}
+	err := s.readBlobIntoMessage(context.Background(), "cas", digest, dir)
+	size := len(dir.Files)*sizeofFileNode + len(dir.Directories)*sizeofDirectoryNode + len(dir.Symlinks)*sizeofSymlinkNode + sizeofDirectory
+	ch <- &dirResponse{Dir: dir, Err: err, Size: size}
 	wg.Add(len(dir.Directories))
 	for _, child := range dir.Directories {
-		go p.fetchDir(child.Digest, wg, ch)
+		go s.fetchDir(child.Digest, wg, ch)
 	}
 	wg.Done()
 }

@@ -109,7 +109,6 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		bucket:       bucket,
 	}
-	srv.pool = newPool(srv)
 	if numCounters == 0 {
 		// Assume that average object size is 1kb, so num counters will be * 10/1000 of that.
 		numCounters = int64(maxCacheSize) / 100
@@ -118,6 +117,9 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 		NumCounters: numCounters,
 		MaxCost:     int64(maxCacheSize),
 		BufferItems: 64, // recommended by upstream
+		OnEvict: func(key, conflict uint64, value interface{}, cost int64) {
+			log.Debug("Evicting item from cache with cost %d", cost)
+		},
 	})
 	if err != nil {
 		log.Fatalf("Failed to create cache: %s", err)
@@ -151,7 +153,6 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 type server struct {
 	bucket           *blob.Bucket
 	bytestreamRe     *regexp.Regexp
-	pool             *treePool
 	limiter          chan struct{}
 	cache            *ristretto.Cache
 	maxCacheItemSize int64
@@ -292,12 +293,25 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	} else if req.PageToken != "" {
 		return status.Errorf(codes.Unimplemented, "page tokens not implemented for GetTree")
 	}
+	key := s.key("tree", req.RootDigest)
+	if resp, present := s.cache.Get(key); present {
+		cacheHits.Inc()
+		return srv.Send(resp.(*pb.GetTreeResponse))
+	}
+	cacheMisses.Inc()
 	resp := &pb.GetTreeResponse{}
-	for r := range s.pool.GetTree(req.RootDigest) {
+	size := 0
+	for r := range s.getTree(req.RootDigest) {
 		if r.Err != nil {
 			return r.Err
 		}
 		resp.Directories = append(resp.Directories, r.Dir)
+		size += r.Size
+	}
+	if s.cache.Set(key, resp, int64(size)) {
+		log.Debug("Set tree %s in the cache with size %d", req.RootDigest, size)
+	} else {
+		log.Debug("Cache did not accept tree %s with size %d", req.RootDigest, size)
 	}
 	return srv.Send(resp)
 }
@@ -440,7 +454,11 @@ func (s *server) cachedBlob(key string) ([]byte, bool) {
 func (s *server) cacheBlob(key string, digest *pb.Digest, blob []byte) {
 	l := int64(len(blob))
 	if l < s.maxCacheItemSize && l == digest.SizeBytes {
-		s.cache.Set(key, blob, l)
+		if s.cache.Set(key, blob, l) {
+			log.Debug("Setting blob in cache for %s with size %d", key, l)
+		} else {
+			log.Debug("Cache did not accept blob for %s with size %d", key, l)
+		}
 	}
 }
 
@@ -592,6 +610,7 @@ func (r *cachingReader) Close() error {
 }
 
 func logUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	start := time.Now()
 	resp, err := handler(ctx, req)
 	if err != nil {
 		if status.Code(err) != codes.NotFound {
@@ -600,17 +619,18 @@ func logUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServ
 			log.Debug("Not found on %s: %s", info.FullMethod, err)
 		}
 	} else {
-		log.Debug("Handled %s successfully", info.FullMethod)
+		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
 	}
 	return resp, err
 }
 
 func logStreamRequests(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	start := time.Now()
 	err := handler(srv, ss)
 	if err != nil {
 		log.Error("Error handling %s: %s", info.FullMethod, err)
 	} else {
-		log.Debug("Handled %s successfully", info.FullMethod)
+		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
 	}
 	return err
 }
