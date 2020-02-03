@@ -260,14 +260,17 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	resp := &pb.BatchReadBlobsResponse{
 		Responses: make([]*pb.BatchReadBlobsResponse_Response, len(req.Digests)),
 	}
 	var wg sync.WaitGroup
+	var size int64
 	wg.Add(len(req.Digests))
 	for i, d := range req.Digests {
+		size += d.SizeBytes
 		go func(i int, d *pb.Digest) {
 			rr := &pb.BatchReadBlobsResponse_Response{
 				Status: &rpcstatus.Status{},
@@ -284,6 +287,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 		}(i, d)
 	}
 	wg.Wait()
+	log.Debug("Served BatchReadBlobs request of %d blobs, total %d bytes in %s", len(req.Digests), size, time.Since(start))
 	return resp, nil
 }
 
@@ -317,9 +321,9 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
 	defer cancel()
-	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	digest, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
@@ -343,6 +347,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		}
 		if err != nil {
 			if err == io.EOF {
+				log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
 				return nil
 			}
 			return err
