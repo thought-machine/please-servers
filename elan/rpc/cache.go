@@ -2,8 +2,10 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"net"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -56,8 +58,14 @@ var hotEvictionsTotal = prometheus.NewGauge(prometheus.GaugeOpts{
 })
 
 // newCache returns a new cache based on the given settings.
-func newCache(s *server, self string, peers []string, maxSize, maxItemSize int64) *cache {
-	pool := groupcache.NewHTTPPool(self)
+func newCache(s *server, port int, self string, peers []string, maxSize, maxItemSize int64) *cache {
+	pool := groupcache.NewHTTPPoolOpts(self, &groupcache.HTTPPoolOptions{})
+	mux := http.NewServeMux()
+	mux.Handle("/_groupcache/", pool)
+	go func() {
+		log.Notice("Serving groupcache on :%d", port)
+		log.Fatalf("http.ListenAndServe failed: %s", http.ListenAndServe(fmt.Sprintf(":%d", port), mux))
+	}()
 	c := &cache{
 		server:      s,
 		pool:        pool,

@@ -26,6 +26,7 @@ var opts = struct {
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	} `group:"Options controlling TLS for the gRPC server"`
 	Cache struct {
+		Port        int          `long:"cache_port" default:"8080" description:"Port to communicate cache data over"`
 		MaxSize     cli.ByteSize `long:"cache_max_size" default:"10M" description:"Max size of in-memory cache"`
 		MaxItemSize cli.ByteSize `long:"cache_max_item_size" default:"100K" description:"Max size of any single item in the cache"`
 		Peers       []string     `long:"cache_peer" description:"URLs of cache peers to connect to. Will be monitored via DNS."`
@@ -49,5 +50,5 @@ func main() {
 	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
 	go metrics.Serve(opts.MetricsPort)
 	log.Notice("Serving on :%d", opts.Port)
-	rpc.ServeForever(opts.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize))
+	rpc.ServeForever(opts.Port, opts.Cache.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize))
 }

@@ -95,7 +95,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64) {
+func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
@@ -109,7 +109,7 @@ func ServeForever(port int, storage, keyFile, certFile, self string, peers []str
 		bucket:           bucket,
 		maxCacheItemSize: maxCacheItemSize,
 	}
-	srv.cache = newCache(srv, self, peers, maxCacheSize, maxCacheItemSize)
+	srv.cache = newCache(srv, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			logUnaryRequests,
