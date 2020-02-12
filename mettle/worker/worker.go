@@ -30,6 +30,7 @@ import (
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"gopkg.in/op/go-logging.v1"
 
@@ -114,7 +115,10 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts:           []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))},
+		DialOpts: []grpc.DialOption{
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
+			grpc.WithBalancerName(roundrobin.Name),
+		},
 	})
 	if err != nil {
 		return err
