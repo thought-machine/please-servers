@@ -147,7 +147,8 @@ func (c *cache) getter(ctx context.Context, key string, dest groupcache.Sink) er
 
 func (c *cache) MonitorPeers(peers []string) {
 	current := []string{}
-	for range time.NewTicker(10 * time.Second).C {
+	ticker := time.NewTicker(10 * time.Second)
+	for ; true; <-ticker.C {
 		if updated, err := c.resolveAddresses(peers); err != nil {
 			log.Warning("Failed to resolve peer address: %s", err)
 		} else if !equal(current, updated) {
@@ -182,7 +183,7 @@ func (c *cache) resolveAddress(address string) ([]string, error) {
 		return net.DefaultResolver.LookupHost(ctx, address)
 	}
 	// Handle the port.
-	parts := strings.SplitN(address, ":", 1)
+	parts := strings.SplitN(address, ":", 2)
 	addrs, err := net.DefaultResolver.LookupHost(ctx, parts[0])
 	for i, addr := range addrs {
 		addrs[i] = addr + ":" + parts[1]
