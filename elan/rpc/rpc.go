@@ -229,6 +229,8 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			if len(r.Data) != int(r.Digest.SizeBytes) {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
+			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
+				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data)); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
