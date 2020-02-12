@@ -170,7 +170,16 @@ func (c *cache) RecordMetrics() {
 func (c *cache) resolveAddress(address string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return net.DefaultResolver.LookupHost(ctx, address)
+	if !strings.Contains(address, ":") {
+		return net.DefaultResolver.LookupHost(ctx, address)
+	}
+	// Handle the port.
+	parts := strings.SplitN(address, ":", 1)
+	addrs, err := net.DefaultResolver.LookupHost(ctx, parts[0])
+	for i, addr := range addrs {
+		addrs[i] = addr + ":" + parts[1]
+	}
+	return addrs, err
 }
 
 func (c *cache) resolveAddresses(addresses []string) ([]string, error) {
