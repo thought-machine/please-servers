@@ -24,7 +24,6 @@ import (
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
-	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -74,29 +73,29 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:      "write_duration_seconds",
 	Buckets:   prometheus.DefBuckets,
 })
-var cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "elan",
-	Name:      "cache_hits_total",
-})
-var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "elan",
-	Name:      "cache_misses_total",
-})
 
 func init() {
+	prometheus.MustRegister(mainBytesTotal)
+	prometheus.MustRegister(mainItemsTotal)
+	prometheus.MustRegister(mainGetsTotal)
+	prometheus.MustRegister(mainHitsTotal)
+	prometheus.MustRegister(mainEvictionsTotal)
+	prometheus.MustRegister(hotBytesTotal)
+	prometheus.MustRegister(hotItemsTotal)
+	prometheus.MustRegister(hotGetsTotal)
+	prometheus.MustRegister(hotHitsTotal)
+	prometheus.MustRegister(hotEvictionsTotal)
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(bytesServed)
 	prometheus.MustRegister(readLatencies)
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
 	prometheus.MustRegister(writeDurations)
-	prometheus.MustRegister(cacheHits)
-	prometheus.MustRegister(cacheMisses)
 	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, maxCacheItemSize uint64, numCounters int64) {
+func ServeForever(port int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
@@ -106,27 +105,11 @@ func ServeForever(port int, storage, keyFile, certFile string, maxCacheSize, max
 		log.Fatalf("Failed to open storage %s: %v", storage, err)
 	}
 	srv := &server{
-		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		bucket:       bucket,
+		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		bucket:           bucket,
+		maxCacheItemSize: maxCacheItemSize,
 	}
-	if numCounters == 0 {
-		// Assume that average object size is 1kb, so num counters will be * 10/1000 of that.
-		numCounters = int64(maxCacheSize) / 100
-	}
-	c, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: numCounters,
-		MaxCost:     int64(maxCacheSize),
-		BufferItems: 64, // recommended by upstream
-		OnEvict: func(key, conflict uint64, value interface{}, cost int64) {
-			log.Debug("Evicting item from cache with cost %d", cost)
-		},
-	})
-	if err != nil {
-		log.Fatalf("Failed to create cache: %s", err)
-	}
-	srv.cache = c
-	srv.maxCacheItemSize = int64(maxCacheItemSize)
-	log.Info("Initialised empty cache, max size %d, max item size %d", maxCacheSize, maxCacheItemSize)
+	srv.cache = newCache(srv, self, peers, maxCacheSize, maxCacheItemSize)
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			logUnaryRequests,
@@ -154,7 +137,7 @@ type server struct {
 	bucket           *blob.Bucket
 	bytestreamRe     *regexp.Regexp
 	limiter          chan struct{}
-	cache            *ristretto.Cache
+	cache            *cache
 	maxCacheItemSize int64
 }
 
@@ -222,7 +205,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 
 // blobExists returns true if this blob has been previously uploaded.
 func (s *server) blobExists(ctx context.Context, key string) bool {
-	if _, present := s.cachedBlob(key); present {
+	if s.cache.Has(key) {
 		return true
 	}
 	exists, _ := s.bucket.Exists(ctx, key)
@@ -298,26 +281,28 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 		return status.Errorf(codes.Unimplemented, "page tokens not implemented for GetTree")
 	}
 	key := s.key("tree", req.RootDigest)
-	if resp, present := s.cache.Get(key); present {
-		cacheHits.Inc()
-		return srv.Send(resp.(*pb.GetTreeResponse))
-	}
-	cacheMisses.Inc()
 	resp := &pb.GetTreeResponse{}
-	size := 0
-	for r := range s.getTree(req.RootDigest) {
-		if r.Err != nil {
-			return r.Err
-		}
-		resp.Directories = append(resp.Directories, r.Dir)
-		size += r.Size
+	if s.cache.GetProto(key, resp) {
+		return srv.Send(resp)
 	}
-	if s.cache.Set(key, resp, int64(size)) {
-		log.Debug("Set tree %s in the cache with size %d", req.RootDigest, size)
-	} else {
-		log.Debug("Cache did not accept tree %s with size %d", req.RootDigest, size)
+	resp, err := s.getWholeTree(req.RootDigest)
+	if err != nil {
+		return err
 	}
 	return srv.Send(resp)
+}
+
+// getWholeTree builds a directory tree proto with no caching.
+// It's also called from the cache.
+func (s *server) getWholeTree(digest *pb.Digest) (*pb.GetTreeResponse, error) {
+	resp := &pb.GetTreeResponse{}
+	for r := range s.getTree(digest) {
+		if r.Err != nil {
+			return nil, r.Err
+		}
+		resp.Directories = append(resp.Directories, r.Dir)
+	}
+	return resp, nil
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
@@ -390,7 +375,7 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
 	key := s.key(prefix, digest)
-	if blob, present := s.cachedBlob(key); present {
+	if blob, present := s.cachedBlob(key, digest); present {
 		if length > 0 {
 			blob = blob[offset : offset+length]
 		}
@@ -409,15 +394,12 @@ func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Di
 		}
 		return nil, err
 	}
-	if digest.SizeBytes <= s.maxCacheItemSize {
-		return &countingReader{r: &cachingReader{r: r, s: s, key: key, digest: digest}}, nil
-	}
 	return &countingReader{r: r}, nil
 }
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
 	key := s.key(prefix, digest)
-	if blob, present := s.cachedBlob(key); present {
+	if blob, present := s.cachedBlob(key, digest); present {
 		return blob, nil
 	}
 	start := time.Now()
@@ -427,11 +409,7 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 		return nil, err
 	}
 	defer r.Close()
-	b, err := ioutil.ReadAll(r)
-	if err == nil {
-		s.cacheBlob(key, digest, b)
-	}
-	return b, err
+	return ioutil.ReadAll(r)
 }
 
 func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
@@ -447,24 +425,13 @@ func (s *server) key(prefix string, digest *pb.Digest) string {
 	return fmt.Sprintf("%s/%c%c/%s", prefix, digest.Hash[0], digest.Hash[1], digest.Hash)
 }
 
-func (s *server) cachedBlob(key string) ([]byte, bool) {
-	if blob, present := s.cache.Get(key); present {
-		cacheHits.Inc()
-		return blob.([]byte), true
-	}
-	cacheMisses.Inc()
-	return nil, false
-}
-
-func (s *server) cacheBlob(key string, digest *pb.Digest, blob []byte) {
-	l := int64(len(blob))
-	if l < s.maxCacheItemSize && l == digest.SizeBytes {
-		if s.cache.Set(key, blob, l) {
-			log.Debug("Setting blob in cache for %s with size %d", key, l)
-		} else {
-			log.Debug("Cache did not accept blob for %s with size %d", key, l)
+func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {
+	if digest.SizeBytes < s.maxCacheItemSize {
+		if blob := s.cache.Get(key); blob != nil {
+			return blob, true
 		}
 	}
+	return nil, false
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
@@ -507,7 +474,9 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	if err := wc.Close(); err != nil {
 		return err
 	}
-	s.cacheBlob(key, digest, buf.Bytes())
+	if digest.SizeBytes < s.maxCacheItemSize {
+		s.cache.Set(key, buf.Bytes())
+	}
 	return nil
 }
 
@@ -584,34 +553,6 @@ func (r *countingReader) Read(buf []byte) (int, error) {
 
 func (r *countingReader) Close() error {
 	return r.r.Close()
-}
-
-// A cachingReader wraps a ReadCloser to cache the result when it is done.
-type cachingReader struct {
-	s      *server
-	r      io.ReadCloser
-	key    string
-	digest *pb.Digest
-	buf    bytes.Buffer
-	err    error
-}
-
-func (r *cachingReader) Read(buf []byte) (int, error) {
-	n, err := r.r.Read(buf)
-	if err != nil {
-		r.err = err
-	} else {
-		r.buf.Write(buf[:n])
-	}
-	return n, err
-}
-
-func (r *cachingReader) Close() error {
-	err := r.r.Close()
-	if err == nil && r.err == nil {
-		r.s.cacheBlob(r.key, r.digest, r.buf.Bytes())
-	}
-	return err
 }
 
 func logUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {

@@ -85,7 +85,18 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			fn := filename
 			f := file
 			g.Go(func() error { return w.downloadFile(fn, f) })
-		} else if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {
+			continue
+		}
+		// Check cache for this blob (we never cache blobs that are big enough not to be batchable)
+		if blob, present := w.cache.Get(file.Digest.Hash); present {
+			fn := filename
+			f := file
+			g.Go(func() error {
+				return ioutil.WriteFile(fn, blob.([]byte), fileMode(f.IsExecutable))
+			})
+			continue
+		}
+		if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {
 			// This blob on its own is OK but will exceed the total.
 			// Download what we have so far then deal with it.
 			fs := filenames[:]
@@ -130,6 +141,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 		} else if err := ioutil.WriteFile(filename, r.Data, fileMode(files[filename].IsExecutable)); err != nil {
 			return err
 		}
+		w.cache.Set(digests[i].Hash, r.Data, int64(len(r.Data)))
 	}
 	return nil
 }

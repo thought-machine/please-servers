@@ -21,6 +21,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -83,13 +84,13 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration) {
-	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox, clean, secureStorage, timeout); err != nil {
+func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) {
+	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox, clean, secureStorage, timeout, maxCacheSize); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration) error {
+func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
@@ -126,10 +127,19 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 	if err != nil {
 		return fmt.Errorf("Failed to make path absolute: %s", err)
 	}
+	c, err := ristretto.NewCache(&ristretto.Config{
+		NumCounters: maxCacheSize / 10, // bit of a guess
+		MaxCost:     maxCacheSize,
+		BufferItems: 64, // recommended by upstream
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to create cache: %s", err)
+	}
 	w := &worker{
 		requests:   common.MustOpenSubscription(requestQueue),
 		responses:  common.MustOpenTopic(responseQueue),
 		client:     client,
+		cache:      c,
 		rootDir:    abspath,
 		clean:      clean,
 		home:       home,
@@ -160,6 +170,7 @@ type worker struct {
 	requests     *pubsub.Subscription
 	responses    *pubsub.Topic
 	client       *client.Client
+	cache        *ristretto.Cache
 	dir, rootDir string
 	home         string
 	name         string

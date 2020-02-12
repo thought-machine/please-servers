@@ -211,9 +211,10 @@ go_get(
 go_get(
     name = "cli-init",
     get = "github.com/peterebden/go-cli-init",
-    revision = "v1.2.0",
+    revision = "v1.3.0",
     deps = [
         ":go-flags",
+        ":humanize",
         ":logging",
         ":terminal",
     ],
@@ -419,4 +420,13 @@ go_get(
         "vendor/golang.org/x/sys/unix",
     ],
     revision = "v1.9.0",
+)
+
+go_get(
+    name = "groupcache",
+    get = "github.com/peterebden/groupcache/...",
+    revision = "7802ab2b12fde1d6c85b66a66bfa494654cb5448",
+    deps = [
+        ":protobuf",
+    ],
 )

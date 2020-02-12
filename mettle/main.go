@@ -37,26 +37,28 @@ var opts = struct {
 		} `group:"Options controlling TLS for the gRPC server"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
-		Dir     string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		NoClean bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
-		Name    string       `short:"n" long:"name" description:"Name of this worker"`
-		Browser string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Sandbox string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		Storage struct {
+		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Name         string       `short:"n" long:"name" description:"Name of this worker"`
+		Browser      string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
+		Storage      struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		} `group:"Options controlling communication with the CAS server"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
-		Port       int          `short:"p" long:"port" default:"7778" description:"Port to serve on"`
-		Dir        string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		NoClean    bool         `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
-		NumWorkers int          `short:"n" long:"num_workers" default:"1" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
-		Browser    string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Sandbox    string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout    cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		TLS        struct {
+		Port         int          `short:"p" long:"port" default:"7778" description:"Port to serve on"`
+		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		NoClean      bool         `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
+		NumWorkers   int          `short:"n" long:"num_workers" default:"1" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
+		Browser      string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
+		TLS          struct {
 			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 			CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 		} `group:"Options controlling TLS for the gRPC server"`
@@ -106,11 +108,11 @@ func main() {
 		common.MustOpenTopic(opts.Queues.RequestQueue)
 		common.MustOpenTopic(opts.Queues.ResponseQueue)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout))
+			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
 		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout))
+		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else {
 		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	}
