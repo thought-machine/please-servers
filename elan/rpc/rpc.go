@@ -457,6 +457,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	var wc io.WriteCloser = w
 	var wr io.Writer = w
 	if digest.SizeBytes < s.maxCacheItemSize {
+		buf.Grow(int(digest.SizeBytes))
 		wr = io.MultiWriter(w, &buf)
 	}
 	h := sha256.New()
