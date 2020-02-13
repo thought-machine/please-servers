@@ -73,6 +73,14 @@ var cpuUsage = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:      "cpu_usage_per_sec",
 	Buckets:   []float64{0.2, 0.5, 1.0, 2.0, 5.0},
 })
+var cacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "cache_hits_total",
+})
+var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "cache_misses_total",
+})
 
 func init() {
 	prometheus.MustRegister(totalBuilds)
@@ -82,6 +90,8 @@ func init() {
 	prometheus.MustRegister(uploadDurations)
 	prometheus.MustRegister(peakMemory)
 	prometheus.MustRegister(cpuUsage)
+	prometheus.MustRegister(cacheHits)
+	prometheus.MustRegister(cacheMisses)
 }
 
 // RunForever runs the worker, receiving jobs until terminated.

@@ -89,6 +89,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 		}
 		// Check cache for this blob (we never cache blobs that are big enough not to be batchable)
 		if blob, present := w.cache.Get(file.Digest.Hash); present {
+			cacheHits.Inc()
 			fn := filename
 			f := file
 			g.Go(func() error {
@@ -96,6 +97,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			})
 			continue
 		}
+		cacheMisses.Inc()
 		if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {
 			// This blob on its own is OK but will exceed the total.
 			// Download what we have so far then deal with it.
