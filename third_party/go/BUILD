@@ -81,6 +81,7 @@ go_get(
         "metadata",
         "naming",
         "peer",
+        "reflection/...",
         "resolver",
         "resolver/dns",
         "resolver/passthrough",

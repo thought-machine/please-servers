@@ -35,6 +35,7 @@ import (
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
@@ -129,6 +130,7 @@ func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, 
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	grpc_prometheus.Register(s)
+	reflection.Register(s)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)
 }

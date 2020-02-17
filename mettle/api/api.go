@@ -20,6 +20,7 @@ import (
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
@@ -86,6 +87,7 @@ func serve(port int, requestQueue, responseQueue, keyFile, certFile string) (*gr
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
 	grpc_prometheus.Register(s)
+	reflection.Register(s)
 	return s, lis, nil
 }
 

@@ -29,6 +29,7 @@ import (
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
@@ -88,6 +89,7 @@ func ServeForever(port int, keyFile, certFile, storage string, secureStorage boo
 	)...)
 	pb.RegisterFetchServer(s, srv)
 	grpc_prometheus.Register(s)
+	reflection.Register(s)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)
 }
