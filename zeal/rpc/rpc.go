@@ -65,7 +65,7 @@ func ServeForever(port int, keyFile, certFile, storage string, secureStorage boo
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
 		DialOpts:           []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))},
-	})
+	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		log.Fatalf("Failed to connect to storage backend: %s", err)
 	}

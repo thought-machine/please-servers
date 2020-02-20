@@ -129,7 +129,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
 			grpc.WithBalancerName(roundrobin.Name),
 		},
-	})
+	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return err
 	}
