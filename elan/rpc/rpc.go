@@ -225,6 +225,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 	for i, r := range req.Requests {
 		go func(i int, r *pb.BatchUpdateBlobsRequest_Request) {
 			rr := &pb.BatchUpdateBlobsResponse_Response{
+				Digest: r.Digest,
 				Status: &rpcstatus.Status{},
 			}
 			resp.Responses[i] = rr
