@@ -21,7 +21,8 @@ import (
 const maxBlobBatchSize = 4012000 // 4000 Kelly-Bootle standard units
 
 // downloadParallelism is the maximum number of parallel downloads we'll allow
-const downloadParallelism = 4
+// This includes simultaneous disk writes.
+const downloadParallelism = 8
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
@@ -93,7 +94,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			fn := filename
 			f := file
 			g.Go(func() error {
-				return ioutil.WriteFile(fn, blob.([]byte), fileMode(f.IsExecutable))
+				return w.writeFile(fn, blob.([]byte), fileMode(f.IsExecutable))
 			})
 			continue
 		}
@@ -140,7 +141,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 		filename := filenames[i]
 		if r.Status.Code != int32(codes.OK) {
 			return fmt.Errorf("%s", r.Status.Message)
-		} else if err := ioutil.WriteFile(filename, r.Data, fileMode(files[filename].IsExecutable)); err != nil {
+		} else if err := w.writeFile(filename, r.Data, fileMode(files[filename].IsExecutable)); err != nil {
 			return err
 		}
 		w.cache.Set(digests[i].Hash, r.Data, int64(len(r.Data)))
@@ -163,6 +164,13 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 		}
 	}
 	return nil
+}
+
+// writeFile writes a blob to disk.
+func (w *worker) writeFile(filename string, data []byte, mode os.FileMode) error {
+	w.limiter <- struct{}{}
+	defer func() { <-w.limiter }()
+	return ioutil.WriteFile(filename, data, mode)
 }
 
 // makeDirIfNeeded makes a new subdir if the given name specifies a subdir (i.e. contains a path separator)
