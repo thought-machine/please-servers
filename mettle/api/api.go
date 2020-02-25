@@ -227,6 +227,15 @@ func (s *server) process(msg *pubsub.Message) {
 		log.Error("ActionDigest in received message is nil: %s", op)
 		return
 	}
+	if log.IsEnabledFor(logging.DEBUG) {
+		switch result := op.Result.(type) {
+		case *longrunning.Operation_Response:
+			response := &pb.ExecuteResponse{}
+			if err := ptypes.UnmarshalAny(result.Response, response); err == nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
+				log.Debug("Got a failed update for %s: %s", metadata.ActionDigest.Hash, response.Status.Message)
+			}
+		}
+	}
 	log.Info("Got an update for %s", metadata.ActionDigest.Hash)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
