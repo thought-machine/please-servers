@@ -32,14 +32,25 @@ func (g *grpcLogMabob) Infof(format string, args ...interface{})    { log.Info(f
 func (g *grpcLogMabob) Infoln(args ...interface{})                  { log.Info("%s", args) }
 func (g *grpcLogMabob) Warning(args ...interface{})                 { log.Warning("%s", args) }
 func (g *grpcLogMabob) Warningf(format string, args ...interface{}) { log.Warning(format, args...) }
-func (g *grpcLogMabob) Warningln(args ...interface{})               { log.Warning("%s", args) }
-func (g *grpcLogMabob) Error(args ...interface{})                   { log.Error("", args...) }
-func (g *grpcLogMabob) Errorf(format string, args ...interface{})   { log.Errorf(format, args...) }
-func (g *grpcLogMabob) Errorln(args ...interface{})                 { log.Error("", args...) }
-func (g *grpcLogMabob) Fatal(args ...interface{})                   { log.Fatal(args...) }
-func (g *grpcLogMabob) Fatalf(format string, args ...interface{})   { log.Fatalf(format, args...) }
-func (g *grpcLogMabob) Fatalln(args ...interface{})                 { log.Fatal(args...) }
-func (g *grpcLogMabob) V(l int) bool                                { return log.IsEnabledFor(logging.Level(l)) }
+func (g *grpcLogMabob) Warningln(args ...interface{}) {
+	// Lower priority of a gRPC message which is triggered by e.g. k8s TCP healthchecks.
+	if len(args) == 2 && args[0] == "grpc: Server.Serve failed to create ServerTransport: " {
+		if err, ok := args[1].(error); ok {
+			if err.Error() == `connection error: desc = "transport: http2Server.HandleStreams failed to receive the preface from client: EOF"` {
+				log.Info("%s %s", args[0], args[1])
+				return
+			}
+		}
+	}
+	log.Warning("%s", args)
+}
+func (g *grpcLogMabob) Error(args ...interface{})                 { log.Error("%s", args) }
+func (g *grpcLogMabob) Errorf(format string, args ...interface{}) { log.Errorf(format, args...) }
+func (g *grpcLogMabob) Errorln(args ...interface{})               { log.Error("%s", args) }
+func (g *grpcLogMabob) Fatal(args ...interface{})                 { log.Fatal(args...) }
+func (g *grpcLogMabob) Fatalf(format string, args ...interface{}) { log.Fatalf(format, args...) }
+func (g *grpcLogMabob) Fatalln(args ...interface{})               { log.Fatal(args...) }
+func (g *grpcLogMabob) V(l int) bool                              { return log.IsEnabledFor(logging.Level(l)) }
 
 func init() {
 	// Change grpc to log using our implementation
