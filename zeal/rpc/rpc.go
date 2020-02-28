@@ -75,6 +75,7 @@ func ServeForever(port int, keyFile, certFile, storage string, secureStorage boo
 	}
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
 	srv.client.RequestLogHook = srv.logHTTPRequests
+	srv.client.Logger = logger{}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_prometheus.UnaryServerInterceptor,
@@ -220,4 +221,11 @@ func (d *doubleSHA1) BlockSize() int              { return d.h.BlockSize() }
 func (d *doubleSHA1) Sum(b []byte) []byte {
 	s := sha1.Sum(d.h.Sum(b))
 	return s[:]
+}
+
+// A logger implements the retryablehttp.Logger interface
+type logger struct{}
+
+func (l logger) Printf(msg string, args ...interface{}) {
+	log.Infof(msg, args...)
 }
