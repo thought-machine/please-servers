@@ -160,6 +160,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 		name:       name,
 		sandbox:    sandbox,
 		limiter:    make(chan struct{}, downloadParallelism),
+		iolimiter:  make(chan struct{}, ioParallelism),
 		browserURL: browserURL,
 		timeout:    timeout,
 	}
@@ -195,8 +196,8 @@ type worker struct {
 	clean        bool
 	timeout      time.Duration
 
-	// For limiting parallelism during download actions
-	limiter chan struct{}
+	// For limiting parallelism during download / write actions
+	limiter, iolimiter chan struct{}
 }
 
 // RunTask runs a single task.
@@ -460,7 +461,9 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	for _, c := range m {
 		chomks = append(chomks, c)
 	}
-	err = w.client.UploadIfMissing(context.Background(), chomks...)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
+	defer cancel()
+	err = w.client.UploadIfMissing(ctx, chomks...)
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories
 	ar.OutputFileSymlinks = ar2.OutputFileSymlinks

@@ -20,9 +20,11 @@ import (
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
 const maxBlobBatchSize = 4012000 // 4000 Kelly-Bootle standard units
 
-// downloadParallelism is the maximum number of parallel downloads we'll allow
-// This includes simultaneous disk writes.
-const downloadParallelism = 8
+// downloadParallelism is the maximum number of parallel downloads we'll allow.
+const downloadParallelism = 4
+
+// ioParallelism is the maximum number of parallel disk writes we'll allow.
+const ioParallelism = 10
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
@@ -168,8 +170,8 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 
 // writeFile writes a blob to disk.
 func (w *worker) writeFile(filename string, data []byte, mode os.FileMode) error {
-	w.limiter <- struct{}{}
-	defer func() { <-w.limiter }()
+	w.iolimiter <- struct{}{}
+	defer func() { <-w.iolimiter }()
 	return ioutil.WriteFile(filename, data, mode)
 }
 
