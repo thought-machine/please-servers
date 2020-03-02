@@ -288,10 +288,12 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 		return status(codes.Internal, "Failed to download input root: %s", err)
 	}
 	// We are required to create directories for all the outputs.
-	for _, out := range command.OutputPaths {
-		if dir := path.Dir(out); out != "" && out != "." {
-			if err := os.MkdirAll(path.Join(w.dir, dir), os.ModeDir|0755); err != nil {
-				return status(codes.Internal, "Failed to create directory: %s", err)
+	if shouldCreateOutputPaths(command) {
+		for _, out := range command.OutputPaths {
+			if dir := path.Dir(out); out != "" && out != "." {
+				if err := os.MkdirAll(path.Join(w.dir, dir), os.ModeDir|0755); err != nil {
+					return status(codes.Internal, "Failed to create directory: %s", err)
+				}
 			}
 		}
 	}
@@ -518,4 +520,18 @@ func appendStd(msg, name, contents string) string {
 func toTimestamp(t time.Time) *timestamp.Timestamp {
 	ts, _ := ptypes.TimestampProto(t)
 	return ts
+}
+
+// shouldCreateOutputPaths determines whether we should create output paths for an action or not.
+// This is dodgy; the spec says we always should but it has a really nasty interaction with
+// post-build functions where we run an action once, add new outputs, then re-run and it fails
+// with the outputs added. This is in contrast to locally where plz only has to run it once
+// so we hack it in to try to mimic that as closely as possible.
+func shouldCreateOutputPaths(command *pb.Command) bool {
+	for _, e := range command.EnvironmentVariables {
+		if e.Name == "_CREATE_OUTPUT_DIRS" && e.Value == "false" {
+			return false
+		}
+	}
+	return true
 }
