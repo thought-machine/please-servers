@@ -284,6 +284,8 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 		return status.Errorf(codes.Unimplemented, "page_size not implemented for GetTree")
 	} else if req.PageToken != "" {
 		return status.Errorf(codes.Unimplemented, "page tokens not implemented for GetTree")
+	} else if req.RootDigest == nil {
+		return status.Errorf(codes.InvalidRequest, "missing root_digest field")
 	}
 	key := s.key("tree", req.RootDigest)
 	resp := &pb.GetTreeResponse{}
