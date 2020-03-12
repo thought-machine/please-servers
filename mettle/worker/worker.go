@@ -30,7 +30,6 @@ import (
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"gopkg.in/op/go-logging.v1"
 
@@ -127,7 +126,6 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 		TransportCredsOnly: secureStorage,
 		DialOpts: []grpc.DialOption{
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
-			grpc.WithBalancerName(roundrobin.Name),
 		},
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
@@ -370,13 +368,13 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		msg = appendStd(msg, "Stderr", stderr.String())
 		msg += w.writeUncachedResult(ar, msg)
 		return &pb.ExecuteResponse{
-			Status: status(codes.Unknown, msg),
+			Status: &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
 			Result: ar,
 		}
 	}
 	if err := w.collectOutputs(ar, command); err != nil {
 		return &pb.ExecuteResponse{
-			Status: status(codes.Unknown, "Failed to collect outputs: %s", err),
+			Status: status(codes.Internal, "Failed to collect outputs: %s", err),
 			Result: ar,
 		}
 	}
@@ -388,7 +386,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		ActionResult: ar,
 	}); err != nil {
 		return &pb.ExecuteResponse{
-			Status: status(codes.Unknown, "Failed to upload action result: %s", err),
+			Status: status(codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
 		}
 	}
