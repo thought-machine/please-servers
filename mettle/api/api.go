@@ -144,6 +144,7 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 	digest := &pb.Digest{Hash: req.Name}
 	ch := s.eventStream(digest, false)
 	if ch == nil {
+		log.Warning("Request for execution %s which is not in progress", req.Name)
 		return status.Errorf(codes.NotFound, "No execution in progress for %s", req.Name)
 	}
 	return s.streamEvents(digest, ch, stream)
