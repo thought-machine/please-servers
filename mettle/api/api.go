@@ -43,6 +43,8 @@ var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name:      "requests_current",
 })
 
+var serveHTTPOnce sync.Once
+
 func init() {
 	prometheus.MustRegister(totalRequests)
 	prometheus.MustRegister(currentRequests)
@@ -90,7 +92,9 @@ func serve(port int, requestQueue, responseQueue, keyFile, certFile string) (*gr
 	pb.RegisterExecutionServer(s, srv)
 	grpc_prometheus.Register(s)
 	reflection.Register(s)
-	http.HandleFunc("/executions", srv.ServeExecutions)
+	serveHTTPOnce.Do(func() {
+		http.HandleFunc("/executions", srv.ServeExecutions)
+	})
 	return s, lis, nil
 }
 
