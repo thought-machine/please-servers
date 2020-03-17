@@ -3,8 +3,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -88,6 +90,7 @@ func serve(port int, requestQueue, responseQueue, keyFile, certFile string) (*gr
 	pb.RegisterExecutionServer(s, srv)
 	grpc_prometheus.Register(s)
 	reflection.Register(s)
+	http.HandleFunc("/executions", srv.ServeExecutions)
 	return s, lis, nil
 }
 
@@ -96,6 +99,19 @@ type server struct {
 	responses *pubsub.Subscription
 	jobs      map[string]*job
 	mutex     sync.Mutex
+}
+
+// ServeExecutions serves a list of currently executing jobs over HTTP.
+func (s *server) ServeExecutions(w http.ResponseWriter, r *http.Request) {
+	resp := map[string]*longrunning.Operation{}
+	s.mutex.Lock()
+	for k, v := range s.jobs {
+		resp[k] = v.Current
+	}
+	s.mutex.Unlock()
+	e := json.NewEncoder(w)
+	e.SetIndent("", "  ")
+	e.Encode(resp)
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
