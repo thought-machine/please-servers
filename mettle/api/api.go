@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
@@ -109,10 +110,12 @@ type server struct {
 
 // ServeExecutions serves a list of currently executing jobs over HTTP.
 func (s *server) ServeExecutions(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]*longrunning.Operation{}
+	resp := map[string]string{}
+	m := jsonpb.Marshaler{Indent: "  "}
 	s.mutex.Lock()
 	for k, v := range s.jobs {
-		resp[k] = v.Current
+		s, _ := m.MarshalToString(v.Current)
+		resp[k] = s
 	}
 	s.mutex.Unlock()
 	e := json.NewEncoder(w)
