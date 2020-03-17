@@ -30,8 +30,9 @@ var opts = struct {
 	} `group:"Options controlling the pub/sub queues"`
 	MetricsPort int `short:"m" long:"metrics_port" description:"Port to serve Prometheus metrics on"`
 	API         struct {
-		Port int `short:"p" long:"port" default:"7778" description:"Port to serve on"`
-		TLS  struct {
+		Port             int    `short:"p" long:"port" default:"7778" description:"Port to serve on"`
+		PreResponseQueue string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+		TLS              struct {
 			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 			CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 		} `group:"Options controlling TLS for the gRPC server"`
@@ -110,10 +111,10 @@ func main() {
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
-		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
+		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
 		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else {
-		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
+		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	}
 }

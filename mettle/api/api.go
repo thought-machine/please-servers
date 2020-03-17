@@ -52,14 +52,14 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, requestQueue, responseQueue, keyFile, certFile string) {
-	if err := serveForever(port, requestQueue, responseQueue, keyFile, certFile); err != nil {
+func ServeForever(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) {
+	if err := serveForever(port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
 
-func serveForever(port int, requestQueue, responseQueue, keyFile, certFile string) error {
-	s, lis, err := serve(port, requestQueue, responseQueue, keyFile, certFile)
+func serveForever(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) error {
+	s, lis, err := serve(port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile)
 	if err != nil {
 		return err
 	}
@@ -67,15 +67,16 @@ func serveForever(port int, requestQueue, responseQueue, keyFile, certFile strin
 	return s.Serve(lis)
 }
 
-func serve(port int, requestQueue, responseQueue, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
+func serve(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to listen on %d: %v", port, err)
 	}
 	srv := &server{
-		requests:  common.MustOpenTopic(requestQueue),
-		responses: common.MustOpenSubscription(responseQueue),
-		jobs:      map[string]*job{},
+		requests:     common.MustOpenTopic(requestQueue),
+		responses:    common.MustOpenSubscription(responseQueue),
+		preResponses: common.MustOpenTopic(preResponseQueue),
+		jobs:         map[string]*job{},
 	}
 	go srv.Receive()
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
@@ -99,10 +100,11 @@ func serve(port int, requestQueue, responseQueue, keyFile, certFile string) (*gr
 }
 
 type server struct {
-	requests  *pubsub.Topic
-	responses *pubsub.Subscription
-	jobs      map[string]*job
-	mutex     sync.Mutex
+	requests     *pubsub.Topic
+	responses    *pubsub.Subscription
+	preResponses *pubsub.Topic
+	jobs         map[string]*job
+	mutex        sync.Mutex
 }
 
 // ServeExecutions serves a list of currently executing jobs over HTTP.
@@ -148,15 +150,21 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		log.Error("Failed to submit work to stream: %s", err)
 		return err
 	}
-	// Send the first message to the client saying that the request is queued
-	metadata, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
+	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
+	// We will also receive & forward this message.
+	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 		Stage:        pb.ExecutionStage_QUEUED,
 		ActionDigest: req.ActionDigest,
 	})
-	stream.Send(&longrunning.Operation{
+	b, _ = proto.Marshal(&longrunning.Operation{
 		Name:     req.ActionDigest.Hash,
-		Metadata: metadata,
+		Metadata: any,
 	})
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := s.preResponses.Send(ctx, &pubsub.Message{Body: b}); err != nil {
+		log.Error("Failed to communicate pre-response message: %s", err)
+	}
 	return s.streamEvents(req.ActionDigest, ch, stream)
 }
 
