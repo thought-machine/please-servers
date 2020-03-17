@@ -153,6 +153,7 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 // streamEvents streams a series of events back to the client.
 func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
 	for op := range ch {
+		op.Name = digest.Hash
 		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
 			s.stopStream(digest, ch)
