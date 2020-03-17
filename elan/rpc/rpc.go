@@ -31,6 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
+	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
@@ -454,7 +455,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // This causes any error before Close() to fail the write.
-	w, err := s.bucket.NewWriter(ctx, key, nil)
+	w, err := s.bucket.NewWriter(ctx, key, &blob.WriterOptions{BufferSize: s.bufferSize(digest)})
 	if err != nil {
 		return err
 	}
@@ -509,6 +510,14 @@ func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, error) {
 		Hash:      matches[1],
 		SizeBytes: int64(size),
 	}, nil
+}
+
+// bufferSize returns the buffer size for a digest, or a default if it's too big.
+func (s *server) bufferSize(digest *pb.Digest) int {
+	if digest.SizeBytes < googleapi.DefaultUploadChunkSize {
+		return int(digest.SizeBytes)
+	}
+	return googleapi.DefaultUploadChunkSize
 }
 
 // A bytestreamReader wraps the incoming byte stream into an io.Reader

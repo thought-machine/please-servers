@@ -4,6 +4,7 @@ go_library(
     deps = [
         "//creds",
         "//third_party/go/gocloud",
+        "//third_party/go/gocloud:api",
         "//third_party/go:bytestream",
         "//third_party/go:logging",
         "//third_party/go:grpc",
