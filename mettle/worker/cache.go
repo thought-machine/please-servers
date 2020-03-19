@@ -100,9 +100,7 @@ func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
 			log.Error("Invalid size for %s: %s", record[0], record[2])
 			continue
 		}
-		if i % 10 == 0 {
-			log.Notice("Downloading artifact %d of %d...", i, len(records))
-		}
+		log.Notice("Downloading artifact %d of %d...", i, len(records))
 		if err := c.storeOne(client, record[1], size); err != nil {
 			log.Error("Error downloading %s: %s", record[0], err)
 		}
