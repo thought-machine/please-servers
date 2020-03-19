@@ -87,7 +87,7 @@ func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
 		}}); err != nil {
 			return err
 		}
-		log.Notice("Removed %d extraneous entries")
+		log.Notice("Removed %d extraneous entries", removed)
 	}
 
 	for i, record := range records {
