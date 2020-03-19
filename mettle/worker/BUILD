@@ -3,11 +3,14 @@ go_library(
     srcs = [
         "worker.go",
         "download.go",
+        "cache.go",
     ],
     deps = [
         "//third_party/go/gocloud",
         "//third_party/go:bytestream",
+        "//third_party/go:copyfile",
         "//third_party/go:errgroup",
+        "//third_party/go:godirwalk",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
         "//third_party/go:longrunning",

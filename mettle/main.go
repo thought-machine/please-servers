@@ -39,6 +39,7 @@ var opts = struct {
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
 		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
 		Name         string       `short:"n" long:"name" description:"Name of this worker"`
 		Browser      string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
@@ -68,6 +69,14 @@ var opts = struct {
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		} `group:"Options controlling communication with the CAS server"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
+	Cache struct {
+		List string `short:"l" long:"list" required:"true" description:"File containing artifact list to download"`
+		Dir string `short:"d" long:"dir" required:"true" description:"Directory to copy data into"`
+		Storage      struct {
+			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		} `group:"Options controlling communication with the CAS server"`
+	} `command:"cache" description:"Download artifacts to cache dir"`
 }{
 	Usage: `
 Mettle is an implementation of the execution service of the Remote Execution API.
@@ -96,6 +105,11 @@ events. Hence when a server restarts it will not have knowledge of all currently
 jobs until an update is sent for each; the suggestion here is to wait for > 1 minute
 (after which each live job should have sent an update, and the new server will know about
 it). This is easy to arrange in a managed environment like Kubernetes.
+
+The worker supports a file-based cache; this is populated initially using the 'cache'
+command and is not updated by it at runtime. This works off the observation that total
+downloaded bytes probably follow a power law distribution with a few relatively rarely 
+updated blobs dominating much of the data downloaded.
 `,
 }
 
@@ -109,12 +123,14 @@ func main() {
 		common.MustOpenTopic(opts.Queues.RequestQueue)
 		common.MustOpenTopic(opts.Queues.ResponseQueue)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
+			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
 		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
-	} else {
+		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
+	} else if cmd == "api" {
 		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
+	} else {
+		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.Cache.List, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	}
 }
