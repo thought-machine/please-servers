@@ -431,3 +431,21 @@ go_get(
         ":protobuf",
     ],
 )
+
+go_get(
+    name = "copyfile",
+    get = "github.com/peterebden/go-copyfile",
+    revision = "8510625f1b436835f0d3514d045b9d2cd0a709d9",
+)
+
+go_get(
+    name = "godirwalk",
+    get = "github.com/karrick/godirwalk",
+    revision = "v1.7.0",
+    strip = [
+        "examples",
+        "testdata",
+        "vendor",
+    ],
+    deps = [":errors"],
+)

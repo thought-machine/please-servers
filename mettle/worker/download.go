@@ -99,6 +99,11 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 				return w.writeFile(fn, blob.([]byte), fileMode(f.IsExecutable))
 			})
 			continue
+		} else if w.fileCache != nil {
+			if w.fileCache.Retrieve(file.Digest.Hash, filename, fileMode(file.IsExecutable)) {
+				cacheHits.Inc()
+				continue
+			}
 		}
 		cacheMisses.Inc()
 		if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {

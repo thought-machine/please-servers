@@ -94,13 +94,13 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) {
-	if err := runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox, clean, secureStorage, timeout, maxCacheSize); err != nil {
+func RunForever(requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) {
+	if err := runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, clean, secureStorage, timeout, maxCacheSize); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) error {
+func runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
@@ -162,6 +162,9 @@ func runForever(requestQueue, responseQueue, name, storage, dir, browserURL, san
 		browserURL: browserURL,
 		timeout:    timeout,
 	}
+	if cacheDir != "" {
+		w.fileCache = NewCache(cacheDir)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
@@ -193,6 +196,7 @@ type worker struct {
 	metadata     *pb.ExecutedActionMetadata
 	clean        bool
 	timeout      time.Duration
+	fileCache    *Cache
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
