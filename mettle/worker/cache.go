@@ -119,7 +119,9 @@ func (c *Cache) storeOne(client *client.Client, hash string, size int) error {
 	}
 	out := c.path(hash)
 	tmp := out + ".tmp"
-	if _, err := client.ReadBlobToFile(ctx, digest, tmp); err != nil {
+	if err := os.MkdirAll(path.Dir(out), os.ModeDir|0755); err != nil {
+		return err
+	} else if _, err := client.ReadBlobToFile(ctx, digest, tmp); err != nil {
 		return err
 	}
 	return os.Rename(tmp, out)
