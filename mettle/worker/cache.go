@@ -71,22 +71,30 @@ func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
 	for _, record := range records {
 		keep[record[1]] = true
 	}
-	removed := 0
-	if err := godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
-		if !entry.IsDir() {
-			if !keep[path.Base(pathname)] {
-				removed++
-				return os.Remove(pathname)
+	if _, err := os.Stat(c.root); err != nil {
+		log.Warning("Cannot stat %s, will not check for existing artifacts: %s", c.root, err)
+	} else {
+		removed := 0
+		if err := godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
+			if !entry.IsDir() {
+				if !keep[path.Base(pathname)] {
+					removed++
+					return os.Remove(pathname)
+				}
+				exists[path.Base(pathname)] = true
 			}
-			exists[path.Base(pathname)] = true
+			return nil
+		}}); err != nil {
+			return err
 		}
-		return nil
-	}}); err != nil {
-		return err
+		log.Notice("Removed %d extraneous entries")
 	}
-	log.Notice("Removed %d extraneous entries")
 
 	for i, record := range records {
+		if exists[record[1]] {
+			log.Debug("Not re-downloading %s...", record[0])
+			continue
+		}
 		size, err := strconv.Atoi(record[2])
 		if err != nil {
 			log.Error("Invalid size for %s: %s", record[0], record[2])
