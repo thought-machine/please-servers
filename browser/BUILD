@@ -2,8 +2,11 @@
 # visualise some of the outputs.
 remote_file(
     name = "bb_browser",
-    url = "https://get.please.build/third_party/binary/bb-browser-20200102",
-    hashes = ["0ff56d6bd4449d0b0e25b1a22032817f7ac9c3b9"],
+    url = "https://get.please.build/third_party/binary/bb-browser-${OS}_${ARCH}-20200329",
+    hashes = [
+        "ad8c57d8e3980c8b332bb3e1279183eb1c33d2e2672a843b9a9ea9723b709ea1",
+        "9d2600a144a83268f112f1d81c1bc06bad838840bbbaacf2ca4cf4663a4cfd3f",
+    ],
     out = "bb-browser",
     binary = True,
 )

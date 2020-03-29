@@ -25,19 +25,19 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"gopkg.in/op/go-logging.v1"
 
 	"github.com/thought-machine/please-servers/mettle/common"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 )
 
-var log = logging.MustGetLogger("worker")
+var log = cli.MustGetLogger()
 
 var totalBuilds = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
@@ -324,10 +324,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	defer cancel()
 	cmd := exec.CommandContext(ctx, command.Arguments[0], command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGTERM,
-		Setpgid:   true,
-	}
+	cmd.SysProcAttr = sysProcAttr()
 	cmd.Dir = path.Join(w.dir, command.WorkingDirectory)
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

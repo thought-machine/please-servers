@@ -7,11 +7,11 @@ import (
 	_ "net/http/pprof"
 	"runtime"
 
+	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gopkg.in/op/go-logging.v1"
 )
 
-var log = logging.MustGetLogger("metrics")
+var log = cli.MustGetLogger()
 
 // Serve serves metrics on the given port if it is not zero.
 func Serve(port int) {

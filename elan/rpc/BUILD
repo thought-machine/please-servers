@@ -6,7 +6,7 @@ go_library(
         "//third_party/go/gocloud",
         "//third_party/go/gocloud:api",
         "//third_party/go:bytestream",
-        "//third_party/go:logging",
+        "//third_party/go:cli-init",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
         "//third_party/go:groupcache",

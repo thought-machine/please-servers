@@ -24,6 +24,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/peterebden/go-cli-init"
 	"github.com/peterebden/go-sri"
 	"github.com/prometheus/client_golang/prometheus"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -31,12 +32,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
-	"gopkg.in/op/go-logging.v1"
 
 	"github.com/thought-machine/please-servers/creds"
 )
 
-var log = logging.MustGetLogger("rpc")
+var log = cli.MustGetLogger()
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "zeal",

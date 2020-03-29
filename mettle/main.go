@@ -6,15 +6,14 @@ import (
 	"time"
 
 	"github.com/peterebden/go-cli-init"
-	"gopkg.in/op/go-logging.v1"
+	"github.com/thought-machine/http-admin"
 
-	"github.com/thought-machine/please-servers/metrics"
 	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/mettle/common"
 	"github.com/thought-machine/please-servers/mettle/worker"
 )
 
-var log = logging.MustGetLogger("mettle")
+var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
@@ -28,7 +27,6 @@ var opts = struct {
 		ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 		ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
 	} `group:"Options controlling the pub/sub queues"`
-	MetricsPort int `short:"m" long:"metrics_port" description:"Port to serve Prometheus metrics on"`
 	API         struct {
 		Port             int    `short:"p" long:"port" default:"7778" description:"Port to serve on"`
 		PreResponseQueue string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
@@ -77,6 +75,7 @@ var opts = struct {
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		} `group:"Options controlling communication with the CAS server"`
 	} `command:"cache" description:"Download artifacts to cache dir"`
+	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Mettle is an implementation of the execution service of the Remote Execution API.
@@ -108,15 +107,17 @@ it). This is easy to arrange in a managed environment like Kubernetes.
 
 The worker supports a file-based cache; this is populated initially using the 'cache'
 command and is not updated by it at runtime. This works off the observation that total
-downloaded bytes probably follow a power law distribution with a few relatively rarely 
+downloaded bytes probably follow a power law distribution with a few relatively rarely
 updated blobs dominating much of the data downloaded.
 `,
 }
 
 func main() {
 	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
-	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	go metrics.Serve(opts.MetricsPort)
+	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
+	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	opts.Admin.LogInfo = info
+	go admin.Serve(opts.Admin)
 	opts.Queues.ResponseQueue += opts.Queues.ResponseQueueSuffix
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.

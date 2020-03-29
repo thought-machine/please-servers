@@ -18,6 +18,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
@@ -31,7 +32,7 @@ import (
 	"github.com/thought-machine/please-servers/mettle/common"
 )
 
-var log = logging.MustGetLogger("api")
+var log = cli.MustGetLogger()
 
 const timeout = 10 * time.Second
 

@@ -28,6 +28,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
@@ -38,14 +39,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
-	"gopkg.in/op/go-logging.v1"
 
 	"github.com/thought-machine/please-servers/creds"
 )
 
 const timeout = 2 * time.Minute
 
-var log = logging.MustGetLogger("rpc")
+var log = cli.MustGetLogger()
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",

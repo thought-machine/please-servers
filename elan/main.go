@@ -3,13 +3,12 @@ package main
 
 import (
 	"github.com/peterebden/go-cli-init"
-	"gopkg.in/op/go-logging.v1"
+	"github.com/thought-machine/http-admin"
 
 	"github.com/thought-machine/please-servers/elan/rpc"
-	"github.com/thought-machine/please-servers/metrics"
 )
 
-var log = logging.MustGetLogger("elan")
+var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
@@ -20,7 +19,6 @@ var opts = struct {
 	} `group:"Options controlling logging output"`
 	Port        int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
 	Storage     string `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
-	MetricsPort int    `short:"m" long:"metrics_port" description:"Port to serve Prometheus metrics on"`
 	TLS         struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
@@ -32,6 +30,7 @@ var opts = struct {
 		Peers       []string     `long:"cache_peer" description:"URLs of cache peers to connect to. Will be monitored via DNS."`
 		SelfIP      string       `long:"cache_self_ip" env:"CACHE_SELF_IP" description:"IP address of the current peer."`
 	} `group:"Options controlling in-memory caching of blobs"`
+	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
@@ -47,8 +46,10 @@ modes are intended for testing only.
 
 func main() {
 	cli.ParseFlagsOrDie("Elan", &opts)
-	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	go metrics.Serve(opts.MetricsPort)
+	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
+	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	opts.Admin.LogInfo = info
+	go admin.Serve(opts.Admin)
 	log.Notice("Serving on :%d", opts.Port)
 	rpc.ServeForever(opts.Port, opts.Cache.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize))
 }

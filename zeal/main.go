@@ -3,13 +3,12 @@ package main
 
 import (
 	"github.com/peterebden/go-cli-init"
-	"gopkg.in/op/go-logging.v1"
+	"github.com/thought-machine/http-admin"
 
-	"github.com/thought-machine/please-servers/metrics"
 	"github.com/thought-machine/please-servers/zeal/rpc"
 )
 
-var log = logging.MustGetLogger("zeal")
+var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
@@ -19,7 +18,6 @@ var opts = struct {
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
 	Port        int `short:"p" long:"port" default:"7776" description:"Port to serve on"`
-	MetricsPort int `short:"m" long:"metrics_port" description:"Port to serve Prometheus metrics on"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -28,6 +26,7 @@ var opts = struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	} `group:"Options controlling TLS for the gRPC server"`
+	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Zeal is a partial implementation of the Remote Asset API.
@@ -51,7 +50,9 @@ for the Paladin skill in Diablo II since its job is to bang things down as fast 
 
 func main() {
 	cli.ParseFlagsOrDie("Zeal", &opts)
-	cli.InitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	go metrics.Serve(opts.MetricsPort)
+	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
+	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	opts.Admin.LogInfo = info
+	go admin.Serve(opts.Admin)
 	rpc.ServeForever(opts.Port, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Storage.Storage, opts.Storage.TLS)
 }

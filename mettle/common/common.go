@@ -9,15 +9,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/peterebden/go-cli-init"
 	"gocloud.dev/pubsub"
-	"gopkg.in/op/go-logging.v1"
 
 	// Must import the schemes we want to use.
 	_ "gocloud.dev/pubsub/gcppubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
 )
 
-var log = logging.MustGetLogger("common")
+var log = cli.MustGetLogger()
 
 // For hacking around the fact that mempubsub doesn't allow reopening the same subscription (each call creates a new one)
 // In production use this makes no real difference since we never open more than one per process.

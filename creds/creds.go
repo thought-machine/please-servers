@@ -2,13 +2,14 @@
 package creds
 
 import (
+	"github.com/peterebden/go-cli-init"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"gopkg.in/op/go-logging.v1"
 )
 
-var log = logging.MustGetLogger("creds")
+var log = cli.MustGetLogger()
 
 // OptionalTLS loads TLS certificates from the given files and attaches them as a gRPC ServerOption.
 // If both filenames are empty then no credentials will be attached.

@@ -212,7 +212,7 @@ go_get(
 go_get(
     name = "cli-init",
     get = "github.com/peterebden/go-cli-init",
-    revision = "v1.3.0",
+    revision = "v2.0.0",
     deps = [
         ":go-flags",
         ":humanize",
@@ -448,4 +448,22 @@ go_get(
         "vendor",
     ],
     deps = [":errors"],
+)
+
+go_get(
+    name = "http-admin",
+    get = "github.com/thought-machine/http-admin",
+    revision = "v1.0.0",
+    deps = [
+        ":mux",
+        ":net",
+        ":logging",
+        "//third_party/go/prometheus",
+    ],
+)
+
+go_get(
+    name = "mux",
+    get = "github.com/gorilla/mux",
+    revision = "v1.7.4",
 )
