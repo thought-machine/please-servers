@@ -453,7 +453,7 @@ go_get(
 go_get(
     name = "http-admin",
     get = "github.com/thought-machine/http-admin",
-    revision = "v1.0.0",
+    revision = "v1.0.1",
     deps = [
         ":mux",
         ":net",
