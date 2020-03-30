@@ -70,10 +70,11 @@ func newCache(s *server, port int, self string, peers []string, maxSize, maxItem
 		server:      s,
 		pool:        pool,
 		maxItemSize: int(maxItemSize),
+		selfIP:      self,
 	}
 	c.group = groupcache.NewGroup("blobs", maxSize, groupcache.GetterFunc(c.getter))
 	if len(peers) > 0 {
-		log.Notice("Monitoring peers %s", peers)
+		log.Notice("Monitoring peers %s (I am %s)", peers, self)
 		go c.MonitorPeers(peers)
 	} else {
 		log.Warning("No peers specified, will run in local-only mode for the cache")
@@ -86,6 +87,7 @@ type cache struct {
 	server      *server
 	pool        *groupcache.HTTPPool
 	group       *groupcache.Group
+	selfIP      string
 	maxItemSize int
 }
 
@@ -185,10 +187,15 @@ func (c *cache) resolveAddress(address string) ([]string, error) {
 	// Handle the port.
 	parts := strings.SplitN(address, ":", 2)
 	addrs, err := net.DefaultResolver.LookupHost(ctx, parts[0])
-	for i, addr := range addrs {
-		addrs[i] = addr + ":" + parts[1]
+	ret := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr == c.selfIP {
+			log.Debug("Skipping self (%s) from cache peers", addr)
+		} else {
+			ret = append(ret, addr + ":" + parts[1])
+		}
 	}
-	return addrs, err
+	return ret, err
 }
 
 func (c *cache) resolveAddresses(addresses []string) ([]string, error) {
