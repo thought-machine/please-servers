@@ -22,18 +22,18 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
-	Queues struct {
-		RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-		ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
-		ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
-	} `group:"Options controlling the pub/sub queues"`
 	API         struct {
 		Port             int    `short:"p" long:"port" default:"7778" description:"Port to serve on"`
-		PreResponseQueue string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 		TLS              struct {
 			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 			CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 		} `group:"Options controlling TLS for the gRPC server"`
+		Queues struct {
+			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+			ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
+			PreResponseQueue string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+		} `group:"Options controlling the pub/sub queues"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
@@ -48,6 +48,10 @@ var opts = struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		} `group:"Options controlling communication with the CAS server"`
+		Queues struct {
+			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
 		Port         int          `short:"p" long:"port" default:"7778" description:"Port to serve on"`
@@ -118,19 +122,20 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	opts.Queues.ResponseQueue += opts.Queues.ResponseQueueSuffix
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.
-		common.MustOpenTopic(opts.Queues.RequestQueue)
-		common.MustOpenTopic(opts.Queues.ResponseQueue)
+		const requests = "mem://requests"
+		const responses = "mem://responses"
+		common.MustOpenTopic(requests)
+		common.MustOpenTopic(responses)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
+			go worker.RunForever(requests, responses, fmt.Sprintf("mettle-%d", i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
-		api.ServeForever(opts.Dual.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Queues.ResponseQueue, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
+		api.ServeForever(opts.Dual.Port, requests, responses, responses, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
+		worker.RunForever(opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
-		api.ServeForever(opts.API.Port, opts.Queues.RequestQueue, opts.Queues.ResponseQueue, opts.API.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
+		api.ServeForever(opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	} else {
 		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.Cache.List, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	}
