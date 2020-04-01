@@ -61,7 +61,7 @@ func ServeForever(port int, requestQueue, responseQueue, preResponseQueue, keyFi
 }
 
 func serveForever(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) error {
-	s, lis, err := serve(port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile)
+	s, lis, err := serve("", port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile)
 	if err != nil {
 		return err
 	}
@@ -69,10 +69,10 @@ func serveForever(port int, requestQueue, responseQueue, preResponseQueue, keyFi
 	return s.Serve(lis)
 }
 
-func serve(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+func serve(host string, port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to listen on %d: %v", port, err)
+		return nil, nil, fmt.Errorf("Failed to listen on %s:%d: %v", host, port, err)
 	}
 	srv := &server{
 		requests:     common.MustOpenTopic(requestQueue),
@@ -215,6 +215,12 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	j.Streams = append(j.Streams, ch)
+	if !create && j.Current != nil {
+		// This request is resuming an existing stream, give them an update on the latest thing to happen.
+		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
+		// amount of time until we receive the next real update.
+		ch <- j.Current
+	}
 	return ch
 }
 
