@@ -368,12 +368,14 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		msg = appendStd(msg, "Stdout", stdout.String())
 		msg = appendStd(msg, "Stderr", stderr.String())
 		msg += w.writeUncachedResult(ar, msg)
+		log.Warning("%s", msg)
 		return &pb.ExecuteResponse{
 			Status: &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
 			Result: ar,
 		}
 	}
 	if err := w.collectOutputs(ar, command); err != nil {
+		log.Error("Failed to collect outputs: %s", err)
 		return &pb.ExecuteResponse{
 			Status: status(codes.Internal, "Failed to collect outputs: %s", err),
 			Result: ar,
@@ -386,6 +388,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		ActionDigest: w.actionDigest,
 		ActionResult: ar,
 	}); err != nil {
+		log.Error("Failed to upload action result: %s", err)
 		return &pb.ExecuteResponse{
 			Status: status(codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
