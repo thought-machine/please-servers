@@ -165,6 +165,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, brows
 	if cacheDir != "" {
 		w.fileCache = NewCache(cacheDir)
 	}
+	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize)
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
@@ -457,7 +458,7 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 
 // collectOutputs collects all the outputs of a command and adds them to the given ActionResult.
 func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
-	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), &filemetadata.NoopFileMetadataCache{})
+	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), filemetadata.NewNoopCache())
 	if err != nil {
 		return err
 	}
