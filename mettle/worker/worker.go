@@ -22,6 +22,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dgraph-io/ristretto"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -193,11 +194,15 @@ type worker struct {
 	name         string
 	browserURL   string
 	sandbox      string
-	actionDigest *pb.Digest
-	metadata     *pb.ExecutedActionMetadata
 	clean        bool
 	timeout      time.Duration
 	fileCache    *Cache
+
+	// These properties are per-action and reset each time.
+	actionDigest    *pb.Digest
+	metadata        *pb.ExecutedActionMetadata
+	downloadedBytes int64
+	cachedBytes     int64
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
@@ -217,6 +222,8 @@ func (w *worker) RunTask(ctx context.Context) error {
 	// run the command, but we *probably* want to do that kind of retrying at a
 	// higher level. TBD.
 	msg.Ack()
+	w.downloadedBytes = 0
+	w.cachedBytes = 0
 	response := w.runTask(msg.Body)
 	return w.update(pb.ExecutionStage_COMPLETED, response)
 }
@@ -301,7 +308,12 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 		}
 	}
 	fetchDurations.Observe(time.Since(start).Seconds())
-	log.Info("Prepared directory for %s", w.actionDigest.Hash)
+	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
+		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
+		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%)", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+	} else {
+		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
+	}
 	return nil
 }
 

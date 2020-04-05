@@ -10,6 +10,7 @@ go_library(
         "//third_party/go:godirwalk",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
+        "//third_party/go:humanize",
         "//third_party/go:longrunning",
         "//third_party/go/prometheus",
         "//third_party/go:protobuf",
