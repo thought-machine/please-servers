@@ -7,7 +7,7 @@ jobs:
      steps:
        - checkout
        - restore_cache:
-           key: go-linux-main-v3-{{ checksum "third_party/go/BUILD" }}
+           key: go-linux-main-v4-{{ checksum "third_party/go/BUILD" }}
        - run:
            name: Test
            command: ./pleasew test -p --profile ci -v 2
@@ -26,7 +26,7 @@ jobs:
        - store_artifacts:
            path: plz-out/log
        - save_cache:
-           key: go-linux-main-v3-{{ checksum "third_party/go/BUILD" }}
+           key: go-linux-main-v4-{{ checksum "third_party/go/BUILD" }}
            paths: [ ".plz-cache/third_party/go" ]
 
    release:
