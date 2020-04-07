@@ -413,7 +413,7 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	iter := s.bucket.List(&blob.ListOptions{Prefix: strings.TrimSuffix(key, "..."), Delimiter: "/"})
+	iter := s.bucket.List(&blob.ListOptions{Prefix: strings.TrimSuffix(key, "...")})
 	ret := []*rpb.Digest{}
 	for {
 		obj, err := iter.Next(ctx)
