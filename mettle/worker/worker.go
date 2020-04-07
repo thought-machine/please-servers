@@ -96,13 +96,13 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) {
-	if err := runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, clean, secureStorage, timeout, maxCacheSize); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, clean, secureStorage, timeout, maxCacheSize); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
-func runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) error {
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) error {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return fmt.Errorf("Failed to create working directory: %s", err)
@@ -122,7 +122,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, brows
 			return fmt.Errorf("Error checking sandbox tool: %s", err)
 		}
 	}
-	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
+	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,

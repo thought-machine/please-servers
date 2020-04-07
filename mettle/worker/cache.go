@@ -41,9 +41,9 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 }
 
 // StoreAll reads the given file and stores all the blobs it finds into the cache.
-func (c *Cache) StoreAll(targets []string, storage string, secureStorage bool) error {
+func (c *Cache) StoreAll(instanceName string, targets []string, storage string, secureStorage bool) error {
 	log.Notice("Dialling remote %s...", storage)
-	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
+	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
@@ -55,7 +55,10 @@ func (c *Cache) StoreAll(targets []string, storage string, secureStorage bool) e
 	rclient := rpb.NewRecorderClient(client.CASConnection)
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Minute)
 	defer cancel()
-	resp, err := rclient.Query(ctx, &rpb.QueryRequest{Queries: targets})
+	resp, err := rclient.Query(ctx, &rpb.QueryRequest{
+		InstanceName: instanceName,
+		Queries:      targets,
+	})
 	if err != nil {
 		return err
 	}
@@ -99,8 +102,8 @@ func (c *Cache) StoreAll(targets []string, storage string, secureStorage bool) e
 }
 
 // MustStoreAll is like StoreAll but dies on errors.
-func (c *Cache) MustStoreAll(targets []string, storage string, secureStorage bool) {
-	if err := c.StoreAll(targets, storage, secureStorage); err != nil {
+func (c *Cache) MustStoreAll(instanceName string, targets []string, storage string, secureStorage bool) {
+	if err := c.StoreAll(instanceName, targets, storage, secureStorage); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
