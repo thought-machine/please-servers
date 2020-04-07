@@ -3,6 +3,7 @@ go_library(
     srcs = glob(["*.go"]),
     deps = [
         "//creds",
+        "//proto:record",
         "//third_party/go/gocloud",
         "//third_party/go/gocloud:api",
         "//third_party/go:bytestream",

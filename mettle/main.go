@@ -72,8 +72,8 @@ var opts = struct {
 		} `group:"Options controlling communication with the CAS server"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	Cache struct {
-		List string `short:"l" long:"list" required:"true" description:"File containing artifact list to download"`
-		Dir string `short:"d" long:"dir" required:"true" description:"Directory to copy data into"`
+		Targets []string `short:"t" long:"targets" required:"true" description:"Targets to populate the cache with the outputs of"`
+		Dir     string `short:"d" long:"dir" required:"true" description:"Directory to copy data into"`
 		Storage      struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -137,6 +137,6 @@ func main() {
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	} else {
-		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.Cache.List, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
+		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.Cache.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	}
 }

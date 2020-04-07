@@ -12,7 +12,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"path"
 	"regexp"
+	"strings"
 	"strconv"
 	"sync"
 	"time"
@@ -40,6 +42,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
+	rpb "github.com/thought-machine/please-servers/proto/record"
 	"github.com/thought-machine/please-servers/creds"
 )
 
@@ -130,6 +133,7 @@ func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, 
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
+	rpb.RegisterRecorderServer(s, srv)
 	grpc_prometheus.Register(s)
 	reflection.Register(s)
 	err = s.Serve(lis)
@@ -381,6 +385,67 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 	return nil, status.Errorf(codes.NotFound, "write %s not found", req.ResourceName)
 }
 
+func (s *server) Record(ctx context.Context, req *rpb.RecordRequest) (*rpb.RecordResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	b, _ := proto.Marshal(req.Digest)
+	if err := s.bucket.WriteAll(ctx, s.labelKey(req.Name), b, nil); err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to write record: %s", err)
+	}
+	return &rpb.RecordResponse{}, nil
+}
+
+func (s *server) Query(ctx context.Context, req *rpb.QueryRequest) (*rpb.QueryResponse, error) {
+	resp := &rpb.QueryResponse{}
+	for _, query := range req.Queries {
+		digests, err := s.query(ctx, s.labelKey(query))
+		if err != nil {
+			return nil, err
+		}
+		resp.Digests = append(resp.Digests, digests...)
+	}
+	return resp, nil
+}
+
+func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
+	if !strings.HasSuffix(key, "/...") {
+		return s.queryOne(ctx, key)
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	iter := s.bucket.List(&blob.ListOptions{Prefix: strings.TrimSuffix(key, "..."), Delimiter: "/"})
+	ret := []*rpb.Digest{}
+	for {
+		obj, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		} else if obj.IsDir {
+			continue
+		}
+		digest, err := s.queryOne(ctx, obj.Key)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, digest...)
+	}
+	return ret, nil
+}
+
+func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	digest := &rpb.Digest{}
+	b, err := s.bucket.ReadAll(ctx, key)
+	if err != nil {
+		return nil, err
+	} else if err := proto.Unmarshal(b, digest); err != nil {
+		return nil, err
+	}
+	return []*rpb.Digest{digest}, nil
+}
+
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
 	key := s.key(prefix, digest)
 	if blob, present := s.cachedBlob(key, digest); present {
@@ -431,6 +496,10 @@ func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest 
 
 func (s *server) key(prefix string, digest *pb.Digest) string {
 	return fmt.Sprintf("%s/%c%c/%s", prefix, digest.Hash[0], digest.Hash[1], digest.Hash)
+}
+
+func (s *server) labelKey(label string) string {
+	return path.Join("rec", strings.Replace(strings.TrimLeft(label, "/"), ":", "/", -1))
 }
 
 func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {

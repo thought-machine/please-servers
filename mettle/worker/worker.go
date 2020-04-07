@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/thought-machine/please-servers/mettle/common"
+	rpb "github.com/thought-machine/please-servers/proto/record"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 )
 
@@ -152,6 +153,7 @@ func runForever(requestQueue, responseQueue, name, storage, dir, cacheDir, brows
 		requests:   common.MustOpenSubscription(requestQueue),
 		responses:  common.MustOpenTopic(responseQueue),
 		client:     client,
+		recorder:   rpb.NewRecorderClient(client.CASConnection),
 		cache:      c,
 		rootDir:    abspath,
 		clean:      clean,
@@ -188,6 +190,7 @@ type worker struct {
 	requests     *pubsub.Subscription
 	responses    *pubsub.Topic
 	client       *client.Client
+	recorder     rpb.RecorderClient
 	cache        *ristretto.Cache
 	dir, rootDir string
 	home         string
@@ -407,6 +410,19 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			Result: ar,
 		}
 	}
+	if label := getEnvVar(command, "_TARGET"); label != "" {
+		ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
+		defer cancel()
+		if _, err := w.recorder.Record(ctx, &rpb.RecordRequest{
+			Name: label,
+			Digest: &rpb.Digest{
+				Hash:      w.actionDigest.Hash,
+				SizeBytes: w.actionDigest.SizeBytes,
+			},
+		}); err != nil {
+			log.Error("Failed to record action: %s", err)
+		}
+	}
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
 	uploadDurations.Observe(end.Sub(execEnd).Seconds())
@@ -546,10 +562,15 @@ func toTimestamp(t time.Time) *timestamp.Timestamp {
 
 // containsEnvVar returns true if the given env var is set on this command.
 func containsEnvVar(command *pb.Command, name, value string) bool {
+	return getEnvVar(command, name) == value
+}
+
+// getEnvVar returns the value of an env var on the given command.
+func getEnvVar(command *pb.Command, name string) string {
 	for _, e := range command.EnvironmentVariables {
-		if e.Name == name && e.Value == value {
-			return true
+		if e.Name == name {
+			return e.Value
 		}
 	}
-	return false
+	return ""
 }

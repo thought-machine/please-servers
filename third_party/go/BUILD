@@ -118,6 +118,16 @@ go_get(
 )
 
 go_get(
+    name = "protoc-gen-go",
+    binary = True,
+    get = [],
+    install = ["github.com/golang/protobuf/protoc-gen-go"],
+    deps = [
+        ":protobuf",
+    ],
+)
+
+go_get(
     name = "protobuf",
     get = "github.com/golang/protobuf/...",
     revision = "v1.3.2",

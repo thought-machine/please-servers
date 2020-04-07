@@ -5,5 +5,10 @@ gopath = $TMP_DIR:$TMP_DIR/third_party/go:$TMP_DIR/third_party/go/prometheus:$TM
 [python]
 moduledir = third_party/python
 
+[proto]
+protoctool = //third_party/proto:protoc
+protocgoplugin = //third_party/go:protoc-gen-go
+language = go
+
 [alias "runlocal"]
 cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local

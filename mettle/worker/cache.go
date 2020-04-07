@@ -2,16 +2,17 @@ package worker
 
 import (
 	"context"
-	"encoding/csv"
 	"os"
 	"path"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/peterebden/go-copyfile"
 	"github.com/karrick/godirwalk"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+
+	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
 // A Cache implements a filesystem-based blob cache.
@@ -40,7 +41,7 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 }
 
 // StoreAll reads the given file and stores all the blobs it finds into the cache.
-func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
+func (c *Cache) StoreAll(targets []string, storage string, secureStorage bool) error {
 	log.Notice("Dialling remote %s...", storage)
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,
@@ -50,27 +51,20 @@ func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
 	if err != nil {
 		return err
 	}
-	log.Notice("Reading artifact list from %s...", filename)
-	f, err := os.Open(filename)
+	log.Notice("Querying outputs for %s...", strings.Join(targets, " "))
+	rclient := rpb.NewRecorderClient(client.CASConnection)
+	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Minute)
+	defer cancel()
+	resp, err := rclient.Query(ctx, &rpb.QueryRequest{Queries: targets})
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	records, err := csv.NewReader(f).ReadAll()
-	if err != nil {
-		return err
-	}
-	// See if first record contains field names
-	if records[0][0] == "Name" {
-		records = records[1:]
-	}
-
-	log.Notice("Removing extraneous artifacts...")
 	keep := map[string]bool{}
-	exists := map[string]bool{}
-	for _, record := range records {
-		keep[record[1]] = true
+	for _, digest := range resp.Digests {
+		keep[digest.Hash] = true
 	}
+	log.Notice("Removing extraneous artifacts...")
+	exists := map[string]bool{}
 	if _, err := os.Stat(c.root); err != nil {
 		log.Warning("Cannot stat %s, will not check for existing artifacts: %s", c.root, err)
 	} else {
@@ -90,19 +84,14 @@ func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
 		log.Notice("Removed %d extraneous entries", removed)
 	}
 
-	for i, record := range records {
-		if exists[record[1]] {
-			log.Debug("Not re-downloading %s...", record[0])
+	for i, digest := range resp.Digests {
+		if exists[digest.Hash] {
+			log.Debug("Not re-downloading %s...", digest.Hash)
 			continue
 		}
-		size, err := strconv.Atoi(record[2])
-		if err != nil {
-			log.Error("Invalid size for %s: %s", record[0], record[2])
-			continue
-		}
-		log.Notice("Downloading artifact %d of %d...", i, len(records))
-		if err := c.storeOne(client, record[1], size); err != nil {
-			log.Error("Error downloading %s: %s", record[0], err)
+		log.Notice("Downloading artifact %d of %d...", i, len(resp.Digests))
+		if err := c.storeOne(client, digest.Hash, digest.SizeBytes); err != nil {
+			log.Error("Error downloading %s: %s", digest.Hash, err)
 		}
 	}
 	log.Notice("Downloads completed")
@@ -110,16 +99,16 @@ func (c *Cache) StoreAll(filename, storage string, secureStorage bool) error {
 }
 
 // MustStoreAll is like StoreAll but dies on errors.
-func (c *Cache) MustStoreAll(filename, storage string, secureStorage bool) {
-	if err := c.StoreAll(filename, storage, secureStorage); err != nil {
+func (c *Cache) MustStoreAll(targets []string, storage string, secureStorage bool) {
+	if err := c.StoreAll(targets, storage, secureStorage); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
 
-func (c *Cache) storeOne(client *client.Client, hash string, size int) error {
+func (c *Cache) storeOne(client *client.Client, hash string, size int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Minute)
 	defer cancel()
-	digest, err := digest.New(hash, int64(size))
+	digest, err := digest.New(hash, size)
 	if err != nil {
 		return err
 	}
