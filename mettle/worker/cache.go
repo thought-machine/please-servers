@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/peterebden/go-copyfile"
 	"github.com/karrick/godirwalk"
+	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 
 	rpb "github.com/thought-machine/please-servers/proto/record"
 )
@@ -62,9 +64,16 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 	if err != nil {
 		return err
 	}
-	keep := map[string]bool{}
+	keep := map[string]int64{}
 	for _, digest := range resp.Digests {
-		keep[digest.Hash] = true
+		digests, err := c.allOutputs(client, digest)
+		if err != nil {
+			log.Error("Error downloading outputs for %s: %s", digest.Hash, err)
+			continue
+		}
+		for _, digest := range digests {
+			keep[digest.Hash] = digest.Size
+		}
 	}
 	log.Notice("Removing extraneous artifacts...")
 	exists := map[string]bool{}
@@ -74,7 +83,7 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		removed := 0
 		if err := godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
 			if !entry.IsDir() {
-				if !keep[path.Base(pathname)] {
+				if _, present := keep[path.Base(pathname)]; present {
 					removed++
 					return os.Remove(pathname)
 				}
@@ -87,17 +96,23 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		log.Notice("Removed %d extraneous entries", removed)
 	}
 
-	for i, digest := range resp.Digests {
-		if exists[digest.Hash] {
-			log.Debug("Not re-downloading %s...", digest.Hash)
+	var total int64
+	i := 0
+	for hash, size := range keep {
+		i++
+		total += size
+		if exists[hash] {
+			log.Debug("Not re-downloading %s...", hash)
 			continue
 		}
-		log.Notice("Downloading artifact %d of %d...", i, len(resp.Digests))
-		if err := c.storeOne(client, digest.Hash, digest.SizeBytes); err != nil {
-			log.Error("Error downloading %s: %s", digest.Hash, err)
+		if i % 10 == 0 {
+			log.Notice("Downloading artifact %d of %d...", i, len(resp.Digests))
+		}
+		if err := c.storeOne(client, hash, size); err != nil {
+			log.Error("Error downloading %s: %s", hash, err)
 		}
 	}
-	log.Notice("Downloads completed")
+	log.Notice("Downloads completed, total size: %s", humanize.Bytes(uint64(total)))
 	return nil
 }
 
@@ -108,10 +123,26 @@ func (c *Cache) MustStoreAll(instanceName string, targets []string, storage stri
 	}
 }
 
+func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) ([]sdkdigest.Digest, error) {
+	ar := &pb.ActionResult{}
+	d, _ := sdkdigest.New(digest.Hash, digest.SizeBytes)
+	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
+	defer cancel()
+	if err := client.ReadProto(ctx, d, ar); err != nil {
+		return nil, err
+	}
+	outs, err := client.FlattenActionOutputs(ctx, ar)
+	ret := make([]sdkdigest.Digest, len(outs))
+	for _, out := range outs {
+		ret = append(ret, out.Digest)
+	}
+	return ret, err
+}
+
 func (c *Cache) storeOne(client *client.Client, hash string, size int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Minute)
 	defer cancel()
-	digest, err := digest.New(hash, size)
+	digest, err := sdkdigest.New(hash, size)
 	if err != nil {
 		return err
 	}
