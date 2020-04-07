@@ -8,3 +8,6 @@ path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
 [go]
 defaultstatic = true
+
+[proto]
+protoctool = protoc
