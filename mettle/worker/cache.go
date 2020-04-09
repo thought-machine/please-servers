@@ -124,11 +124,10 @@ func (c *Cache) MustStoreAll(instanceName string, targets []string, storage stri
 }
 
 func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) ([]sdkdigest.Digest, error) {
-	ar := &pb.ActionResult{}
-	d, _ := sdkdigest.New(digest.Hash, digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
 	defer cancel()
-	if err := client.ReadProto(ctx, d, ar); err != nil {
+	ar, err := client.CheckActionCache(ctx, &pb.Digest{Hash: digest.Hash, SizeBytes: digest.SizeBytes})
+	if err != nil {
 		return nil, err
 	}
 	outs, err := client.FlattenActionOutputs(ctx, ar)
