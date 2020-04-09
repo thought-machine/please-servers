@@ -83,7 +83,7 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		removed := 0
 		if err := godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
 			if !entry.IsDir() {
-				if _, present := keep[path.Base(pathname)]; present {
+				if _, present := keep[path.Base(pathname)]; !present {
 					removed++
 					return os.Remove(pathname)
 				}
@@ -106,7 +106,7 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 			continue
 		}
 		if i % 10 == 0 {
-			log.Notice("Downloading artifact %d of %d...", i, len(resp.Digests))
+			log.Notice("Downloading artifact %d of %d...", i, len(keep))
 		}
 		if err := c.storeOne(client, hash, size); err != nil {
 			log.Error("Error downloading %s: %s", hash, err)
