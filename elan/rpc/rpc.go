@@ -34,6 +34,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -99,6 +100,10 @@ func init() {
 	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
+// parallelism limits the number of concurrent requests we make on some RPCs.
+// TODO(peterebden): Use it more widely?
+const parallelism = 20
+
 // ServeForever serves on the given port until terminated.
 func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -113,6 +118,7 @@ func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, 
 		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		bucket:           bucket,
 		maxCacheItemSize: maxCacheItemSize,
+		limiter:          make(chan struct{}, parallelism),
 	}
 	srv.cache = newCache(srv, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
@@ -411,10 +417,12 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 	if !strings.HasSuffix(key, "/...") {
 		return s.queryOne(ctx, key)
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, 10 * time.Minute)
 	defer cancel()
 	iter := s.bucket.List(&blob.ListOptions{Prefix: strings.TrimSuffix(key, "...")})
 	ret := []*rpb.Digest{}
+	var g errgroup.Group
+	var mtx sync.Mutex
 	for {
 		obj, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -424,13 +432,21 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 		} else if obj.IsDir {
 			continue
 		}
-		digest, err := s.queryOne(ctx, obj.Key)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, digest...)
+		key := obj.Key
+		g.Go(func() error {
+			s.limiter <- struct{}{}
+			defer func() { <-s.limiter }()
+			digest, err := s.queryOne(ctx, key)
+			if err != nil {
+				return err
+			}
+			mtx.Lock()
+			defer mtx.Unlock()
+			ret = append(ret, digest...)
+			return nil
+		})
 	}
-	return ret, nil
+	return ret, g.Wait()
 }
 
 func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error) {
