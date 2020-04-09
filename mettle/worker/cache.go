@@ -95,10 +95,15 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		}
 		log.Notice("Removed %d extraneous entries", removed)
 	}
-
+	fetch := map[string]int64{}
+	for hash, size := range keep {
+		if !exists[hash] {
+			fetch[hash] = size
+		}
+	}
 	var total int64
 	i := 0
-	for hash, size := range keep {
+	for hash, size := range fetch {
 		i++
 		total += size
 		if exists[hash] {
@@ -106,7 +111,7 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 			continue
 		}
 		if i % 10 == 0 {
-			log.Notice("Downloading artifact %d of %d...", i, len(keep))
+			log.Notice("Downloading artifact %d of %d...", i, len(fetch))
 		}
 		if err := c.storeOne(client, hash, size); err != nil {
 			log.Error("Error downloading %s: %s", hash, err)
