@@ -82,6 +82,19 @@ var opts = struct {
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		} `group:"Options controlling communication with the CAS server"`
 	} `command:"cache" description:"Download artifacts to cache dir"`
+	One struct {
+		Hash         string       `long:"hash" required:"true" description:"Hash of the action digest to run"`
+		Size         int64        `long:"size" required:"true" description:"Size of the action digest to run"`
+		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
+		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		Storage      struct {
+			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		} `group:"Options controlling communication with the CAS server"`
+	} `command:"one" description:"Executes a single build action, identified by its action digest."`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
@@ -139,7 +152,11 @@ func main() {
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
-	} else {
+	} else if cmd == "cache" {
 		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
+	} else {
+		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, true, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size); err != nil {
+			log.Fatalf("%s", err)
+		}
 	}
 }

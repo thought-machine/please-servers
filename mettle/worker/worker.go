@@ -102,73 +102,44 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
+// RunOne runs one single request, returning any error received.
+func RunOne(instanceName, name, storage, dir, cacheDir, sandbox string, clean, secureStorage bool, timeout time.Duration, hash string, size int64) error {
+	// Must create this to submit on first
+	topic := common.MustOpenTopic("mem://requests")
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, clean, secureStorage, timeout, 0)
+	if err != nil {
+		return err
+	}
+	// Have to do this async since mempubsub doesn't seem to store messages?
+	go func() {
+		time.Sleep(500 * time.Millisecond)  // this is dodgy obvs
+		b, _ := proto.Marshal(&pb.ExecuteRequest{
+			InstanceName: instanceName,
+			ActionDigest: &pb.Digest{
+				Hash:      hash,
+				SizeBytes: size,
+			},
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		log.Notice("Sending request to build %s...", hash)
+		if err := topic.Send(ctx, &pubsub.Message{Body: b}); err != nil {
+			log.Fatalf("Failed to submit job to internal queue: %s", err)
+		}
+		log.Notice("Sent request to build %s", hash)
+	}()
+	if err := w.RunTask(context.Background()); err != nil {
+		return fmt.Errorf("Failed to run task: %s", err)
+	}
+	log.Notice("Completed execution successfully for %s", hash)
+	return nil
+}
+
 func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) error {
-	// Make sure we have a directory to run in
-	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
-		return fmt.Errorf("Failed to create working directory: %s", err)
-	}
-	// If no name is given, default to the hostname.
-	if name == "" {
-		hostname, err := os.Hostname()
-		if err != nil {
-			return fmt.Errorf("Failed to determine hostname, must pass --name explicitly: %s", err)
-		}
-		name = hostname
-		log.Notice("This is %s", name)
-	}
-	// Check this exists upfront
-	if sandbox != "" {
-		if _, err := os.Stat(sandbox); err != nil {
-			return fmt.Errorf("Error checking sandbox tool: %s", err)
-		}
-	}
-	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            storage,
-		NoSecurity:         !secureStorage,
-		TransportCredsOnly: secureStorage,
-		DialOpts: []grpc.DialOption{
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
-		},
-	}, client.UseBatchOps(true), client.RetryTransient())
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, clean, secureStorage, timeout, maxCacheSize)
 	if err != nil {
 		return err
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	abspath, err := filepath.Abs(dir)
-	if err != nil {
-		return fmt.Errorf("Failed to make path absolute: %s", err)
-	}
-	c, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: maxCacheSize / 10, // bit of a guess
-		MaxCost:     maxCacheSize,
-		BufferItems: 64, // recommended by upstream
-	})
-	if err != nil {
-		return fmt.Errorf("Failed to create cache: %s", err)
-	}
-	w := &worker{
-		requests:   common.MustOpenSubscription(requestQueue),
-		responses:  common.MustOpenTopic(responseQueue),
-		client:     client,
-		recorder:   rpb.NewRecorderClient(client.CASConnection),
-		cache:      c,
-		rootDir:    abspath,
-		clean:      clean,
-		home:       home,
-		name:       name,
-		sandbox:    sandbox,
-		limiter:    make(chan struct{}, downloadParallelism),
-		iolimiter:  make(chan struct{}, ioParallelism),
-		browserURL: browserURL,
-		timeout:    timeout,
-	}
-	if cacheDir != "" {
-		w.fileCache = NewCache(cacheDir)
-	}
-	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize)
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
@@ -184,6 +155,78 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 			return fmt.Errorf("Failed to run task: %s", err)
 		}
 	}
+}
+
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox string, clean, secureStorage bool, timeout time.Duration, maxCacheSize int64) (*worker, error) {
+	// Make sure we have a directory to run in
+	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
+		return nil, fmt.Errorf("Failed to create working directory: %s", err)
+	}
+	// If no name is given, default to the hostname.
+	if name == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to determine hostname, must pass --name explicitly: %s", err)
+		}
+		name = hostname
+		log.Notice("This is %s", name)
+	}
+	// Check this exists upfront
+	if sandbox != "" {
+		if _, err := os.Stat(sandbox); err != nil {
+			return nil, fmt.Errorf("Error checking sandbox tool: %s", err)
+		}
+	}
+	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
+		Service:            storage,
+		NoSecurity:         !secureStorage,
+		TransportCredsOnly: secureStorage,
+		DialOpts: []grpc.DialOption{
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
+		},
+	}, client.UseBatchOps(true), client.RetryTransient())
+	if err != nil {
+		return nil, err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	abspath, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to make path absolute: %s", err)
+	}
+	w := &worker{
+		requests:   common.MustOpenSubscription(requestQueue),
+		responses:  common.MustOpenTopic(responseQueue),
+		client:     client,
+		recorder:   rpb.NewRecorderClient(client.CASConnection),
+		rootDir:    abspath,
+		clean:      clean,
+		home:       home,
+		name:       name,
+		sandbox:    sandbox,
+		limiter:    make(chan struct{}, downloadParallelism),
+		iolimiter:  make(chan struct{}, ioParallelism),
+		browserURL: browserURL,
+		timeout:    timeout,
+	}
+	if cacheDir != "" {
+		w.fileCache = NewCache(cacheDir)
+	}
+	if maxCacheSize > 0 {
+		c, err := ristretto.NewCache(&ristretto.Config{
+			NumCounters: maxCacheSize / 10, // bit of a guess
+			MaxCost:     maxCacheSize,
+			BufferItems: 64, // recommended by upstream
+		})
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create cache: %s", err)
+		}
+		w.cache = c
+	}
+	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize)
+	return w, nil
 }
 
 type worker struct {
