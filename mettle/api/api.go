@@ -139,7 +139,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
-	log.Debug("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
+	log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
 	totalRequests.Inc()
 	currentRequests.Inc()
 	// N.B. We never try a cache lookup here because Please always tells us not to; it's not
@@ -173,6 +173,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 }
 
 func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
+	log.Info("Received a request to wait for %s", req.Name)
 	digest := &pb.Digest{Hash: req.Name}
 	ch := s.eventStream(digest, false)
 	if ch == nil {
@@ -192,7 +193,7 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 			return err
 		}
 	}
-	log.Info("Completed stream for %s", digest.Hash)
+	log.Notice("Completed stream for %s", digest.Hash)
 	return nil
 }
 
@@ -299,7 +300,7 @@ func (s *server) process(msg *pubsub.Message) {
 			}(stream)
 		}
 		if op.Done {
-			log.Info("Job %s is complete", metadata.ActionDigest.Hash)
+			log.Notice("Job %s is complete", metadata.ActionDigest.Hash)
 			delete(s.jobs, metadata.ActionDigest.Hash)
 			currentRequests.Dec()
 		}

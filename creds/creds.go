@@ -38,7 +38,7 @@ func (g *grpcLogMabob) Warningln(args ...interface{}) {
 	if len(args) == 2 && args[0] == "grpc: Server.Serve failed to create ServerTransport: " {
 		if err, ok := args[1].(error); ok {
 			if err.Error() == `connection error: desc = "transport: http2Server.HandleStreams failed to receive the preface from client: EOF"` {
-				log.Info("%s %s", args[0], args[1])
+				log.Debug("%s %s", args[0], args[1])
 				return
 			}
 		}
