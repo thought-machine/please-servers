@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -28,12 +29,14 @@ const ioParallelism = 10
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
+	ts1 := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	dirs, err := w.client.GetDirectoryTree(ctx, digest)
 	if err != nil {
 		return err
 	}
+	ts2 := time.Now()
 	m := make(map[string]*pb.Directory, len(dirs))
 	for _, dir := range dirs {
 		m[digestProto(dir).Hash] = dir
@@ -42,7 +45,12 @@ func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
 	if err := w.createDirectory(m, files, root, digest); err != nil {
 		return err
 	}
-	return w.downloadAllFiles(files)
+	ts3 := time.Now()
+	err = w.downloadAllFiles(files)
+	w.metadataFetch = ts2.Sub(ts1)
+	w.dirCreation = ts3.Sub(ts2)
+	w.fileDownload = time.Since(ts3)
+	return err
 }
 
 // createDirectory creates a directory & all its children

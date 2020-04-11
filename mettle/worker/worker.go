@@ -249,6 +249,9 @@ type worker struct {
 	metadata        *pb.ExecutedActionMetadata
 	downloadedBytes int64
 	cachedBytes     int64
+	metadataFetch   time.Duration
+	dirCreation     time.Duration
+	fileDownload    time.Duration
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
@@ -356,10 +359,11 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	fetchDurations.Observe(time.Since(start).Seconds())
 	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
 		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
-		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%)", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
 	} else {
 		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
 	}
+	log.Notice("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
 	return nil
 }
 
