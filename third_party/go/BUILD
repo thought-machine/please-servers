@@ -140,7 +140,7 @@ go_get(
 go_get(
     name = "spew",
     get = "github.com/davecgh/go-spew/spew",
-    revision = "ecdeabc65495df2dec95d7c4a4c3e021903035e5",
+    revision = "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
 )
 
 go_get(

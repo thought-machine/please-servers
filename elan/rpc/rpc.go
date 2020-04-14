@@ -584,7 +584,7 @@ func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Dig
 	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b))
 }
 
-// bytestreamDigest returns the digest corresponding to a bytestream resource name.
+// bytestreamBlobName returns the digest corresponding to a bytestream resource name.
 func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, error) {
 	matches := s.bytestreamRe.FindStringSubmatch(bytestream)
 	if matches == nil {

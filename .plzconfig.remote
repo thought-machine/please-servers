@@ -2,7 +2,7 @@
 ; (use `plz runlocal` to start the servers in that mode)
 [remote]
 url = localhost:7778
-casurl = localhost:7777
+casurl = localhost:7775
 asseturl = localhost:7776
 instance = mettle
 secure = false
