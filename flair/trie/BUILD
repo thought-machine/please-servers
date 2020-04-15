@@ -4,7 +4,7 @@ go_library(
         "replication.go",
         "trie.go",
     ],
-    visibility = ["//sanguine/..."],
+    visibility = ["//flair/..."],
     deps = [
         "//proto:record",
         "//third_party/go:bytestream",

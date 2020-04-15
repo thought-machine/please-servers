@@ -4,7 +4,7 @@ go_library(
     deps = [
         "//creds",
         "//proto:record",
-        "//sanguine/trie",
+        "//flair/trie",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
         "//third_party/go:errgroup",
@@ -14,5 +14,5 @@ go_library(
         "//third_party/go:protobuf",
         "//third_party/go:remote-apis",
     ],
-    visibility = ["//sanguine/..."],
+    visibility = ["//flair/..."],
 )

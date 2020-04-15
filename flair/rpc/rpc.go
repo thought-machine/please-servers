@@ -23,7 +23,7 @@ import (
 
 	"github.com/thought-machine/please-servers/creds"
 	rpb "github.com/thought-machine/please-servers/proto/record"
-	"github.com/thought-machine/please-servers/sanguine/trie"
+	"github.com/thought-machine/please-servers/flair/trie"
 )
 
 var log = cli.MustGetLogger()

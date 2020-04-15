@@ -1,4 +1,4 @@
-// Package trie provides a trie implementation specialised to Sanguine's requirements.
+// Package trie provides a trie implementation specialised to Flair's requirements.
 //
 // Not every possible setup is supported. Maybe eventually it will get cleverer.
 package trie
