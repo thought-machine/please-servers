@@ -388,7 +388,7 @@ go_get(
 go_get(
     name = "go-multierror",
     get = "github.com/hashicorp/go-multierror",
-    revision = "v1.0.0",
+    revision = "v1.1.0",
     deps = [":errwrap"],
 )
 

@@ -40,3 +40,20 @@ func TestTwoCompleteLevels(t *testing.T) {
 	assert.Equal(t, trie.Get("abcd"), trie.Get("bcde"))
 	assert.NotEqual(t, trie.Get("0abc"), trie.Get("0bcd"))
 }
+
+func TestOffset(t *testing.T) {
+	var trie Trie
+	assert.NoError(t, trie.AddAll(map[string]string{
+		"00-3f": "127.0.0.1:443",
+		"40-7f": "127.0.0.1:443",
+		"80-af": "127.0.0.1:443",
+		"b0-ff": "127.0.0.1:443",
+	}))
+	assert.NoError(t, trie.Check())
+	assert.NotNil(t, trie.Get("0000"))
+	// An offset of 1 isn't enough to move to the next replica.
+	assert.Equal(t, trie.Get("0000"), trie.GetOffset("0000", 1))
+	// But 4 is
+	assert.NotEqual(t, trie.Get("0000"), trie.GetOffset("0000", 4))
+	assert.Equal(t, trie.Get("4000"), trie.GetOffset("0000", 4))
+}

@@ -29,13 +29,13 @@ import (
 var log = cli.MustGetLogger()
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, trie *trie.Trie, keyFile, certFile string) {
+func ServeForever(port int, replicator *trie.Replicator, keyFile, certFile string) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
 	}
 	srv := &server{
-		trie:         trie,
+		replicator:   replicator,
 		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 	}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
@@ -56,7 +56,7 @@ func ServeForever(port int, trie *trie.Trie, keyFile, certFile string) {
 }
 
 type server struct {
-	trie         *trie.Trie
+	replicator   *trie.Replicator
 	bytestreamRe *regexp.Regexp
 }
 
@@ -80,38 +80,57 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 	}, nil
 }
 
-func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (*pb.ActionResult, error) {
-	return s.trie.Get(req.ActionDigest.Hash).AC.GetActionResult(ctx, req)
+func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (ar *pb.ActionResult, err error) {
+	err = s.replicator.Read(req.ActionDigest.Hash, func(s *trie.Server) error {
+		a, e := s.AC.GetActionResult(ctx, req)
+		if e == nil {
+			ar = a
+		}
+		return e
+	})
+	return
 }
 
-func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
-	return s.trie.Get(req.ActionDigest.Hash).AC.UpdateActionResult(ctx, req)
+func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (ar *pb.ActionResult, err error) {
+	err = s.replicator.Write(req.ActionDigest.Hash, func(s *trie.Server) error {
+		a, e := s.AC.UpdateActionResult(ctx, req)
+		if e == nil {
+			ar = a
+		}
+		return e
+	})
+	return
 }
 
 func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsRequest) (*pb.FindMissingBlobsResponse, error) {
+	// Note that the replication strategy here assumes that the set of blobs to go to each replica is the same as for
+	// the primary (basically that the replication offset is an integer multiple of the size of each hash block, and those
+	// blocks are of a consistent size). This currently fits our setup.
 	blobs := map[*trie.Server][]*pb.Digest{}
 	for _, d := range req.BlobDigests {
-		s := s.trie.Get(d.Hash)
+		s := s.replicator.Trie.Get(d.Hash)
 		blobs[s] = append(blobs[s], d)
 	}
 	resp := &pb.FindMissingBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
-	for s, b := range blobs {
-		s := s
+	for srv, b := range blobs {
+		srv := srv
 		b := b
 		g.Go(func() error {
-			r, err := s.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
-				InstanceName: req.InstanceName,
-				BlobDigests:  b,
+			return s.replicator.Read(srv.Start, func(srv *trie.Server) error {
+				r, err := srv.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
+					InstanceName: req.InstanceName,
+					BlobDigests:  b,
+				})
+				if err != nil {
+					return err
+				}
+				mutex.Lock()
+				defer mutex.Unlock()
+				resp.MissingBlobDigests = append(resp.MissingBlobDigests, r.MissingBlobDigests...)
+				return nil
 			})
-			if err != nil {
-				return err
-			}
-			mutex.Lock()
-			defer mutex.Unlock()
-			resp.MissingBlobDigests = append(resp.MissingBlobDigests, r.MissingBlobDigests...)
-			return nil
 		})
 	}
 	return resp, g.Wait()
@@ -120,27 +139,29 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsRequest) (*pb.BatchUpdateBlobsResponse, error) {
 	blobs := map[*trie.Server][]*pb.BatchUpdateBlobsRequest_Request{}
 	for _, d := range req.Requests {
-		s := s.trie.Get(d.Digest.Hash)
+		s := s.replicator.Trie.Get(d.Digest.Hash)
 		blobs[s] = append(blobs[s], d)
 	}
 	resp := &pb.BatchUpdateBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
-	for s, rs := range blobs {
-		s := s
+	for srv, rs := range blobs {
+		srv := srv
 		rs := rs
 		g.Go(func() error {
-			r, err := s.CAS.BatchUpdateBlobs(ctx, &pb.BatchUpdateBlobsRequest{
-				InstanceName: req.InstanceName,
-				Requests:     rs,
+			return s.replicator.Write(srv.Start, func(srv *trie.Server) error {
+				r, err := srv.CAS.BatchUpdateBlobs(ctx, &pb.BatchUpdateBlobsRequest{
+					InstanceName: req.InstanceName,
+					Requests:     rs,
+				})
+				if err != nil {
+					return err
+				}
+				mutex.Lock()
+				defer mutex.Unlock()
+				resp.Responses = append(resp.Responses, r.Responses...)
+				return nil
 			})
-			if err != nil {
-				return err
-			}
-			mutex.Lock()
-			defer mutex.Unlock()
-			resp.Responses = append(resp.Responses, r.Responses...)
-			return nil
 		})
 	}
 	return resp, g.Wait()
@@ -149,27 +170,29 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
 	blobs := map[*trie.Server][]*pb.Digest{}
 	for _, d := range req.Digests {
-		s := s.trie.Get(d.Hash)
+		s := s.replicator.Trie.Get(d.Hash)
 		blobs[s] = append(blobs[s], d)
 	}
 	resp := &pb.BatchReadBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
-	for s, d := range blobs {
-		s := s
+	for srv, d := range blobs {
+		srv := srv
 		d := d
 		g.Go(func() error {
-			r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
-				InstanceName: req.InstanceName,
-				Digests:      d,
+			return s.replicator.Read(srv.Start, func(s *trie.Server) error {
+				r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
+					InstanceName: req.InstanceName,
+					Digests:      d,
+				})
+				if err != nil {
+					return err
+				}
+				mutex.Lock()
+				defer mutex.Unlock()
+				resp.Responses = append(resp.Responses, r.Responses...)
+				return nil
 			})
-			if err != nil {
-				return err
-			}
-			mutex.Lock()
-			defer mutex.Unlock()
-			resp.Responses = append(resp.Responses, r.Responses...)
-			return nil
 		})
 	}
 	return resp, g.Wait()
@@ -191,16 +214,23 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 
 	var fetchDir func(digest *pb.Digest) error
 	fetchDir = func(digest *pb.Digest) error {
-		resp, err := s.trie.Get(digest.Hash).CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
-			InstanceName: req.InstanceName,
-			Digests:      []*pb.Digest{digest},
-		})
-		if err != nil {
+		var resp *pb.BatchReadBlobsResponse
+		if err := s.replicator.Read(digest.Hash, func(s *trie.Server) error {
+			r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
+				InstanceName: req.InstanceName,
+				Digests:      []*pb.Digest{digest},
+			})
+			if err != nil {
+				return err
+			} else if len(resp.Responses) != 1 {
+				return fmt.Errorf("missing blob in response") // shouldn't happen...
+			} else if s := resp.Responses[0].Status; s.Code != int32(codes.OK) {
+				return status.Errorf(codes.Code(s.Code), s.Message)
+			}
+			resp = r
+			return nil
+		}); err != nil {
 			return err
-		} else if len(resp.Responses) != 1 {
-			return fmt.Errorf("missing blob in response") // shouldn't happen...
-		} else if s := resp.Responses[0].Status; s.Code != int32(codes.OK) {
-			return status.Errorf(codes.Code(s.Code), s.Message)
 		}
 		dir := &pb.Directory{}
 		if err := proto.Unmarshal(resp.Responses[0].Data, dir); err != nil {
@@ -232,58 +262,105 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if err != nil {
 		return err
 	}
-	client, err := s.trie.Get(hash).BS.Read(srv.Context(), req)
-	if err != nil {
-		return err
-	}
-	for {
-		if resp, err := client.Recv(); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		} else if err := srv.Send(resp); err != nil {
+	// This needs a little bookkeeping since we can fail partway and restart on another server.
+	// That's actually OK as long as we jiggle the ReadOffset appropriately.
+	return s.replicator.Read(hash, func(s *trie.Server) error {
+		client, err := s.BS.Read(srv.Context(), req)
+		if err != nil {
 			return err
 		}
-	}
+		for {
+			resp, err := client.Recv()
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			} else if err := srv.Send(resp); err != nil {
+				return err
+			}
+			req.ReadOffset += int64(len(resp.Data))
+		}
+	})
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
-	var client bs.ByteStream_WriteClient
-	for {
-		req, err := srv.Recv()
-		if err != nil {
-			if err == io.EOF {
-				resp, err := client.CloseAndRecv()
-				if err != nil {
-					return err
-				}
-				return srv.SendAndClose(resp)
-			}
-			return err
-		} else if client == nil {
-			hash, err := s.bytestreamBlobName(req.ResourceName)
-			if err != nil {
-				return err
-			}
-			client, err = s.trie.Get(hash).BS.Write(srv.Context())
-			if err != nil {
-				return err
-			}
-		}
-		if err := client.Send(req); err != nil {
-			log.Warning("here: %s %s", err, req)
-			return err
-		}
+	// This is a bit different to (and rather more complex than) Read since we have to perform all writes in parallel,
+	// but we only receive from the client once so we have to fan out the messages.
+	req, err := srv.Recv()
+	if err != nil {
+		return err
 	}
+	hash, err := s.bytestreamBlobName(req.ResourceName)
+	if err != nil {
+		return err
+	}
+	chs := make([]chan *bs.WriteRequest, s.replicator.Replicas)
+	chch := make(chan chan *bs.WriteRequest, s.replicator.Replicas)
+	for i := range chs {
+		ch := make(chan *bs.WriteRequest, 10)  // Bit of arbitrary buffering so they can get a little out of sync if needed.
+		ch <- req
+		chs[i] = ch
+		chch <- ch
+	}
+	var g errgroup.Group
+	g.Go(func() error {
+		for {
+			req, err := srv.Recv()
+			if err != nil {
+				for _, ch := range chs {
+					close(ch)
+				}
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			}
+			for _, ch := range chs {
+				ch <- req
+			}
+		}
+	})
+	var resp *bs.WriteResponse
+	if err := s.replicator.Write(hash, func(s *trie.Server) error {
+		ch := <- chch
+		client, err := s.BS.Write(srv.Context())
+		if err != nil {
+			return err
+		}
+		for req := range ch {
+			if err := client.Send(req); err != nil {
+				return err
+			}
+		}
+		r, err := client.CloseAndRecv()
+		if err != nil {
+			return err
+		}
+		resp = r
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	return srv.SendAndClose(resp)
 }
 
-func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusRequest) (*bs.QueryWriteStatusResponse, error) {
+func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusRequest) (resp *bs.QueryWriteStatusResponse, err error) {
 	hash, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return nil, err
 	}
-	return s.trie.Get(hash).BS.QueryWriteStatus(ctx, req)
+	err = s.replicator.Read(hash, func(s *trie.Server) error {
+		r, e := s.BS.QueryWriteStatus(ctx, req)
+		if e == nil {
+			resp = r
+		}
+		return e
+	})
+	return resp, err
 }
 
 // bytestreamBlobName returns the hash corresponding to a bytestream resource name.

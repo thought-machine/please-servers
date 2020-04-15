@@ -20,6 +20,7 @@ var opts = struct {
 	} `group:"Options controlling logging output"`
 	Port int    `short:"p" long:"port" default:"7775" description:"Port to serve on"`
 	Geometry map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
+	Replicas int `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
 	TLS         struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
@@ -54,5 +55,6 @@ func main() {
 	} else if err := t.Check(); err != nil {
 		log.Fatalf("Failed to construct trie: %s", err)
 	}
-	rpc.ServeForever(opts.Port, &t, opts.TLS.KeyFile, opts.TLS.CertFile)
+	r := trie.NewReplicator(&t, opts.Replicas)
+	rpc.ServeForever(opts.Port, r, opts.TLS.KeyFile, opts.TLS.CertFile)
 }

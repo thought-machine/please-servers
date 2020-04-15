@@ -29,6 +29,8 @@ type Server struct {
 	AC  pb.ActionCacheClient
 	BS  bs.ByteStreamClient
 	Rec rpb.RecorderClient
+	Start string
+	End string
 }
 
 // A node represents a single node within the trie.
@@ -97,6 +99,8 @@ func (t *Trie) AddRange(start, end, address string) error {
 		AC:  pb.NewActionCacheClient(conn),
 		BS:  bs.NewByteStreamClient(conn),
 		Rec: rpb.NewRecorderClient(conn),
+		Start: start,
+		End: end,
 	}
 	t.servers = append(t.servers, s)
 	return t.add(&t.root, start, end, &s)
@@ -144,9 +148,15 @@ func toInt(c byte) int {
 // Get returns a server from this trie.
 // It is assumed not to fail since the trie is already complete.
 func (t *Trie) Get(key string) *Server {
+	return t.GetOffset(key, 0)
+}
+
+// GetOffset gets a server with the hash offset by a given amount.
+func (t *Trie) GetOffset(key string, offset int) *Server {
 	node := &t.root
 	for {
-		child := &node.children[toInt(key[0])]
+		idx := toInt(key[0]) + offset
+		child := &node.children[idx % 16]
 		if child.server != nil {
 			return child.server
 		}
