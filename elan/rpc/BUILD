@@ -16,6 +16,7 @@ go_library(
         "//third_party/go:longrunning",
         "//third_party/go/prometheus",
         "//third_party/go:protobuf",
+        "//third_party/go:ristretto",
         "//third_party/go:remote-apis",
         "//third_party/go:rpcstatus",
     ],

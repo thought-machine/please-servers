@@ -105,7 +105,7 @@ func init() {
 const parallelism = 20
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64) {
+func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
@@ -121,6 +121,13 @@ func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, 
 		limiter:          make(chan struct{}, parallelism),
 	}
 	srv.cache = newCache(srv, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
+	if fileCachePath != "" && maxFileCacheSize > 0 {
+		c, err := newFileCache(fileCachePath, maxFileCacheSize)
+		if err != nil {
+			log.Fatalf("Failed to create file cache: %s", err)
+		}
+		srv.fileCache = c
+	}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			logUnaryRequests,
@@ -152,6 +159,7 @@ type server struct {
 	limiter          chan struct{}
 	cache            *cache
 	maxCacheItemSize int64
+	fileCache        *fileCache
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -464,6 +472,11 @@ func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
 	key := s.key(prefix, digest)
+	if s.fileCache != nil {
+		if r := s.fileCache.Get(key); r != nil {
+			return r, nil
+		}
+	}
 	if blob, present := s.cachedBlob(key, digest); present {
 		if length > 0 {
 			blob = blob[offset : offset+length]
@@ -488,6 +501,11 @@ func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Di
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
 	key := s.key(prefix, digest)
+	if s.fileCache != nil {
+		if b := s.fileCache.GetAll(key); b != nil {
+			return b, nil
+		}
+	}
 	if blob, present := s.cachedBlob(key, digest); present {
 		return blob, nil
 	}
@@ -550,6 +568,11 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	if digest.SizeBytes < s.maxCacheItemSize {
 		buf.Grow(int(digest.SizeBytes))
 		wr = io.MultiWriter(w, &buf)
+	}
+	if s.fileCache != nil {
+		if w := s.fileCache.Set(key, digest.SizeBytes); w != nil {
+			wr = io.MultiWriter(wr, w)
+		}
 	}
 	h := sha256.New()
 	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.

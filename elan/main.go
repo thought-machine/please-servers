@@ -24,12 +24,16 @@ var opts = struct {
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	} `group:"Options controlling TLS for the gRPC server"`
 	Cache struct {
-		Port        int          `long:"cache_port" default:"8080" description:"Port to communicate cache data over"`
-		MaxSize     cli.ByteSize `long:"cache_max_size" default:"10M" description:"Max size of in-memory cache"`
-		MaxItemSize cli.ByteSize `long:"cache_max_item_size" default:"100K" description:"Max size of any single item in the cache"`
-		Peers       []string     `long:"cache_peer" description:"URLs of cache peers to connect to. Will be monitored via DNS."`
-		SelfIP      string       `long:"cache_self_ip" env:"CACHE_SELF_IP" description:"IP address of the current peer."`
-	} `group:"Options controlling in-memory caching of blobs"`
+		Port        int          `long:"port" default:"8080" description:"Port to communicate cache data over"`
+		MaxSize     cli.ByteSize `long:"max_size" default:"10M" description:"Max size of in-memory cache"`
+		MaxItemSize cli.ByteSize `long:"max_item_size" default:"100K" description:"Max size of any single item in the cache"`
+		Peers       []string     `long:"peer" description:"URLs of cache peers to connect to. Will be monitored via DNS."`
+		SelfIP      string       `long:"self_ip" env:"CACHE_SELF_IP" description:"IP address of the current peer."`
+	} `group:"Options controlling in-memory caching of blobs" namespace:"cache"`
+	FileCache struct {
+		MaxSize cli.ByteSize `long:"max_size" description:"Max size of the cache. If 0 or not specified it is disabled."`
+		Path    string       `long:"path" description:"Path to the root of the cache"`
+	} `group:"Options controlling filesystem-based caching of blobs" namespace:"file_cache"`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
@@ -51,5 +55,5 @@ func main() {
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
 	log.Notice("Serving on :%d", opts.Port)
-	rpc.ServeForever(opts.Port, opts.Cache.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize))
+	rpc.ServeForever(opts.Port, opts.Cache.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize), opts.FileCache.Path, int64(opts.FileCache.MaxSize))
 }

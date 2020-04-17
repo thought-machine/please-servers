@@ -3,6 +3,7 @@ package main
 
 import (
 	"github.com/peterebden/go-cli-init"
+	"github.com/thought-machine/http-admin"
 
 	"github.com/thought-machine/please-servers/flair/rpc"
 	"github.com/thought-machine/please-servers/flair/trie"
