@@ -20,7 +20,10 @@ var opts = struct {
 	} `group:"Options controlling logging output"`
 	Port     int               `short:"p" long:"port" default:"7775" description:"Port to serve on"`
 	Geometry map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
+	AssetGeometry map[string]string `short:"a" long:"asset_geometry" description:"Asset server geometry to forward requests to. If not given then the remote asset API will be unavailable."`
+	ExecutorGeometry map[string]string `short:"e" long:"executor_geometry" description:"Executor server geometry to forward request to. If not given then the executor API will be unavailable."`
 	Replicas int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
+	ConnTLS bool `long:"tls" description:"Use TLS for connecting to other servers"`
 	TLS      struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
@@ -50,12 +53,21 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	var t trie.Trie
-	if err := t.AddAll(opts.Geometry); err != nil {
+	cr := newReplicator(opts.Geometry, opts.Replicas)
+	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
+	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)
+	rpc.ServeForever(opts.Port, cr, ar, er, opts.TLS.KeyFile, opts.TLS.CertFile)
+}
+
+func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {
+	if len(geometry) == 0 {
+		return nil
+	}
+	t := trie.Trie{TLS: opts.ConnTLS}
+	if err := t.AddAll(geometry); err != nil {
 		log.Fatalf("Failed to create trie for provided geometry: %s", err)
 	} else if err := t.Check(); err != nil {
 		log.Fatalf("Failed to construct trie: %s", err)
 	}
-	r := trie.NewReplicator(&t, opts.Replicas)
-	rpc.ServeForever(opts.Port, r, opts.TLS.KeyFile, opts.TLS.CertFile)
+	return trie.NewReplicator(&t, replicas)
 }

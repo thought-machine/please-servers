@@ -31,9 +31,10 @@ func NewReplicator(t *Trie, replicas int) *Replicator {
 // errors where the server is down, we wouldn't retry InvalidArgument where it seems it would be pointless).
 type ReplicatedFunc func(*Server) error
 
-// Read replicates a read; it reads off the primary first and subsequently attempts each replica in sequence on error.
+// Sequential runs the function sequentially from the primary, attempting each replica in sequence until either one is
+// successful or they all fail.
 // It returns an error if all replicas fail, which is the error of the primary replica (with appropriate status code etc).
-func (r *Replicator) Read(key string, f ReplicatedFunc) error {
+func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 	var e error
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
@@ -55,9 +56,9 @@ func (r *Replicator) Read(key string, f ReplicatedFunc) error {
 	return e
 }
 
-// Write replicates a write; it writes to all replicas simultaneously.
+// Parallel replicates the given function to all replicas at once.
 // It returns an error if all replicas fail, hence it is possible for some replicas not to receive data.
-func (r *Replicator) Write(key string, f ReplicatedFunc) error {
+func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 	var g multierror.Group
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {

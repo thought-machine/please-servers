@@ -3,17 +3,22 @@ package rpc
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"regexp"
 	"sync"
 
+	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-sri"
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/grpc"
@@ -29,14 +34,16 @@ import (
 var log = cli.MustGetLogger()
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, replicator *trie.Replicator, keyFile, certFile string) {
+func ServeForever(port int, casReplicator, assetReplicator, executorReplicator *trie.Replicator, keyFile, certFile string) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
 	}
 	srv := &server{
-		replicator:   replicator,
-		bytestreamRe: regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		replicator:      casReplicator,
+		assetReplicator: assetReplicator,
+		exeReplicator:   executorReplicator,
+		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 	}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_recovery.UnaryServerInterceptor()),
@@ -49,6 +56,12 @@ func ServeForever(port int, replicator *trie.Replicator, keyFile, certFile strin
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	rpb.RegisterRecorderServer(s, srv)
+	if assetReplicator != nil {
+		apb.RegisterFetchServer(s, srv)
+	}
+	if executorReplicator != nil {
+		pb.RegisterExecutionServer(s, srv)
+	}
 	reflection.Register(s)
 	log.Notice("Serving on :%d", port)
 	err = s.Serve(lis)
@@ -56,15 +69,15 @@ func ServeForever(port int, replicator *trie.Replicator, keyFile, certFile strin
 }
 
 type server struct {
-	replicator   *trie.Replicator
-	bytestreamRe *regexp.Regexp
+	replicator, assetReplicator, exeReplicator   *trie.Replicator
+	bytestreamRe                                 *regexp.Regexp
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
 	// This always does the same thing as Elan.
 	// We might consider upping some of the size limits though since it will multiplex batch requests so will be more
 	// efficient with bigger ones than Elan would be on its own.
-	return &pb.ServerCapabilities{
+	caps := &pb.ServerCapabilities{
 		CacheCapabilities: &pb.CacheCapabilities{
 			DigestFunction: []pb.DigestFunction_Value{
 				pb.DigestFunction_SHA1,
@@ -76,12 +89,19 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
-		HighApiVersion: &semver.SemVer{Major: 2, Minor: 0},
-	}, nil
+		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1},  // optimistic
+	}
+	if s.exeReplicator != nil {
+		caps.ExecutionCapabilities = &pb.ExecutionCapabilities{
+			DigestFunction: pb.DigestFunction_SHA256,
+			ExecEnabled:    true,
+		}
+	}
+	return caps, nil
 }
 
 func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (ar *pb.ActionResult, err error) {
-	err = s.replicator.Read(req.ActionDigest.Hash, func(s *trie.Server) error {
+	err = s.replicator.Sequential(req.ActionDigest.Hash, func(s *trie.Server) error {
 		a, e := s.AC.GetActionResult(ctx, req)
 		if e == nil {
 			ar = a
@@ -92,7 +112,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 }
 
 func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (ar *pb.ActionResult, err error) {
-	err = s.replicator.Write(req.ActionDigest.Hash, func(s *trie.Server) error {
+	err = s.replicator.Parallel(req.ActionDigest.Hash, func(s *trie.Server) error {
 		a, e := s.AC.UpdateActionResult(ctx, req)
 		if e == nil {
 			ar = a
@@ -118,7 +138,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 		srv := srv
 		b := b
 		g.Go(func() error {
-			return s.replicator.Read(srv.Start, func(srv *trie.Server) error {
+			return s.replicator.Sequential(srv.Start, func(srv *trie.Server) error {
 				r, err := srv.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
 					InstanceName: req.InstanceName,
 					BlobDigests:  b,
@@ -149,7 +169,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 		srv := srv
 		rs := rs
 		g.Go(func() error {
-			return s.replicator.Write(srv.Start, func(srv *trie.Server) error {
+			return s.replicator.Parallel(srv.Start, func(srv *trie.Server) error {
 				r, err := srv.CAS.BatchUpdateBlobs(ctx, &pb.BatchUpdateBlobsRequest{
 					InstanceName: req.InstanceName,
 					Requests:     rs,
@@ -180,7 +200,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 		srv := srv
 		d := d
 		g.Go(func() error {
-			return s.replicator.Read(srv.Start, func(s *trie.Server) error {
+			return s.replicator.Sequential(srv.Start, func(s *trie.Server) error {
 				r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 					InstanceName: req.InstanceName,
 					Digests:      d,
@@ -215,7 +235,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	var fetchDir func(digest *pb.Digest) error
 	fetchDir = func(digest *pb.Digest) error {
 		var resp *pb.BatchReadBlobsResponse
-		if err := s.replicator.Read(digest.Hash, func(s *trie.Server) error {
+		if err := s.replicator.Sequential(digest.Hash, func(s *trie.Server) error {
 			r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 				InstanceName: req.InstanceName,
 				Digests:      []*pb.Digest{digest},
@@ -264,7 +284,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	// This needs a little bookkeeping since we can fail partway and restart on another server.
 	// That's actually OK as long as we jiggle the ReadOffset appropriately.
-	return s.replicator.Read(hash, func(s *trie.Server) error {
+	return s.replicator.Sequential(hash, func(s *trie.Server) error {
 		client, err := s.BS.Read(srv.Context(), req)
 		if err != nil {
 			return err
@@ -322,7 +342,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 		}
 	})
 	var resp *bs.WriteResponse
-	if err := s.replicator.Write(hash, func(s *trie.Server) error {
+	if err := s.replicator.Parallel(hash, func(s *trie.Server) error {
 		ch := <- chch
 		client, err := s.BS.Write(srv.Context())
 		if err != nil {
@@ -353,7 +373,7 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 	if err != nil {
 		return nil, err
 	}
-	err = s.replicator.Read(hash, func(s *trie.Server) error {
+	err = s.replicator.Sequential(hash, func(s *trie.Server) error {
 		r, e := s.BS.QueryWriteStatus(ctx, req)
 		if e == nil {
 			resp = r
@@ -370,6 +390,79 @@ func (s *server) bytestreamBlobName(bytestream string) (string, error) {
 		return "", status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
 	}
 	return matches[1], nil
+}
+
+func (s *server) FetchDirectory(ctx context.Context, req *apb.FetchDirectoryRequest) (resp *apb.FetchDirectoryResponse, err error) {
+	err = s.assetReplicator.Sequential(s.assetHash(req.Qualifiers), func(s *trie.Server) error {
+		resp, err = s.Fetch.FetchDirectory(ctx, req)
+		return err
+	})
+	return resp, err
+}
+
+func (s *server) FetchBlob(ctx context.Context, req *apb.FetchBlobRequest) (resp *apb.FetchBlobResponse, err error) {
+	err = s.assetReplicator.Sequential(s.assetHash(req.Qualifiers), func(s *trie.Server) error {
+		resp, err = s.Fetch.FetchBlob(ctx, req)
+		return err
+	})
+	return resp, err
+}
+
+// assetHash returns a hash used to key requests to the asset service.
+// It attempts to work it out from any subresource integrity qualifiers in order to put the fetch closer to the
+// CAS server (assuming their geometries match...) but on failure just picks something random.
+func (s *server) assetHash(quals []*apb.Qualifier) string {
+	for _, q := range quals {
+		if q.Name == "checksum.sri" {
+			if c, err := sri.NewChecker(q.Value); err == nil {
+				if hashes := c.Expected("sha256"); len(hashes) > 0 {
+					// Need to convert from base64 to hex...
+					if b, err := base64.StdEncoding.DecodeString(hashes[0]); err == nil {
+						return hex.EncodeToString(b)
+					}
+				}
+			}
+		}
+	}
+	// Didn't find anything above, for whatever reason. Make up something random.
+	key := [32]byte{}
+	rand.Read(key[:])
+	return hex.EncodeToString(key[:])
+}
+
+func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServer) error {
+	return s.exeReplicator.Sequential(req.ActionDigest.Hash, func(srv *trie.Server) error {
+		client, err := srv.Exe.Execute(stream.Context(), req)
+		if err != nil {
+			return err
+		}
+		return s.streamExecution(client, stream)
+	})
+}
+
+
+func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
+	return s.exeReplicator.Sequential(req.Name, func(srv *trie.Server) error {
+		client, err := srv.Exe.WaitExecution(stream.Context(), req)
+		if err != nil {
+			return err
+		}
+		return s.streamExecution(client, stream)
+	})
+}
+
+func (s *server) streamExecution(client pb.Execution_ExecuteClient, server pb.Execution_ExecuteServer) error {
+	for {
+		resp, err := client.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		} else if err := server.Send(resp); err != nil {
+			return err
+		}
+	}
 }
 
 // Record and Query are silently unimplemented for now. They are nontrivial in terms of how we

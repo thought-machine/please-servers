@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	bs "google.golang.org/genproto/googleapis/bytestream"
+	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 
 	rpb "github.com/thought-machine/please-servers/proto/record"
@@ -18,6 +20,8 @@ import (
 // A Trie provides fast lookups on hash keys.
 // The zero value is usable.
 type Trie struct {
+	// If TLS is set, newly created connections will use a generic TLS configuration.
+	TLS bool
 	root node
 	nodes []node  // premature optimisation
 	servers []Server
@@ -29,6 +33,8 @@ type Server struct {
 	AC  pb.ActionCacheClient
 	BS  bs.ByteStreamClient
 	Rec rpb.RecorderClient
+	Exe pb.ExecutionClient
+	Fetch apb.FetchClient
 	Start string
 	End string
 }
@@ -90,15 +96,18 @@ func (t *Trie) AddRange(start, end, address string) error {
 	if len(start) != len(end) {
 		return fmt.Errorf("Mismatching range lengths: %s / %s", start, end)
 	}
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, t.dialOpt())
 	if err != nil {
 		return err
 	}
+	// We always set up all clients here, even if they won't all be used for this connection.
 	s := Server{
 		CAS: pb.NewContentAddressableStorageClient(conn),
 		AC:  pb.NewActionCacheClient(conn),
 		BS:  bs.NewByteStreamClient(conn),
 		Rec: rpb.NewRecorderClient(conn),
+		Exe: pb.NewExecutionClient(conn),
+		Fetch: apb.NewFetchClient(conn),
 		Start: start,
 		End: end,
 	}
@@ -121,6 +130,13 @@ func (t *Trie) add(n *node, start, end string, server *Server) error {
 		}
 	}
 	return nil
+}
+
+func (t *Trie) dialOpt() grpc.DialOption {
+	if t.TLS {
+		return grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
+	}
+	return grpc.WithInsecure()
 }
 
 func toInt(c byte) int {

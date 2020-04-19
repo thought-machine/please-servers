@@ -13,6 +13,7 @@ go_library(
         "//third_party/go:grpc-middleware",
         "//third_party/go:protobuf",
         "//third_party/go:remote-apis",
+        "//third_party/go:sri",
     ],
     visibility = ["//flair/..."],
 )

@@ -8,12 +8,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestReplicatedReadSuccess(t *testing.T) {
+func TestReplicatedSequentialSuccess(t *testing.T) {
 	called := 0
 	trie := testTrie(t)
 	r := NewReplicator(trie, 2)
 	// This should succeed on the second call.
-	assert.NoError(t, r.Read("0000", func(s *Server) error {
+	assert.NoError(t, r.Sequential("0000", func(s *Server) error {
 		called++
 		if s == trie.Get("0000") {
 			return status.Errorf(codes.Unavailable, "Server down")
@@ -23,34 +23,34 @@ func TestReplicatedReadSuccess(t *testing.T) {
 	assert.Equal(t, 2, called)
 }
 
-func TestReplicatedReadFailure(t *testing.T) {
+func TestReplicatedSequentialFailure(t *testing.T) {
 	called := 0
 	r := NewReplicator(testTrie(t), 2)
 	// This should fail on all calls.
-	assert.Error(t, r.Read("0000", func(s *Server) error {
+	assert.Error(t, r.Sequential("0000", func(s *Server) error {
 		called++
 		return status.Errorf(codes.Unavailable, "Server down")
 	}))
 	assert.Equal(t, 2, called)
 }
 
-func TestReplicatedReadNotRetryable(t *testing.T) {
+func TestReplicatedSequentialNotRetryable(t *testing.T) {
 	called := 0
 	r := NewReplicator(testTrie(t), 4)
 	// This should fail on the first call but not retry.
-	assert.Error(t, r.Read("0000", func(s *Server) error {
+	assert.Error(t, r.Sequential("0000", func(s *Server) error {
 		called++
 		return status.Errorf(codes.InvalidArgument, "Your call is bad and you should feel bad")
 	}))
 	assert.Equal(t, 1, called)
 }
 
-func TestReplicatedWriteSuccess(t *testing.T) {
+func TestReplicatedParallelSuccess(t *testing.T) {
 	called := 0
 	trie := testTrie(t)
 	r := NewReplicator(trie, 2)
 	// This should succeed on the second server, and hence overall
-	assert.NoError(t, r.Write("0000", func(s *Server) error {
+	assert.NoError(t, r.Parallel("0000", func(s *Server) error {
 		called++
 		if s == trie.Get("0000") {
 			return status.Errorf(codes.Unavailable, "Server down")
@@ -60,11 +60,11 @@ func TestReplicatedWriteSuccess(t *testing.T) {
 	assert.Equal(t, 2, called)
 }
 
-func TestReplicatedWriteFailure(t *testing.T) {
+func TestReplicatedParallelFailure(t *testing.T) {
 	called := 0
 	r := NewReplicator(testTrie(t), 3)
 	// This should fail since all writes fail
-	assert.Error(t, r.Write("0000", func(s *Server) error {
+	assert.Error(t, r.Parallel("0000", func(s *Server) error {
 		called++
 		return status.Errorf(codes.Unavailable, "Server down")
 	}))
