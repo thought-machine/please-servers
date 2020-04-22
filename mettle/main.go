@@ -24,6 +24,7 @@ var opts = struct {
 	} `group:"Options controlling logging output"`
 	InstanceName string `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API         struct {
+		Host             string `long:"host" description:"Host to listen on"`
 		Port             int    `short:"p" long:"port" default:"7778" description:"Port to serve on"`
 		TLS              struct {
 			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
@@ -147,11 +148,11 @@ func main() {
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
-		api.ServeForever(opts.Dual.Port, requests, responses, responses, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
+		api.ServeForever("127.0.0.1", opts.Dual.Port, requests, responses, responses, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
-		api.ServeForever(opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
+		api.ServeForever(opts.API.Host, opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
 	} else if cmd == "cache" {
 		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	} else {

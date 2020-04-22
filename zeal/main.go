@@ -17,7 +17,8 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
-	Port        int `short:"p" long:"port" default:"7776" description:"Port to serve on"`
+	Host        string `long:"host" description:"Host to listen on"`
+	Port        int    `short:"p" long:"port" default:"7776" description:"Port to serve on"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -54,6 +55,6 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	log.Notice("Serving on :%d", opts.Port)
-	rpc.ServeForever(opts.Port, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Storage.Storage, opts.Storage.TLS)
+	log.Notice("Serving on %s:%d", opts.Host, opts.Port)
+	rpc.ServeForever(opts.Host, opts.Port, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Storage.Storage, opts.Storage.TLS)
 }

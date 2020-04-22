@@ -105,8 +105,8 @@ func init() {
 const parallelism = 20
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64) {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64) {
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
 	}
@@ -120,7 +120,7 @@ func ServeForever(port, cachePort int, storage, keyFile, certFile, self string, 
 		maxCacheItemSize: maxCacheItemSize,
 		limiter:          make(chan struct{}, parallelism),
 	}
-	srv.cache = newCache(srv, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
+	srv.cache = newCache(srv, host, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
 	if fileCachePath != "" && maxFileCacheSize > 0 {
 		c, err := newFileCache(fileCachePath, maxFileCacheSize)
 		if err != nil {

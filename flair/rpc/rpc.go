@@ -34,10 +34,10 @@ import (
 var log = cli.MustGetLogger()
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, casReplicator, assetReplicator, executorReplicator *trie.Replicator, keyFile, certFile string) {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+func ServeForever(host string, port int, casReplicator, assetReplicator, executorReplicator *trie.Replicator, keyFile, certFile string) {
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
-		log.Fatalf("Failed to listen on port %d: %v", port, err)
+		log.Fatalf("Failed to listen on %s:%d: %v", host, port, err)
 	}
 	srv := &server{
 		replicator:      casReplicator,
@@ -63,7 +63,7 @@ func ServeForever(port int, casReplicator, assetReplicator, executorReplicator *
 		pb.RegisterExecutionServer(s, srv)
 	}
 	reflection.Register(s)
-	log.Notice("Serving on :%d", port)
+	log.Notice("Serving on %s:%d", host, port)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)
 }

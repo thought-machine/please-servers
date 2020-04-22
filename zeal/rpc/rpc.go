@@ -55,10 +55,10 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, keyFile, certFile, storage string, secureStorage bool) {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+func ServeForever(host string, port int, keyFile, certFile, storage string, secureStorage bool) {
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
-		log.Fatalf("Failed to listen on port %d: %v", port, err)
+		log.Fatalf("Failed to listen on %s:%d: %v", host, port, err)
 	}
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,

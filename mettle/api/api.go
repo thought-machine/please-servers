@@ -16,7 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,18 +54,18 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) {
-	if err := serveForever(port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile); err != nil {
+func ServeForever(host string, port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) {
+	if err := serveForever(host, port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
 
-func serveForever(port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) error {
-	s, lis, err := serve("", port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile)
+func serveForever(host string, port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) error {
+	s, lis, err := serve(host, port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile)
 	if err != nil {
 		return err
 	}
-	log.Notice("Serving on :%d", port)
+	log.Notice("Serving on %s:%d", host, port)
 	return s.Serve(lis)
 }
 

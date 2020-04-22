@@ -18,6 +18,7 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
+	Host     string            `long:"host" description:"Host to listen on"`
 	Port     int               `short:"p" long:"port" default:"7775" description:"Port to serve on"`
 	Geometry map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
 	AssetGeometry map[string]string `short:"a" long:"asset_geometry" description:"Asset server geometry to forward requests to. If not given then the remote asset API will be unavailable."`
@@ -56,7 +57,7 @@ func main() {
 	cr := newReplicator(opts.Geometry, opts.Replicas)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
 	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)
-	rpc.ServeForever(opts.Port, cr, ar, er, opts.TLS.KeyFile, opts.TLS.CertFile)
+	rpc.ServeForever(opts.Host, opts.Port, cr, ar, er, opts.TLS.KeyFile, opts.TLS.CertFile)
 }
 
 func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {
