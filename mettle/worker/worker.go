@@ -128,8 +128,11 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox string, clean, s
 		}
 		log.Notice("Sent request to build %s", hash)
 	}()
-	if err := w.RunTask(context.Background()); err != nil {
+	response, err := w.RunTask(context.Background())
+	if err != nil {
 		return fmt.Errorf("Failed to run task: %s", err)
+	} else if response.Result.ExitCode != 0 {
+		return fmt.Errorf("Execution failed: %s", response.Message)
 	}
 	log.Notice("Completed execution successfully for %s", hash)
 	return nil
@@ -149,7 +152,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		log.Fatalf("Received another signal %s, shutting down immediately", <-ch)
 	}()
 	for {
-		if err := w.RunTask(ctx); err != nil {
+		if _, err := w.RunTask(ctx); err != nil {
 			// If we get an error back here, we have failed to communicate with one of
 			// our queues, so we are basically doomed and should stop.
 			return fmt.Errorf("Failed to run task: %s", err)
@@ -260,12 +263,12 @@ type worker struct {
 // RunTask runs a single task.
 // Note that it only returns errors for reasons this service controls (i.e. queue comms),
 // failures at actually running the task are communicated back on the responses queue.
-func (w *worker) RunTask(ctx context.Context) error {
+func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	log.Notice("Waiting for next task...")
 	msg, err := w.requests.Receive(ctx)
 	if err != nil {
 		log.Error("Error receiving message: %s", err)
-		return err
+		return nil, err
 	}
 	// Mark message as consumed now. Alternatively we could not ack it until we
 	// run the command, but we *probably* want to do that kind of retrying at a
@@ -274,7 +277,7 @@ func (w *worker) RunTask(ctx context.Context) error {
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
 	response := w.runTask(msg.Body)
-	return w.update(pb.ExecutionStage_COMPLETED, response)
+	return response, w.update(pb.ExecutionStage_COMPLETED, response)
 }
 
 // runTask does the actual running of a task.
@@ -429,7 +432,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	if err != nil {
 		msg := "Execution failed: " + err.Error()
 		msg += w.writeUncachedResult(ar, msg)
-		log.Warning("%s", msg)
+		log.Warning("%s", appendStd(appendStd(msg, "Stdout", stdout.String()), "Stderr", stderr.String()))
 		return &pb.ExecuteResponse{
 			Status:  &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
 			Result:  ar,
