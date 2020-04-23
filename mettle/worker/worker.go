@@ -428,8 +428,6 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	w.observeSysUsage(cmd, execDuration)
 	if err != nil {
 		msg := "Execution failed: " + err.Error()
-		msg = appendStd(msg, "Stdout", stdout.String())
-		msg = appendStd(msg, "Stderr", stderr.String())
 		msg += w.writeUncachedResult(ar, msg)
 		log.Warning("%s", msg)
 		return &pb.ExecuteResponse{

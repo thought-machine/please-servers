@@ -88,7 +88,6 @@ var opts = struct {
 		Size         int64        `long:"size" required:"true" description:"Size of the action digest to run"`
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
-		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		Storage      struct {
@@ -156,7 +155,7 @@ func main() {
 	} else if cmd == "cache" {
 		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	} else {
-		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, true, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size); err != nil {
+		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size); err != nil {
 			log.Fatalf("%s", err)
 		}
 	}
