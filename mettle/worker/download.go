@@ -63,7 +63,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string
 	if len(dir.Files) > 0 {
 		log.Debug("Files: ")
 		for _, file := range dir.Files {
-			log.Debug("  %s", file.Name)
+			log.Debug("  %s [%s/%d]", file.Name, file.Digest.Hash, file.Digest.SizeBytes)
 		}
 	}
 	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
