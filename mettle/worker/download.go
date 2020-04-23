@@ -59,6 +59,13 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string
 	if !present {
 		return fmt.Errorf("Missing directory %s", digest.Hash)
 	}
+	log.Debug("creating dir %s [%s]", root, digest.Hash)
+	if len(dir.Files) > 0 {
+		log.Debug("Files: ")
+		for _, file := range dir.Files {
+			log.Debug("  %s", file.Name)
+		}
+	}
 	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
 		return err
 	}

@@ -155,6 +155,7 @@ func main() {
 	} else if cmd == "cache" {
 		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	} else {
+		opts.Admin.Disabled = true // No point starting this since we are a short-lived process
 		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size); err != nil {
 			log.Fatalf("%s", err)
 		}
