@@ -100,12 +100,8 @@ func init() {
 	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
-// parallelism limits the number of concurrent requests we make on some RPCs.
-// TODO(peterebden): Use it more widely?
-const parallelism = 20
-
 // ServeForever serves on the given port until terminated.
-func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64) {
+func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64, parallelism int) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
@@ -229,6 +225,8 @@ func (s *server) blobExists(ctx context.Context, key string) bool {
 	if s.cache.Has(key) {
 		return true
 	}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	exists, _ := s.bucket.Exists(ctx, key)
 	return exists
 }
@@ -403,6 +401,8 @@ func (s *server) Record(ctx context.Context, req *rpb.RecordRequest) (*rpb.Recor
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	b, _ := proto.Marshal(req.Digest)
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	if err := s.bucket.WriteAll(ctx, s.labelKey(req.Name), b, nil); err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to write record: %s", err)
 	}
@@ -461,6 +461,8 @@ func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	digest := &rpb.Digest{}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	b, err := s.bucket.ReadAll(ctx, key)
 	if err != nil {
 		return nil, err
@@ -483,6 +485,8 @@ func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest,
 		}
 		return &countingReader{ioutil.NopCloser(bytes.NewReader(blob))}, nil
 	}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	return s.readBlobUncached(ctx, key, digest, offset, length)
 }
 
@@ -509,6 +513,8 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	if blob, present := s.cachedBlob(key, digest); present {
 		return blob, nil
 	}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	r, err := s.readBlobUncached(ctx, key, digest, 0, -1)
@@ -554,6 +560,8 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		_, err := io.Copy(ioutil.Discard, r)
 		return err
 	}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)

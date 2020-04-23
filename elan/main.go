@@ -20,6 +20,7 @@ var opts = struct {
 	Host        string `long:"host" description:"Host to listen on"`
 	Port        int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
 	Storage     string `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
+	Parallelism int    `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer"`
 	TLS         struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
@@ -56,5 +57,5 @@ func main() {
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
 	log.Notice("Serving on %s:%d", opts.Host, opts.Port)
-	rpc.ServeForever(opts.Host, opts.Port, opts.Cache.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize), opts.FileCache.Path, int64(opts.FileCache.MaxSize))
+	rpc.ServeForever(opts.Host, opts.Port, opts.Cache.Port, opts.Storage, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize), opts.FileCache.Path, int64(opts.FileCache.MaxSize), opts.Parallelism)
 }
