@@ -150,8 +150,10 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	defer func() { <-w.limiter }()
 
 	digests := make([]*pb.Digest, len(filenames))
+	digestToFilename := make(map[string]string, len(filenames))
 	for i, f := range filenames {
 		digests[i] = files[f].Digest
+		digestToFilename[files[f].Digest.Hash] = f
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
@@ -162,15 +164,15 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	if err != nil {
 		return err
 	}
-	// This assumes they come back in the same sequence, which Elan always does.
-	for i, r := range resp.Responses {
-		filename := filenames[i]
+	for _, r := range resp.Responses {
 		if r.Status.Code != int32(codes.OK) {
 			return fmt.Errorf("%s", r.Status.Message)
+		} else if filename, present := digestToFilename[r.Digest.Hash]; !present {
+			return fmt.Errorf("Unknown digest %s in response", r.Digest.Hash)
 		} else if err := w.writeFile(filename, r.Data, fileMode(files[filename].IsExecutable)); err != nil {
 			return err
 		}
-		w.cache.Set(digests[i].Hash, r.Data, int64(len(r.Data)))
+		w.cache.Set(r.Digest.Hash, r.Data, int64(len(r.Data)))
 	}
 	return nil
 }
