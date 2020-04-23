@@ -433,8 +433,9 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		msg += w.writeUncachedResult(ar, msg)
 		log.Warning("%s", msg)
 		return &pb.ExecuteResponse{
-			Status: &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
-			Result: ar,
+			Status:  &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
+			Result:  ar,
+			Message: msg,
 		}
 	}
 	if err := w.collectOutputs(ar, command); err != nil {
