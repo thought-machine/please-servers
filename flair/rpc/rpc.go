@@ -27,8 +27,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/creds"
-	rpb "github.com/thought-machine/please-servers/proto/record"
 	"github.com/thought-machine/please-servers/flair/trie"
+	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
 var log = cli.MustGetLogger()
@@ -69,8 +69,8 @@ func ServeForever(host string, port int, casReplicator, assetReplicator, executo
 }
 
 type server struct {
-	replicator, assetReplicator, exeReplicator   *trie.Replicator
-	bytestreamRe                                 *regexp.Regexp
+	replicator, assetReplicator, exeReplicator *trie.Replicator
+	bytestreamRe                               *regexp.Regexp
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -89,7 +89,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
-		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1},  // optimistic
+		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1}, // optimistic
 	}
 	if s.exeReplicator != nil {
 		caps.ExecutionCapabilities = &pb.ExecutionCapabilities{
@@ -242,9 +242,9 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 			})
 			if err != nil {
 				return err
-			} else if len(resp.Responses) != 1 {
+			} else if len(r.Responses) != 1 {
 				return fmt.Errorf("missing blob in response") // shouldn't happen...
-			} else if s := resp.Responses[0].Status; s.Code != int32(codes.OK) {
+			} else if s := r.Responses[0].Status; s.Code != int32(codes.OK) {
 				return status.Errorf(codes.Code(s.Code), s.Message)
 			}
 			resp = r
@@ -318,7 +318,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	chs := make([]chan *bs.WriteRequest, s.replicator.Replicas)
 	chch := make(chan chan *bs.WriteRequest, s.replicator.Replicas)
 	for i := range chs {
-		ch := make(chan *bs.WriteRequest, 10)  // Bit of arbitrary buffering so they can get a little out of sync if needed.
+		ch := make(chan *bs.WriteRequest, 10) // Bit of arbitrary buffering so they can get a little out of sync if needed.
 		ch <- req
 		chs[i] = ch
 		chch <- ch
@@ -343,7 +343,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	})
 	var resp *bs.WriteResponse
 	if err := s.replicator.Parallel(hash, func(s *trie.Server) error {
-		ch := <- chch
+		ch := <-chch
 		client, err := s.BS.Write(srv.Context())
 		if err != nil {
 			return err
@@ -439,7 +439,6 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		return s.streamExecution(client, stream)
 	})
 }
-
 
 func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
 	return s.exeReplicator.Sequential(req.Name, func(srv *trie.Server) error {
