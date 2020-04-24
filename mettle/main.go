@@ -3,6 +3,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"runtime/pprof"
 	"time"
 
 	"github.com/peterebden/go-cli-init"
@@ -90,6 +92,7 @@ var opts = struct {
 		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		ProfileFile  string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 		Storage      struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -135,9 +138,11 @@ updated blobs dominating much of the data downloaded.
 func main() {
 	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
 	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-	opts.Admin.LogInfo = info
-	go admin.Serve(opts.Admin)
+	if cmd != "one" {
+		opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+		opts.Admin.LogInfo = info
+		go admin.Serve(opts.Admin)
+	}
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.
 		const requests = "mem://requests"
@@ -155,9 +160,23 @@ func main() {
 	} else if cmd == "cache" {
 		worker.NewCache(opts.Cache.Dir).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	} else {
-		opts.Admin.Disabled = true // No point starting this since we are a short-lived process
-		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size); err != nil {
+		if err := one(); err != nil {
 			log.Fatalf("%s", err)
 		}
 	}
+}
+
+func one() error {
+	if opts.One.ProfileFile != "" {
+		f, err := os.Create(opts.One.ProfileFile)
+		if err != nil {
+			log.Fatalf("Failed to open profile file: %s", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatalf("could not start profiler: %s", err)
+		}
+		defer f.Close()
+		defer pprof.StopCPUProfile()
+	}
+	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
 }
