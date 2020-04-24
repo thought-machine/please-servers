@@ -157,12 +157,15 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
-	digests := make([]*pb.Digest, len(filenames))
+	digests := make([]*pb.Digest, 0, len(filenames))
 	digestToFilenames := make(map[string][]string, len(filenames))
-	for i, f := range filenames {
+	for _, f := range filenames {
 		d := files[f].Digest
-		digests[i] = d
-		digestToFilenames[d.Hash] = append(digestToFilenames[d.Hash], f)
+		filenames, present := digestToFilenames[d.Hash]
+		if !present {
+			digests = append(digests, d)
+		}
+		digestToFilenames[d.Hash] = append(filenames, f)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
