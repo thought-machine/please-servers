@@ -33,6 +33,11 @@ func NewCache(root string) *Cache {
 // Retrieve copies a blob from the cache to the given location.
 // It returns true if retrieved.
 func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
+	if err := os.Link(c.path(key), dest); err != nil {
+		log.Warning("Failed to link %s -> %s: %s", c.path(key), dest, err)
+	} else {
+		return true
+	}
 	if err := c.copier.LinkMode(c.path(key), dest, mode); err != nil {
 		if !os.IsNotExist(err) {
 			log.Warning("Failed to retrieve %s from cache: %s", key, err)
