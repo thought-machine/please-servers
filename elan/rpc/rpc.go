@@ -341,6 +341,8 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if req.ReadLimit == 0 {
 		req.ReadLimit = -1
 	}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	r, err := s.readBlob(ctx, "cas", digest, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
@@ -485,8 +487,6 @@ func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest,
 		}
 		return &countingReader{ioutil.NopCloser(bytes.NewReader(blob))}, nil
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
 	return s.readBlobUncached(ctx, key, digest, offset, length)
 }
 
