@@ -445,7 +445,7 @@ go_get(
 go_get(
     name = "copyfile",
     get = "github.com/peterebden/go-copyfile",
-    revision = "8510625f1b436835f0d3514d045b9d2cd0a709d9",
+    revision = "bc0baf74909cb55565cf9536cb003f04da55372d",
 )
 
 go_get(

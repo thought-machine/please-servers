@@ -243,7 +243,7 @@ func digestProto(msg proto.Message) *pb.Digest {
 
 func fileMode(isExecutable bool) os.FileMode {
 	if isExecutable {
-		return 0755
+		return 0555
 	}
-	return 0644
+	return 0444
 }
