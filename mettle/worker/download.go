@@ -27,6 +27,11 @@ const downloadParallelism = 4
 // ioParallelism is the maximum number of parallel disk writes we'll allow.
 const ioParallelism = 10
 
+// emptyHash is the sha256 hash of the empty file.
+// Technically checking the size is sufficient but we add this as well for general sanity in case something
+// else lost the size for some reason (it will be more obvious to debug that mismatch than mysteriously empty files).
+const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
 	ts1 := time.Now()
@@ -91,6 +96,16 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 	filenames := []string{}
 	var totalSize int64
 	for filename, file := range files {
+		// Optimise out any empty files. The empty blob is surprisingly popular and obviously we always know what
+		// it will contain, so save the RPCs.
+		if file.Digest.SizeBytes == 0 && file.Digest.Hash == emptyHash {
+			fn := filename
+			f := file
+			g.Go(func() error {
+				return w.writeFile(fn, nil, fileMode(f.IsExecutable))
+			})
+			continue
+		}
 		if w.fileCache != nil && w.fileCache.Retrieve(file.Digest.Hash, filename, fileMode(file.IsExecutable)) {
 			cacheHits.Inc()
 			w.cachedBytes += file.Digest.SizeBytes
@@ -143,10 +158,11 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	defer func() { <-w.limiter }()
 
 	digests := make([]*pb.Digest, len(filenames))
-	digestToFilename := make(map[string]string, len(filenames))
+	digestToFilenames := make(map[string][]string, len(filenames))
 	for i, f := range filenames {
-		digests[i] = files[f].Digest
-		digestToFilename[files[f].Digest.Hash] = f
+		d := files[f].Digest
+		digests[i] = d
+		digestToFilenames[d.Hash] = append(digestToFilenames[d.Hash], f)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
@@ -160,9 +176,11 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	for _, r := range resp.Responses {
 		if r.Status.Code != int32(codes.OK) {
 			return fmt.Errorf("%s", r.Status.Message)
-		} else if filename, present := digestToFilename[r.Digest.Hash]; !present {
+		} else if filenames, present := digestToFilenames[r.Digest.Hash]; !present {
 			return fmt.Errorf("Unknown digest %s in response", r.Digest.Hash)
-		} else if err := w.writeFile(filename, r.Data, fileMode(files[filename].IsExecutable)); err != nil {
+			// The below isn't *quite* right since it assumes file modes are consistent across all files with a matching
+			// digest, which isn't actually what the protocol says....
+		} else if err := w.writeFiles(filenames, r.Data, fileMode(files[filenames[0]].IsExecutable)); err != nil {
 			return err
 		}
 		w.cache.Set(r.Digest.Hash, r.Data, int64(len(r.Data)))
@@ -192,6 +210,20 @@ func (w *worker) writeFile(filename string, data []byte, mode os.FileMode) error
 	w.iolimiter <- struct{}{}
 	defer func() { <-w.iolimiter }()
 	return ioutil.WriteFile(filename, data, mode)
+}
+
+// writeFiles writes a blob to a series of files.
+func (w *worker) writeFiles(filenames []string, data []byte, mode os.FileMode) error {
+	w.iolimiter <- struct{}{}
+	defer func() { <-w.iolimiter }()
+	// We could potentially be slightly smarter here by writing only the first file and linking others, although
+	// first attempts resulted in some odd "file exists" errors.
+	for _, fn := range filenames {
+		if err := ioutil.WriteFile(fn, data, mode); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // makeDirIfNeeded makes a new subdir if the given name specifies a subdir (i.e. contains a path separator)
