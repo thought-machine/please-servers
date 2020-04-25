@@ -503,7 +503,8 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 		log.Warning("Failed to save uncached action result: %s", err)
 		return ""
 	}
-	return fmt.Sprintf("\nFailed action details: %s/uncached_action_result/mettle/%s/%d/\n", w.browserURL, digest.Hash, digest.Size)
+	s := fmt.Sprintf("\nFailed action details: %s/uncached_action_result/%s/%s/%d/\n", w.browserURL, w.client.InstanceName, digest.Hash, digest.Size)
+	return s + fmt.Sprintf("\n      Original action: %s/action/mettle/%s/%d/\n", w.browserURL, w.client.InstanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
 }
 
 // shouldSandbox returns true if we should sandbox execution of the given command.
