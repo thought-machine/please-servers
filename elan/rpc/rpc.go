@@ -225,6 +225,11 @@ func (s *server) blobExists(ctx context.Context, key string) bool {
 	if s.cache.Has(key) {
 		return true
 	}
+	return s.blobExistsUncached(ctx, key)
+}
+
+// blobExistsUncached returns true if this blob exists in the underlying storage (but not the cache)
+func (s *server) blobExistsUncached(ctx context.Context, key string) bool {
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	exists, _ := s.bucket.Exists(ctx, key)
@@ -249,7 +254,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			if len(r.Data) != int(r.Digest.SizeBytes) {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
-			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
+			} else if s.blobExistsUncached(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data)); err != nil {
 				rr.Status.Code = int32(status.Code(err))
@@ -553,7 +558,7 @@ func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
-	if s.blobExists(ctx, key) {
+	if s.blobExistsUncached(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
 		// this seems like the most compatible way.
