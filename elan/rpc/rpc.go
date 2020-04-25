@@ -570,11 +570,12 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // This causes any error before Close() to fail the write.
+	defer cancel()
 	w, err := s.bucket.NewWriter(ctx, key, &blob.WriterOptions{BufferSize: s.bufferSize(digest)})
 	if err != nil {
 		return err
 	}
+	defer w.Close()
 	var buf bytes.Buffer
 	var wc io.WriteCloser = w
 	var wr io.Writer = w
@@ -594,10 +595,12 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	n, err := io.Copy(wr, r)
 	bytesReceived.Add(float64(n))
 	if err != nil {
+		cancel()  // ensure this happens before w.Close()
 		return err
 	}
 	if prefix == "cas" {
 		if receivedDigest := hex.EncodeToString(h.Sum(nil)); receivedDigest != digest.Hash {
+			cancel()
 			return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, receivedDigest)
 		}
 	}
