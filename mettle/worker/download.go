@@ -178,7 +178,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	}
 	for _, r := range resp.Responses {
 		if r.Status.Code != int32(codes.OK) {
-			return fmt.Errorf("%s", r.Status.Message)
+			return fmt.Errorf("Error fetching %s: %s", r.Digest.Hash, r.Status.Message)
 		} else if filenames, present := digestToFilenames[r.Digest.Hash]; !present {
 			return fmt.Errorf("Unknown digest %s in response", r.Digest.Hash)
 			// The below isn't *quite* right since it assumes file modes are consistent across all files with a matching
