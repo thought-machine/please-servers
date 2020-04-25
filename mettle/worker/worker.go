@@ -325,9 +325,9 @@ func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Co
 	if err := proto.Unmarshal(msg, req); err != nil {
 		return nil, nil, nil, status(codes.FailedPrecondition, "Badly serialised request: %s", err)
 	} else if err := w.readBlobToProto(req.ActionDigest, action); err != nil {
-		return req, nil, nil, status(codes.FailedPrecondition, "Invalid action digest: %s", err)
+		return req, nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
 	} else if err := w.readBlobToProto(action.CommandDigest, command); err != nil {
-		return req, nil, nil, status(codes.FailedPrecondition, "Invalid command digest: %s", err)
+		return req, nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
 	}
 	return req, action, command, nil
 }
@@ -504,7 +504,7 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 		return ""
 	}
 	s := fmt.Sprintf("\nFailed action details: %s/uncached_action_result/%s/%s/%d/\n", w.browserURL, w.client.InstanceName, digest.Hash, digest.Size)
-	return s + fmt.Sprintf("\n      Original action: %s/action/mettle/%s/%d/\n", w.browserURL, w.client.InstanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
+	return s + fmt.Sprintf("\n      Original action: %s/action/%s/%s/%d/\n", w.browserURL, w.client.InstanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
 }
 
 // shouldSandbox returns true if we should sandbox execution of the given command.
