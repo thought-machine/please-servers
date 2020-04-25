@@ -147,27 +147,27 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	//      not uploading sources unnecessarily, and to work out that it can not do that it
 	//      needs to contact the action cache itself anyway).
 	ch := s.eventStream(req.ActionDigest, true)
-	b, _ := proto.Marshal(req)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	if err := s.requests.Send(ctx, &pubsub.Message{Body: b}); err != nil {
-		log.Error("Failed to submit work to stream: %s", err)
-		return err
-	}
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
 	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 		Stage:        pb.ExecutionStage_QUEUED,
 		ActionDigest: req.ActionDigest,
 	})
-	b, _ = proto.Marshal(&longrunning.Operation{
+	b, _ := proto.Marshal(&longrunning.Operation{
 		Name:     req.ActionDigest.Hash,
 		Metadata: any,
 	})
-	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := s.preResponses.Send(ctx, &pubsub.Message{Body: b}); err != nil {
 		log.Error("Failed to communicate pre-response message: %s", err)
+	}
+	b, _ = proto.Marshal(req)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := s.requests.Send(ctx, &pubsub.Message{Body: b}); err != nil {
+		log.Error("Failed to submit work to stream: %s", err)
+		return err
 	}
 	return s.streamEvents(req.ActionDigest, ch, stream)
 }
