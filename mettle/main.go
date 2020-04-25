@@ -138,7 +138,7 @@ updated blobs dominating much of the data downloaded.
 func main() {
 	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
 	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	if cmd != "one" {
+	if cmd != "one" && cmd != "cache" {
 		opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 		opts.Admin.LogInfo = info
 		go admin.Serve(opts.Admin)

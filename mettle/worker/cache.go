@@ -12,6 +12,7 @@ import (
 	"github.com/karrick/godirwalk"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 
 	rpb "github.com/thought-machine/please-servers/proto/record"
@@ -55,7 +56,7 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 	}
 	log.Notice("Querying outputs for %s...", strings.Join(targets, " "))
 	rclient := rpb.NewRecorderClient(client.CASConnection)
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Hour)
 	defer cancel()
 	resp, err := rclient.Query(ctx, &rpb.QueryRequest{
 		InstanceName: instanceName,
@@ -65,14 +66,16 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		return err
 	}
 	keep := map[string]int64{}
+	exes := map[string]bool{}  // Tracks if any digests are executable as output from any action.
 	for _, digest := range resp.Digests {
-		digests, err := c.allOutputs(client, digest)
+		outs, err := c.allOutputs(client, digest)
 		if err != nil {
 			log.Error("Error downloading outputs for %s: %s", digest.Hash, err)
 			continue
 		}
-		for _, digest := range digests {
-			keep[digest.Hash] = digest.Size
+		for _, out := range outs {
+			keep[out.Digest.Hash] = out.Digest.Size
+			exes[out.Digest.Hash] = exes[out.Digest.Hash] || out.IsExecutable
 		}
 	}
 	log.Notice("Removing extraneous artifacts...")
@@ -83,9 +86,15 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		removed := 0
 		if err := godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
 			if !entry.IsDir() {
-				if _, present := keep[path.Base(pathname)]; !present {
+				base := path.Base(pathname)
+				if _, present := keep[base]; !present {
 					removed++
 					return os.Remove(pathname)
+				} else if exes[base] {
+					// Ensure this file is executable if needed.
+					if err := os.Chmod(pathname, fileMode(true)); err != nil {
+						return err
+					}
 				}
 				exists[path.Base(pathname)] = true
 			}
@@ -113,7 +122,7 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		if i % 10 == 0 {
 			log.Notice("Downloading artifact %d of %d...", i, len(fetch))
 		}
-		if err := c.storeOne(client, hash, size); err != nil {
+		if err := c.storeOne(client, hash, size, exes[hash]); err != nil {
 			log.Error("Error downloading %s: %s", hash, err)
 		}
 	}
@@ -128,22 +137,17 @@ func (c *Cache) MustStoreAll(instanceName string, targets []string, storage stri
 	}
 }
 
-func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) ([]sdkdigest.Digest, error) {
+func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) (map[string]*tree.Output, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
 	defer cancel()
 	ar, err := client.CheckActionCache(ctx, &pb.Digest{Hash: digest.Hash, SizeBytes: digest.SizeBytes})
 	if err != nil {
 		return nil, err
 	}
-	outs, err := client.FlattenActionOutputs(ctx, ar)
-	ret := make([]sdkdigest.Digest, len(outs))
-	for _, out := range outs {
-		ret = append(ret, out.Digest)
-	}
-	return ret, err
+	return client.FlattenActionOutputs(ctx, ar)
 }
 
-func (c *Cache) storeOne(client *client.Client, hash string, size int64) error {
+func (c *Cache) storeOne(client *client.Client, hash string, size int64, isExecutable bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Minute)
 	defer cancel()
 	digest, err := sdkdigest.New(hash, size)
@@ -155,6 +159,8 @@ func (c *Cache) storeOne(client *client.Client, hash string, size int64) error {
 	if err := os.MkdirAll(path.Dir(out), os.ModeDir|0755); err != nil {
 		return err
 	} else if _, err := client.ReadBlobToFile(ctx, digest, tmp); err != nil {
+		return err
+	} else if err := os.Chmod(tmp, fileMode(isExecutable)); err != nil {
 		return err
 	}
 	return os.Rename(tmp, out)
