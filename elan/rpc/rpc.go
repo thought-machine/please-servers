@@ -510,6 +510,8 @@ func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Di
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
 	key := s.key(prefix, digest)
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	if s.fileCache != nil {
 		if b := s.fileCache.GetAll(key); b != nil {
 			return b, nil
@@ -518,8 +520,6 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	if blob, present := s.cachedBlob(key, digest); present {
 		return blob, nil
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	r, err := s.readBlobUncached(ctx, key, digest, 0, -1)
@@ -558,6 +558,8 @@ func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	if s.blobExistsUncached(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
@@ -565,8 +567,6 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		_, err := io.Copy(ioutil.Discard, r)
 		return err
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
