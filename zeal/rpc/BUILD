@@ -5,8 +5,6 @@ go_library(
         "//grpcutil",
         "//third_party/go:cli-init",
         "//third_party/go:grpc",
-        "//third_party/go:grpc-middleware",
-        "//third_party/go/prometheus:grpc-prometheus",
         "//third_party/go/prometheus",
         "//third_party/go:go-multierror",
         "//third_party/go:protobuf",

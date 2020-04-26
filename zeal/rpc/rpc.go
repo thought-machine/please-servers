@@ -19,9 +19,6 @@ import (
 	rpb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/peterebden/go-cli-init"
@@ -30,7 +27,6 @@ import (
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -51,7 +47,6 @@ var downloadDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 func init() {
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(downloadDurations)
-	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.
@@ -76,23 +71,8 @@ func ServeForever(host string, port int, keyFile, certFile, storage string, secu
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
 	srv.client.RequestLogHook = srv.logHTTPRequests
 	srv.client.Logger = logger{}
-	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			creds.LogUnaryRequests,
-			grpc_prometheus.UnaryServerInterceptor,
-			grpc_recovery.UnaryServerInterceptor(),
-		)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			creds.LogStreamRequests,
-			grpc_prometheus.StreamServerInterceptor,
-			grpc_recovery.StreamServerInterceptor(),
-		)),
-		grpc.MaxRecvMsgSize(419430400), // 400MB
-		grpc.MaxSendMsgSize(419430400),
-	)...)
+	s := grpcutil.NewServer(keyFile, certFile)
 	pb.RegisterFetchServer(s, srv)
-	grpc_prometheus.Register(s)
-	reflection.Register(s)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)
 }

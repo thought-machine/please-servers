@@ -27,9 +27,6 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
@@ -38,9 +35,7 @@ import (
 	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
 	rpb "github.com/thought-machine/please-servers/proto/record"
@@ -97,7 +92,6 @@ func init() {
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
 	prometheus.MustRegister(writeDurations)
-	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.
@@ -124,27 +118,12 @@ func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, 
 		}
 		srv.fileCache = c
 	}
-	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			creds.LogUnaryRequests,
-			grpc_prometheus.UnaryServerInterceptor,
-			grpc_recovery.UnaryServerInterceptor(),
-		)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			creds.LogStreamRequests,
-			grpc_prometheus.StreamServerInterceptor,
-			grpc_recovery.StreamServerInterceptor(),
-		)),
-		grpc.MaxRecvMsgSize(419430400), // 400MB
-		grpc.MaxSendMsgSize(419430400),
-	)...)
+	s := grpcutil.NewServer(keyFile, certFile)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	rpb.RegisterRecorderServer(s, srv)
-	grpc_prometheus.Register(s)
-	reflection.Register(s)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)
 }

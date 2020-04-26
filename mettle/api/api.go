@@ -15,16 +15,12 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
@@ -50,7 +46,6 @@ var serveHTTPOnce sync.Once
 func init() {
 	prometheus.MustRegister(totalRequests)
 	prometheus.MustRegister(currentRequests)
-	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 // ServeForever serves on the given port until terminated.
@@ -81,22 +76,9 @@ func serve(host string, port int, requestQueue, responseQueue, preResponseQueue,
 		jobs:         map[string]*job{},
 	}
 	go srv.Receive()
-	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			creds.LogUnaryRequests,
-			grpc_recovery.UnaryServerInterceptor(),
-			grpc_prometheus.UnaryServerInterceptor,
-		)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			creds.LogStreamRequests,
-			grpc_recovery.StreamServerInterceptor(),
-			grpc_prometheus.StreamServerInterceptor,
-		)),
-	)...)
+	s := grpcutil.NewServer(keyFile, certFile)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
-	grpc_prometheus.Register(s)
-	reflection.Register(s)
 	serveHTTPOnce.Do(func() {
 		http.HandleFunc("/executions", srv.ServeExecutions)
 	})

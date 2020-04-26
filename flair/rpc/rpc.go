@@ -16,15 +16,11 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/peterebden/go-cli-init"
 	"github.com/peterebden/go-sri"
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -46,18 +42,7 @@ func ServeForever(host string, port int, casReplicator, assetReplicator, executo
 		exeReplicator:   executorReplicator,
 		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 	}
-	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			creds.LogUnaryRequests,
-			grpc_recovery.UnaryServerInterceptor(),
-		)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			creds.LogStreamRequests,
-			grpc_recovery.StreamServerInterceptor(),
-		)),
-		grpc.MaxRecvMsgSize(419430400), // 400MB
-		grpc.MaxSendMsgSize(419430400),
-	)...)
+	s := grpcutil.NewServer(keyFile, certFile)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
@@ -69,7 +54,6 @@ func ServeForever(host string, port int, casReplicator, assetReplicator, executo
 	if executorReplicator != nil {
 		pb.RegisterExecutionServer(s, srv)
 	}
-	reflection.Register(s)
 	log.Notice("Serving on %s:%d", host, port)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)

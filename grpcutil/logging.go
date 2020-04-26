@@ -1,5 +1,5 @@
-// Package grpc implements some common functionality for gRPC that we use across all servers.
-package grpc
+// Package grpcutil implements some common functionality for gRPC that we use across all servers.
+package grpcutil
 
 import (
 	"context"
