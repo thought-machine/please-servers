@@ -2,9 +2,14 @@
 package creds
 
 import (
+	"context"
+	"time"
+
 	"github.com/peterebden/go-cli-init"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/grpclog"
 	"gopkg.in/op/go-logging.v1"
 )
@@ -56,4 +61,32 @@ func (g *grpcLogMabob) V(l int) bool                              { return log.I
 func init() {
 	// Change grpc to log using our implementation
 	grpclog.SetLoggerV2(&grpcLogMabob{})
+}
+
+// LogUnaryRequests is a gRPC interceptor that logs outcomes of unary requests.
+func LogUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	if err != nil {
+		if status.Code(err) != codes.NotFound {
+			log.Error("Error handling %s: %s", info.FullMethod, err)
+		} else {
+			log.Debug("Not found on %s: %s", info.FullMethod, err)
+		}
+	} else {
+		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
+	}
+	return resp, err
+}
+
+// LogStreamRequests is a gRPC interceptor that logs outcomes of stream requests.
+func LogStreamRequests(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	start := time.Now()
+	err := handler(srv, ss)
+	if err != nil {
+		log.Error("Error handling %s: %s", info.FullMethod, err)
+	} else {
+		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
+	}
+	return err
 }

@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
-	"github.com/thought-machine/please-servers/creds"
+	"github.com/thought-machine/please-servers/grpc"
 	"github.com/thought-machine/please-servers/mettle/common"
 )
 
@@ -83,10 +83,12 @@ func serve(host string, port int, requestQueue, responseQueue, preResponseQueue,
 	go srv.Receive()
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			creds.LogUnaryRequests,
 			grpc_recovery.UnaryServerInterceptor(),
 			grpc_prometheus.UnaryServerInterceptor,
 		)),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			creds.LogStreamRequests,
 			grpc_recovery.StreamServerInterceptor(),
 			grpc_prometheus.StreamServerInterceptor,
 		)),

@@ -2,7 +2,7 @@ go_library(
     name = "api",
     srcs = ["api.go"],
     deps = [
-        "//creds",
+        "//grpc",
         "//third_party/go/gocloud",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",

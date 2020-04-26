@@ -16,6 +16,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
+	"github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/peterebden/go-cli-init"
 	"github.com/peterebden/go-sri"
@@ -26,7 +27,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/creds"
+	"github.com/thought-machine/please-servers/grpc"
 	"github.com/thought-machine/please-servers/flair/trie"
 	rpb "github.com/thought-machine/please-servers/proto/record"
 )
@@ -46,8 +47,14 @@ func ServeForever(host string, port int, casReplicator, assetReplicator, executo
 		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 	}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
-		grpc.UnaryInterceptor(grpc_recovery.UnaryServerInterceptor()),
-		grpc.StreamInterceptor(grpc_recovery.StreamServerInterceptor()),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			creds.LogUnaryRequests,
+			grpc_recovery.UnaryServerInterceptor(),
+		)),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			creds.LogStreamRequests,
+			grpc_recovery.StreamServerInterceptor(),
+		)),
 		grpc.MaxRecvMsgSize(419430400), // 400MB
 		grpc.MaxSendMsgSize(419430400),
 	)...)

@@ -44,7 +44,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	rpb "github.com/thought-machine/please-servers/proto/record"
-	"github.com/thought-machine/please-servers/creds"
+	"github.com/thought-machine/please-servers/grpc"
 )
 
 const timeout = 2 * time.Minute
@@ -126,12 +126,12 @@ func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, 
 	}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			logUnaryRequests,
+			creds.LogUnaryRequests,
 			grpc_prometheus.UnaryServerInterceptor,
 			grpc_recovery.UnaryServerInterceptor(),
 		)),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			logStreamRequests,
+			creds.LogStreamRequests,
 			grpc_prometheus.StreamServerInterceptor,
 			grpc_recovery.StreamServerInterceptor(),
 		)),
@@ -694,30 +694,4 @@ func (r *countingReader) Read(buf []byte) (int, error) {
 
 func (r *countingReader) Close() error {
 	return r.r.Close()
-}
-
-func logUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	start := time.Now()
-	resp, err := handler(ctx, req)
-	if err != nil {
-		if status.Code(err) != codes.NotFound {
-			log.Error("Error handling %s: %s", info.FullMethod, err)
-		} else {
-			log.Debug("Not found on %s: %s", info.FullMethod, err)
-		}
-	} else {
-		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
-	}
-	return resp, err
-}
-
-func logStreamRequests(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	start := time.Now()
-	err := handler(srv, ss)
-	if err != nil {
-		log.Error("Error handling %s: %s", info.FullMethod, err)
-	} else {
-		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
-	}
-	return err
 }

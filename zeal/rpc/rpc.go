@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/creds"
+	"github.com/thought-machine/please-servers/grpc"
 )
 
 var log = cli.MustGetLogger()
@@ -78,10 +78,12 @@ func ServeForever(host string, port int, keyFile, certFile, storage string, secu
 	srv.client.Logger = logger{}
 	s := grpc.NewServer(creds.OptionalTLS(keyFile, certFile,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			creds.LogUnaryRequests,
 			grpc_prometheus.UnaryServerInterceptor,
 			grpc_recovery.UnaryServerInterceptor(),
 		)),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			creds.LogStreamRequests,
 			grpc_prometheus.StreamServerInterceptor,
 			grpc_recovery.StreamServerInterceptor(),
 		)),

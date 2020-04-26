@@ -2,7 +2,7 @@ go_library(
     name = "rpc",
     srcs = ["rpc.go"],
     deps = [
-        "//creds",
+        "//grpc",
         "//third_party/go:cli-init",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
