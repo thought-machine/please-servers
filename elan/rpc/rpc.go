@@ -537,8 +537,6 @@ func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
 	if s.blobExistsUncached(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
@@ -546,6 +544,8 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		_, err := io.Copy(ioutil.Discard, r)
 		return err
 	}
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer writeLatencies.Observe(time.Since(start).Seconds())
 	ctx, cancel := context.WithCancel(ctx)
