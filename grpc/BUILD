@@ -1,6 +1,6 @@
 go_library(
-    name = "creds",
-    srcs = ["creds.go"],
+    name = "grpc",
+    srcs = glob(["*.go"]),
     deps = [
         "//third_party/go:cli-init",
         "//third_party/go:grpc",
