@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/grpc"
+	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/flair/trie"
 	rpb "github.com/thought-machine/please-servers/proto/record"
 )

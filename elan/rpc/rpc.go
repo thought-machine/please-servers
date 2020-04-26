@@ -44,7 +44,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	rpb "github.com/thought-machine/please-servers/proto/record"
-	"github.com/thought-machine/please-servers/grpc"
+	"github.com/thought-machine/please-servers/grpcutil"
 )
 
 const timeout = 2 * time.Minute

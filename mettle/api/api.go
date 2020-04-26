@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
-	"github.com/thought-machine/please-servers/grpc"
+	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
 )
 

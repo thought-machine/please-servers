@@ -2,7 +2,7 @@ go_library(
     name = "rpc",
     srcs = glob(["*.go"]),
     deps = [
-        "//grpc",
+        "//grpcutil",
         "//proto:record",
         "//flair/trie",
         "//third_party/go:bytestream",
