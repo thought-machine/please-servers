@@ -162,9 +162,12 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		return nil, err
 	}
 	if req.InlineStdout && ar.StdoutDigest != nil {
-		b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest)
-		ar.StdoutRaw = b
-		return ar, err
+		// The docs say that the server MAY omit inlining, even if asked. Hence we assume that if we can't find it here
+		// we might be in a sharded setup where we don't have the stdout digest, and it's better to return what we can
+		// (the client can still request the actual blob themselves).
+		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest); err == nil {
+			ar.StdoutRaw = b
+		}
 	}
 	return ar, nil
 }
