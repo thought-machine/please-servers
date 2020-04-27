@@ -563,7 +563,8 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		wr = io.MultiWriter(w, &buf)
 	}
 	if s.fileCache != nil {
-		if w := s.fileCache.Set(key, digest.SizeBytes); w != nil {
+		if w := s.fileCache.Set(ctx, key, digest.SizeBytes); w != nil {
+			defer w.Close()
 			wr = io.MultiWriter(wr, w)
 		}
 	}

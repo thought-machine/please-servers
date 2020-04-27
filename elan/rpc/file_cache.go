@@ -1,7 +1,7 @@
 package rpc
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -87,7 +87,8 @@ func (fc *fileCache) GetAll(key string) []byte {
 
 // Set sets the given item into the cache. It returns an io.WriteCloser to write to, which is never nil
 // (although this makes no promise that future calls to Get will or won't retrieve this item).
-func (fc *fileCache) Set(key string, size int64) io.WriteCloser {
+// To abort the write to the file, cancel the passed context.
+func (fc *fileCache) Set(ctx context.Context, key string, size int64) io.WriteCloser {
 	filename := path.Join(fc.root, key)
 	if !fc.cache.Set(key, filename, size) {
 		log.Debug("Cache rejected write for %s [%d]", key, size)
@@ -98,7 +99,7 @@ func (fc *fileCache) Set(key string, size int64) io.WriteCloser {
 		fc.cache.Del(key)
 		return discardCloser{}
 	}
-	f, err := os.Create(filename)
+	f, err := newAtomicFile(ctx, filename)
 	if err != nil {
 		log.Warning("Failed to create cache file: %s", err)
 		fc.cache.Del(key)
@@ -106,16 +107,6 @@ func (fc *fileCache) Set(key string, size int64) io.WriteCloser {
 	}
 	log.Debug("Cache accepted write for %s [%d]", key, size)
 	return f
-}
-
-// SetAll sets the entirety of a given blob into the cache.
-func (fc *fileCache) SetAll(key string, size int64, contents []byte) {
-	w := fc.Set(key, size)
-	defer w.Close()
-	if _, err := io.Copy(w, bytes.NewReader(contents)); err != nil {
-		log.Warning("Failed to write file into cache: %s", err)
-		fc.cache.Del(key)
-	}
 }
 
 func (fc *fileCache) OnEvict(key, conflict uint64, value interface{}, cost int64) {
@@ -129,3 +120,45 @@ type discardCloser struct {}
 
 func (discardCloser) Write(p []byte) (int, error) { return len(p), nil }
 func (discardCloser) Close() error { return nil }
+
+// An atomicFile wraps a file to do atomic writing; it writes to a temp file and moves on close.
+// If its context is cancelled it aborts the write.
+type atomicFile struct{
+	ctx  context.Context
+	f    *os.File
+	name string
+}
+
+func newAtomicFile(ctx context.Context, filename string) (*atomicFile, error) {
+	af := &atomicFile{
+		ctx:      ctx,
+		name: filename,
+	}
+	dir, file := path.Split(filename)
+	f, err := ioutil.TempFile(dir, file + ".tmp")
+	if err != nil {
+		return nil, err
+	}
+	af.f = f
+	return af, nil
+}
+
+func (af *atomicFile) Write(buf []byte) (int, error) {
+	return af.f.Write(buf)
+}
+
+func (af *atomicFile) Close() error {
+	tmpfile := af.f.Name()
+	if err := af.f.Close(); err != nil {
+		log.Warning("Error closing cache file: %s", err)
+		os.Remove(tmpfile)
+		return err
+	} else if err := af.ctx.Err(); err != nil {  // Don't log this since it's a cancellation
+		os.Remove(tmpfile)
+		return err
+	} else if err := os.Rename(tmpfile, af.name); err != nil {
+		os.Remove(tmpfile)
+		return err
+	}
+	return nil
+}
