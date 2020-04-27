@@ -25,6 +25,7 @@ var opts = struct {
 	ExecutorGeometry map[string]string `short:"e" long:"executor_geometry" description:"Executor server geometry to forward request to. If not given then the executor API will be unavailable."`
 	Replicas int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
 	ConnTLS bool `long:"tls" description:"Use TLS for connecting to other servers"`
+	CA      string `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
 	TLS      struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
@@ -64,7 +65,7 @@ func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {
 	if len(geometry) == 0 {
 		return nil
 	}
-	t := trie.Trie{TLS: opts.ConnTLS}
+	t := trie.Trie{TLS: opts.ConnTLS, CA: opts.CA}
 	if err := t.AddAll(geometry); err != nil {
 		log.Fatalf("Failed to create trie for provided geometry: %s", err)
 	} else if err := t.Check(); err != nil {

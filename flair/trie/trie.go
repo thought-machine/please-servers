@@ -4,7 +4,10 @@
 package trie
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -22,6 +25,8 @@ import (
 type Trie struct {
 	// If TLS is set, newly created connections will use a generic TLS configuration.
 	TLS bool
+	// If CA is set, newly created connections with TLS will load the CA cert from here.
+	CA string
 	root node
 	nodes []node  // premature optimisation
 	servers []Server
@@ -134,6 +139,11 @@ func (t *Trie) add(n *node, start, end string, server *Server) error {
 
 func (t *Trie) dialOpt() grpc.DialOption {
 	if t.TLS {
+		if t.CA != "" {
+			return grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+				RootCAs: mustLoadCACert(t.CA),
+			}))
+		}
 		return grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
 	}
 	return grpc.WithInsecure()
@@ -202,4 +212,17 @@ func (t *Trie) check(prefix string, node *node) error {
 		}
 	}
 	return nil
+}
+
+// mustLoadCACert loads a CA cert from a file and dies on any errors.
+func mustLoadCACert(filename string) *x509.CertPool {
+	ca, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalf("Failed to read CA cert from %s: %s", filename, err)
+	}
+	cp := x509.NewCertPool()
+	if !cp.AppendCertsFromPEM(ca) {
+		log.Fatalf("Failed to append CA cert to pool (invalid PEM file?)")
+	}
+	return cp
 }
