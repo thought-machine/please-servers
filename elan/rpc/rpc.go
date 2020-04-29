@@ -540,7 +540,7 @@ func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
-	if s.blobExistsUncached(ctx, key) {
+	if prefix == "cas" && s.blobExistsUncached(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
 		// this seems like the most compatible way.
