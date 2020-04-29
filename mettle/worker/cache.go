@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -150,9 +151,14 @@ func (c *Cache) CopyTo(destination string) error {
 	return godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
 		dest := path.Join(destination, strings.TrimLeft(strings.TrimPrefix(pathname, c.root), "/"))
 		if entry.IsDir() {
+			if entry.Name() == "lost+found" {  // Bit of a hack to skip unreadable directories
+				return filepath.SkipDir
+			}
 			return os.MkdirAll(dest, 0755 | os.ModeDir)
+		} else if err := c.copyfunc(pathname, dest, 0755); err != nil {
+			log.Warning("Failed to copy cache file: %s", err)  // Don't fail on this.
 		}
-		return c.copyfunc(pathname, dest, 0755)
+		return nil
 	}})
 }
 
