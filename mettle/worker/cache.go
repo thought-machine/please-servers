@@ -144,6 +144,17 @@ func (c *Cache) MustStoreAll(instanceName string, targets []string, storage stri
 	}
 }
 
+// CopyTo copies the entire contents of the cache dir to a destination.
+func (c *Cache) CopyTo(destination string) error {
+	return godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
+		dest := path.Join(destination, strings.TrimLeft(strings.TrimPrefix(pathname, c.root), "/"))
+		if entry.IsDir() {
+			return os.MkdirAll(dest, 0755 | os.ModeDir)
+		}
+		return c.copyfunc(pathname, dest, 0755)
+	}})
+}
+
 func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) (map[string]*tree.Output, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
 	defer cancel()

@@ -41,6 +41,7 @@ var opts = struct {
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		CacheSrcDir  string       `long:"cache_src_dir" description:"Directory to copy pre-cached blobs from initially"`
 		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
 		CacheCopy    bool         `long:"cache_copy" description:"Copy blobs from cache rather than attempting to link."`
 		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
@@ -156,6 +157,11 @@ func main() {
 		}
 		api.ServeForever("127.0.0.1", opts.Dual.Port, requests, responses, responses, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
 	} else if cmd == "worker" {
+		if opts.Worker.CacheSrcDir != "" {
+			if err := worker.NewCache(opts.Worker.CacheSrcDir, true).CopyTo(opts.Worker.CacheDir); err != nil {
+				log.Fatalf("Failed to copy cache dir: %s", err)
+			}
+		}
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.Host, opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
