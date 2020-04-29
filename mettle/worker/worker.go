@@ -165,6 +165,19 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
 	}
+	// Remove anything existing within this directory.
+	// We don't just do a RemoveAll above in case we don't have permissions to create it in the first place.
+	if clean {
+		files, err := ioutil.ReadDir(dir)
+		if err != nil {
+			return nil, err  // If we can't even list the directory, may as well bomb out now.
+		}
+		for _, file := range files {
+			if err := os.RemoveAll(path.Join(dir, file.Name())); err != nil {
+				log.Warning("Failed to remove existing work directory: %s", err)
+			}
+		}
+	}
 	// If no name is given, default to the hostname.
 	if name == "" {
 		hostname, err := os.Hostname()
