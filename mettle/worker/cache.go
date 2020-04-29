@@ -24,17 +24,24 @@ import (
 type Cache struct {
 	root string
 	copier copyfile.Copier
+	copyfunc func(string, string, os.FileMode) error
 }
 
 // NewCache returns a new cache instance.
-func NewCache(root string) *Cache {
-	return &Cache{root: root}
+func NewCache(root string, copy bool) *Cache {
+	c := &Cache{root: root}
+	if copy {
+		c.copyfunc = c.copier.CopyMode
+	}  else {
+		c.copyfunc = c.copier.LinkMode
+	}
+	return c
 }
 
 // Retrieve copies a blob from the cache to the given location.
 // It returns true if retrieved.
 func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
-	if err := c.copier.LinkMode(c.path(key), dest, mode); err != nil {
+	if err := c.copyfunc(c.path(key), dest, mode); err != nil {
 		if !os.IsNotExist(err) {
 			log.Warning("Failed to retrieve %s from cache: %s", key, err)
 		}
