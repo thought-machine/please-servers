@@ -2,6 +2,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/peterebden/go-cli-init"
 	"github.com/thought-machine/http-admin"
 
@@ -21,6 +23,7 @@ var opts = struct {
 	Port        int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
 	Storage     string `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
 	Parallelism int    `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer"`
+	Query       []string `long:"query" hidden:"true" description:"Run a single Query RPC against the backend and print its results."`
 	TLS         struct {
 		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
@@ -53,6 +56,17 @@ modes are intended for testing only.
 func main() {
 	cli.ParseFlagsOrDie("Elan", &opts)
 	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
+	if len(opts.Query) != 0 {
+		log.Notice("Running query...")
+		digests, err := rpc.RunQuery(opts.Storage, opts.Query, opts.Parallelism)
+		if err != nil {
+			log.Fatalf("Query failed: %s", err)
+		}
+		log.Notice("Query completed with %s results", len(digests))
+		for _, d := range digests {
+			fmt.Printf("%s / %d\n", d.Hash, d.SizeBytes)
+		}
+	}
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)

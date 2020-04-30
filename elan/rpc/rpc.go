@@ -100,16 +100,7 @@ func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, 
 	if err != nil {
 		log.Fatalf("Failed to listen on port %d: %v", port, err)
 	}
-	bucket, err := blob.OpenBucket(context.Background(), storage)
-	if err != nil {
-		log.Fatalf("Failed to open storage %s: %v", storage, err)
-	}
-	srv := &server{
-		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		bucket:           bucket,
-		maxCacheItemSize: maxCacheItemSize,
-		limiter:          make(chan struct{}, parallelism),
-	}
+	srv := newServer(storage, maxCacheItemSize, parallelism)
 	srv.cache = newCache(srv, host, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
 	if fileCachePath != "" && maxFileCacheSize > 0 {
 		c, err := newFileCache(fileCachePath, maxFileCacheSize)
@@ -128,6 +119,16 @@ func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, 
 	log.Fatalf("%s", err)
 }
 
+// RunQuery sets up the server and runs a single query against the storage backend.
+func RunQuery(storage string, query []string, parallelism int) ([]*rpb.Digest, error) {
+	srv := newServer(storage, 0, parallelism)
+	resp, err := srv.Query(context.Background(), &rpb.QueryRequest{Queries: query})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Digests, nil
+}
+
 type server struct {
 	bucket           *blob.Bucket
 	bytestreamRe     *regexp.Regexp
@@ -135,6 +136,20 @@ type server struct {
 	cache            *cache
 	maxCacheItemSize int64
 	fileCache        *fileCache
+}
+
+// newServer creates and returns a new server.
+func newServer(storage string, maxCacheItemSize int64, parallelism int) *server {
+	bucket, err := blob.OpenBucket(context.Background(), storage)
+	if err != nil {
+		log.Fatalf("Failed to open storage %s: %v", storage, err)
+	}
+	return &server{
+		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		bucket:           bucket,
+		maxCacheItemSize: maxCacheItemSize,
+		limiter:          make(chan struct{}, parallelism),
+	}
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -401,6 +416,7 @@ func (s *server) Record(ctx context.Context, req *rpb.RecordRequest) (*rpb.Recor
 func (s *server) Query(ctx context.Context, req *rpb.QueryRequest) (*rpb.QueryResponse, error) {
 	resp := &rpb.QueryResponse{}
 	for _, query := range req.Queries {
+		log.Debug("Running query for %s...", query)
 		digests, err := s.query(ctx, s.labelKey(query))
 		if err != nil {
 			return nil, err
@@ -420,6 +436,7 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 	ret := []*rpb.Digest{}
 	var g errgroup.Group
 	var mtx sync.Mutex
+	log.Debug("Iterating responses for %s...", key)
 	for {
 		obj, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -443,6 +460,7 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 			return nil
 		})
 	}
+	log.Debug("Waiting for all queries for %s...", key)
 	return ret, g.Wait()
 }
 
