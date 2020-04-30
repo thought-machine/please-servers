@@ -7,6 +7,7 @@ import (
 
 	"github.com/thought-machine/please-servers/flair/rpc"
 	"github.com/thought-machine/please-servers/flair/trie"
+	"github.com/thought-machine/please-servers/grpcutil"
 )
 
 var log = cli.MustGetLogger()
@@ -18,18 +19,13 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
-	Host     string            `long:"host" description:"Host to listen on"`
-	Port     int               `short:"p" long:"port" default:"7775" description:"Port to serve on"`
+	GRPC     grpcutil.Opts `group:"Options controlling the gRPC server"`
 	Geometry map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
 	AssetGeometry map[string]string `short:"a" long:"asset_geometry" description:"Asset server geometry to forward requests to. If not given then the remote asset API will be unavailable."`
 	ExecutorGeometry map[string]string `short:"e" long:"executor_geometry" description:"Executor server geometry to forward request to. If not given then the executor API will be unavailable."`
 	Replicas int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
 	ConnTLS bool `long:"tls" description:"Use TLS for connecting to other servers"`
 	CA      string `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
-	TLS      struct {
-		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
-		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
-	} `group:"Options controlling TLS for the gRPC server"`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
@@ -58,7 +54,7 @@ func main() {
 	cr := newReplicator(opts.Geometry, opts.Replicas)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
 	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)
-	rpc.ServeForever(opts.Host, opts.Port, cr, ar, er, opts.TLS.KeyFile, opts.TLS.CertFile)
+	rpc.ServeForever(opts.GRPC, cr, ar, er)
 }
 
 func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {

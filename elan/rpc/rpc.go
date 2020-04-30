@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"path"
 	"regexp"
 	"strings"
@@ -95,11 +94,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64, parallelism int) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		log.Fatalf("Failed to listen on port %d: %v", port, err)
-	}
+func ServeForever(opts grpcutil.Opts, cachePort int, storage, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64, parallelism int) {
 	bucket, err := blob.OpenBucket(context.Background(), storage)
 	if err != nil {
 		log.Fatalf("Failed to open storage %s: %v", storage, err)
@@ -110,7 +105,7 @@ func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, 
 		maxCacheItemSize: maxCacheItemSize,
 		limiter:          make(chan struct{}, parallelism),
 	}
-	srv.cache = newCache(srv, host, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
+	srv.cache = newCache(srv, opts.Host, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
 	if fileCachePath != "" && maxFileCacheSize > 0 {
 		c, err := newFileCache(fileCachePath, maxFileCacheSize)
 		if err != nil {
@@ -118,7 +113,7 @@ func ServeForever(host string, port, cachePort int, storage, keyFile, certFile, 
 		}
 		srv.fileCache = c
 	}
-	s := grpcutil.NewServer(keyFile, certFile)
+	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)

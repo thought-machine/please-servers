@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -49,26 +48,21 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(host string, port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) {
-	if err := serveForever(host, port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile); err != nil {
+func ServeForever(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) {
+	if err := serveForever(opts, requestQueue, responseQueue, preResponseQueue); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
 
-func serveForever(host string, port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) error {
-	s, lis, err := serve(host, port, requestQueue, responseQueue, preResponseQueue, keyFile, certFile)
+func serveForever(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) error {
+	s, lis, err := serve(opts, requestQueue, responseQueue, preResponseQueue)
 	if err != nil {
 		return err
 	}
-	log.Notice("Serving on %s:%d", host, port)
 	return s.Serve(lis)
 }
 
-func serve(host string, port int, requestQueue, responseQueue, preResponseQueue, keyFile, certFile string) (*grpc.Server, net.Listener, error) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to listen on %s:%d: %v", host, port, err)
-	}
+func serve(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
 	srv := &server{
 		requests:     common.MustOpenTopic(requestQueue),
 		responses:    common.MustOpenSubscription(responseQueue),
@@ -76,7 +70,7 @@ func serve(host string, port int, requestQueue, responseQueue, preResponseQueue,
 		jobs:         map[string]*job{},
 	}
 	go srv.Receive()
-	s := grpcutil.NewServer(keyFile, certFile)
+	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
 	serveHTTPOnce.Do(func() {

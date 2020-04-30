@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
 )
 
@@ -99,7 +100,10 @@ func TestWaitExecution(t *testing.T) {
 func setupServers(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
-	s, lis, err := serve("127.0.0.1", port, requests, responses, responses, "", "")
+	s, lis, err := serve(grpcutil.Opts{
+		Host: "127.0.0.1",
+		Port: port,
+	}, requests, responses, responses)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())

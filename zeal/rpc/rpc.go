@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"net"
 	"net/http"
 	"time"
 
@@ -50,11 +49,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(host string, port int, keyFile, certFile, storage string, secureStorage bool) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		log.Fatalf("Failed to listen on %s:%d: %v", host, port, err)
-	}
+func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool) {
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,
 		NoSecurity:         !secureStorage,
@@ -71,7 +66,7 @@ func ServeForever(host string, port int, keyFile, certFile, storage string, secu
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
 	srv.client.RequestLogHook = srv.logHTTPRequests
 	srv.client.Logger = logger{}
-	s := grpcutil.NewServer(keyFile, certFile)
+	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterFetchServer(s, srv)
 	err = s.Serve(lis)
 	log.Fatalf("%s", err)

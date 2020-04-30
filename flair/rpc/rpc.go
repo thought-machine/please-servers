@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"regexp"
 	"sync"
 
@@ -31,18 +30,14 @@ import (
 var log = cli.MustGetLogger()
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(host string, port int, casReplicator, assetReplicator, executorReplicator *trie.Replicator, keyFile, certFile string) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		log.Fatalf("Failed to listen on %s:%d: %v", host, port, err)
-	}
+func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator) {
 	srv := &server{
 		replicator:      casReplicator,
 		assetReplicator: assetReplicator,
 		exeReplicator:   executorReplicator,
 		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 	}
-	s := grpcutil.NewServer(keyFile, certFile)
+	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
@@ -54,8 +49,7 @@ func ServeForever(host string, port int, casReplicator, assetReplicator, executo
 	if executorReplicator != nil {
 		pb.RegisterExecutionServer(s, srv)
 	}
-	log.Notice("Serving on %s:%d", host, port)
-	err = s.Serve(lis)
+	err := s.Serve(lis)
 	log.Fatalf("%s", err)
 }
 

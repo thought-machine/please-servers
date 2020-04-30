@@ -10,6 +10,7 @@ import (
 	"github.com/peterebden/go-cli-init"
 	"github.com/thought-machine/http-admin"
 
+	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/mettle/common"
 	"github.com/thought-machine/please-servers/mettle/worker"
@@ -26,12 +27,7 @@ var opts = struct {
 	} `group:"Options controlling logging output"`
 	InstanceName string `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API         struct {
-		Host             string `long:"host" description:"Host to listen on"`
-		Port             int    `short:"p" long:"port" default:"7778" description:"Port to serve on"`
-		TLS              struct {
-			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
-			CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
-		} `group:"Options controlling TLS for the gRPC server"`
+		GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
@@ -60,7 +56,7 @@ var opts = struct {
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
-		Port         int          `short:"p" long:"port" default:"7778" description:"Port to serve on"`
+		GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		NoClean      bool         `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
 		NumWorkers   int          `short:"n" long:"num_workers" default:"1" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
@@ -68,10 +64,6 @@ var opts = struct {
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
-		TLS          struct {
-			KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
-			CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
-		} `group:"Options controlling TLS for the gRPC server"`
 		Storage struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -155,7 +147,7 @@ func main() {
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
-		api.ServeForever("127.0.0.1", opts.Dual.Port, requests, responses, responses, opts.Dual.TLS.KeyFile, opts.Dual.TLS.CertFile)
+		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
 		if opts.Worker.CacheSrcDir != "" {
 			if err := worker.NewCache(opts.Worker.CacheSrcDir, true).CopyTo(opts.Worker.CacheDir); err != nil {
@@ -164,7 +156,7 @@ func main() {
 		}
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
-		api.ServeForever(opts.API.Host, opts.API.Port, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS.KeyFile, opts.API.TLS.CertFile)
+		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else if cmd == "cache" {
 		worker.NewCache(opts.Cache.Dir, false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
 	} else {

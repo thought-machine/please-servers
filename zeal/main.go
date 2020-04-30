@@ -5,10 +5,9 @@ import (
 	"github.com/peterebden/go-cli-init"
 	"github.com/thought-machine/http-admin"
 
+	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/zeal/rpc"
 )
-
-var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
@@ -17,16 +16,11 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
-	Host        string `long:"host" description:"Host to listen on"`
-	Port        int    `short:"p" long:"port" default:"7776" description:"Port to serve on"`
+	GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling communication with the CAS server"`
-	TLS struct {
-		KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
-		CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
-	} `group:"Options controlling TLS for the gRPC server"`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
@@ -55,6 +49,5 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	log.Notice("Serving on %s:%d", opts.Host, opts.Port)
-	rpc.ServeForever(opts.Host, opts.Port, opts.TLS.KeyFile, opts.TLS.CertFile, opts.Storage.Storage, opts.Storage.TLS)
+	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS)
 }
