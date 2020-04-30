@@ -431,8 +431,6 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 		}
 		key := obj.Key
 		g.Go(func() error {
-			s.limiter <- struct{}{}
-			defer func() { <-s.limiter }()
 			digest, err := s.queryOne(ctx, key)
 			if err != nil {
 				return err
