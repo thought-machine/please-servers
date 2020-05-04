@@ -4,14 +4,10 @@
 package trie
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"strings"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -21,12 +17,8 @@ import (
 )
 
 // A Trie provides fast lookups on hash keys.
-// The zero value is usable.
 type Trie struct {
-	// If TLS is set, newly created connections will use a generic TLS configuration.
-	TLS bool
-	// If CA is set, newly created connections with TLS will load the CA cert from here.
-	CA string
+	dialCallback DialCallback
 	root node
 	nodes []node  // premature optimisation
 	servers []Server
@@ -50,6 +42,14 @@ type node struct {
 		server *Server
 		node   *node
 	}
+}
+
+// A DialCallback is called when we need to dial a new gRPC server.
+type DialCallback func(address string) (*grpc.ClientConn, error)
+
+// New creates a new trie.
+func New(callback DialCallback) *Trie {
+	return &Trie{dialCallback: callback}
 }
 
 // Add adds a node to this trie.
@@ -101,7 +101,7 @@ func (t *Trie) AddRange(start, end, address string) error {
 	if len(start) != len(end) {
 		return fmt.Errorf("Mismatching range lengths: %s / %s", start, end)
 	}
-	conn, err := grpc.Dial(address, t.dialOpt())
+	conn, err := t.dialCallback(address)
 	if err != nil {
 		return err
 	}
@@ -135,18 +135,6 @@ func (t *Trie) add(n *node, start, end string, server *Server) error {
 		}
 	}
 	return nil
-}
-
-func (t *Trie) dialOpt() grpc.DialOption {
-	if t.TLS {
-		if t.CA != "" {
-			return grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-				RootCAs: mustLoadCACert(t.CA),
-			}))
-		}
-		return grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
-	}
-	return grpc.WithInsecure()
 }
 
 func toInt(c byte) int {
@@ -212,17 +200,4 @@ func (t *Trie) check(prefix string, node *node) error {
 		}
 	}
 	return nil
-}
-
-// mustLoadCACert loads a CA cert from a file and dies on any errors.
-func mustLoadCACert(filename string) *x509.CertPool {
-	ca, err := ioutil.ReadFile(filename)
-	if err != nil {
-		log.Fatalf("Failed to read CA cert from %s: %s", filename, err)
-	}
-	cp := x509.NewCertPool()
-	if !cp.AppendCertsFromPEM(ca) {
-		log.Fatalf("Failed to append CA cert to pool (invalid PEM file?)")
-	}
-	return cp
 }

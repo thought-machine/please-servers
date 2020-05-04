@@ -16,6 +16,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 
+	"github.com/thought-machine/please-servers/grpcutil"
 	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
@@ -52,12 +53,13 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 }
 
 // StoreAll reads the given file and stores all the blobs it finds into the cache.
-func (c *Cache) StoreAll(instanceName string, targets []string, storage string, secureStorage bool) error {
+func (c *Cache) StoreAll(instanceName string, targets []string, storage string, secureStorage bool, tokenFile string) error {
 	log.Notice("Dialling remote %s...", storage)
 	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
+		DialOpts:           grpcutil.DialOptions(tokenFile),
 	}, client.RetryTransient())
 	if err != nil {
 		return err
@@ -139,8 +141,8 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 }
 
 // MustStoreAll is like StoreAll but dies on errors.
-func (c *Cache) MustStoreAll(instanceName string, targets []string, storage string, secureStorage bool) {
-	if err := c.StoreAll(instanceName, targets, storage, secureStorage); err != nil {
+func (c *Cache) MustStoreAll(instanceName string, targets []string, storage string, secureStorage bool, tokenFile string) {
+	if err := c.StoreAll(instanceName, targets, storage, secureStorage, tokenFile); err != nil {
 		log.Fatalf("%s", err)
 	}
 }

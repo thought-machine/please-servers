@@ -4,6 +4,7 @@ package main
 import (
 	"github.com/peterebden/go-cli-init"
 	"github.com/thought-machine/http-admin"
+	"google.golang.org/grpc"
 
 	"github.com/thought-machine/please-servers/flair/rpc"
 	"github.com/thought-machine/please-servers/flair/trie"
@@ -61,11 +62,13 @@ func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {
 	if len(geometry) == 0 {
 		return nil
 	}
-	t := trie.Trie{TLS: opts.ConnTLS, CA: opts.CA}
+	t := trie.New(func(address string) (*grpc.ClientConn, error) {
+		return grpcutil.Dial(address, opts.ConnTLS, opts.CA, opts.GRPC.TokenFile)
+	})
 	if err := t.AddAll(geometry); err != nil {
 		log.Fatalf("Failed to create trie for provided geometry: %s", err)
 	} else if err := t.Check(); err != nil {
 		log.Fatalf("Failed to construct trie: %s", err)
 	}
-	return trie.NewReplicator(&t, replicas)
+	return trie.NewReplicator(t, replicas)
 }

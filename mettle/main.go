@@ -18,6 +18,12 @@ import (
 
 var log = cli.MustGetLogger()
 
+type StorageOpts struct {
+	Storage   string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+	TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+	TokenFile string `long:"token_file" description:"File containing a pre-shared token to authenticate to storage server with."`
+}
+
 var opts = struct {
 	Usage   string
 	Logging struct {
@@ -46,17 +52,14 @@ var opts = struct {
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
-		Storage      struct {
-			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
-		} `group:"Options controlling communication with the CAS server"`
+		Storage      StorageOpts  `group:"Options controlling communication with the CAS server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
-		GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
+		GRPC         grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		NoClean      bool         `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
 		NumWorkers   int          `short:"n" long:"num_workers" default:"1" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
@@ -65,19 +68,16 @@ var opts = struct {
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
 		Storage struct {
-			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
-		} `group:"Options controlling communication with the CAS server"`
+			Storage   string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		}
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	Cache struct {
 		Args struct {
 			Targets []string `positional-arg-name:"targets" required:"true" description:"Targets to watch the sources of for changes"`
 		} `positional-args:"true" required:"true"`
 		Dir     string `short:"d" long:"dir" required:"true" description:"Directory to copy data into"`
-		Storage      struct {
-			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
-		} `group:"Options controlling communication with the CAS server"`
+		Storage StorageOpts  `group:"Options controlling communication with the CAS server"`
 	} `command:"cache" description:"Download artifacts to cache dir"`
 	One struct {
 		Hash         string       `long:"hash" required:"true" description:"Hash of the action digest to run"`
@@ -88,10 +88,7 @@ var opts = struct {
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		ProfileFile  string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
-		Storage      struct {
-			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
-		} `group:"Options controlling communication with the CAS server"`
+		Storage      StorageOpts  `group:"Options controlling communication with the CAS server"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
@@ -145,7 +142,7 @@ func main() {
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
+			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.GRPC.TokenFile, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
@@ -154,11 +151,11 @@ func main() {
 				log.Fatalf("Failed to copy cache dir: %s", err)
 			}
 		}
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Storage.TokenFile, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else if cmd == "cache" {
-		worker.NewCache(opts.Cache.Dir, false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS)
+		worker.NewCache(opts.Cache.Dir, false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile)
 	} else {
 		if err := one(); err != nil {
 			log.Fatalf("%s", err)
@@ -178,5 +175,5 @@ func one() error {
 		defer f.Close()
 		defer pprof.StopCPUProfile()
 	}
-	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.Worker.Sandbox, false, opts.One.Storage.TLS, opts.One.CacheCopy, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
+	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.One.Sandbox, opts.One.Storage.TokenFile, false, opts.One.Storage.TLS, opts.One.CacheCopy, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
 }

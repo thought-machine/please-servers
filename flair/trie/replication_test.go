@@ -72,7 +72,7 @@ func TestReplicatedParallelFailure(t *testing.T) {
 }
 
 func testTrie(t *testing.T) *Trie {
-	trie := &Trie{}
+	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
 		"00-3f": "127.0.0.1:443",
 		"40-7f": "127.0.0.1:443",

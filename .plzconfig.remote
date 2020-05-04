@@ -6,6 +6,7 @@ instance = mettle
 secure = false
 numexecutors = 10
 displayurl = http://localhost:7779
+tokenfile = grpcutil/token.txt
 
 [build]
 hashfunction = sha256

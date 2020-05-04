@@ -24,7 +24,6 @@ import (
 	"github.com/peterebden/go-sri"
 	"github.com/prometheus/client_golang/prometheus"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -54,7 +53,7 @@ func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool) {
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts:           []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))},
+		DialOpts:           grpcutil.DialOptions(opts.TokenFile),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		log.Fatalf("Failed to connect to storage backend: %s", err)

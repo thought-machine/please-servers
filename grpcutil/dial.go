@@ -1,0 +1,71 @@
+package grpcutil
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
+	"strings"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+)
+
+// Dial is a convenience function wrapping up some common gRPC functionality.
+func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn, error) {
+	return grpc.Dial(address, append(DialOptions(tokenFile), tlsOpt(tls, caFile))...)
+}
+
+// DialOptions returns some common dial options.
+func DialOptions(tokenFile string) []grpc.DialOption {
+	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))}
+	if tokenFile == "" {
+		return opts
+	}
+	return append(opts, grpc.WithPerRPCCredentials(tokenCredProvider{
+		"authorization": "Bearer " + mustLoadToken(tokenFile),
+	}))
+}
+
+func tlsOpt(useTLS bool, caFile string) grpc.DialOption {
+	if useTLS {
+		if caFile != "" {
+			return grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+				RootCAs: mustLoadCACert(caFile),
+			}))
+		}
+		return grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
+	}
+	return grpc.WithInsecure()
+}
+
+// mustLoadCACert loads a CA cert from a file and dies on any errors.
+func mustLoadCACert(filename string) *x509.CertPool {
+	ca, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalf("Failed to read CA cert from %s: %s", filename, err)
+	}
+	cp := x509.NewCertPool()
+	if !cp.AppendCertsFromPEM(ca) {
+		log.Fatalf("Failed to append CA cert to pool (invalid PEM file?)")
+	}
+	return cp
+}
+
+func mustLoadToken(tokenFile string) string {
+	contents, err := ioutil.ReadFile(tokenFile)
+	if err != nil {
+		log.Fatalf("Failed to read token file: %s", err)
+	}
+	return strings.TrimSpace(string(contents))
+}
+
+type tokenCredProvider map[string]string
+
+func (cred tokenCredProvider) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return cred, nil
+}
+
+func (cred tokenCredProvider) RequireTransportSecurity() bool {
+	return false  // Allow these to be provided over an insecure channel; this facilitates e.g. service meshes like Istio.
+}

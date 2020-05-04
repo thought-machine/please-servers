@@ -3,22 +3,23 @@ package trie
 import (
 	"testing"
 
+	"google.golang.org/grpc"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEmptyTrie(t *testing.T) {
-	var trie Trie
+	trie := New(callback)
 	assert.Error(t, trie.Check())
 }
 
 func TestOneCompleteLevel(t *testing.T) {
-	var trie Trie
+	trie := New(callback)
 	assert.NoError(t, trie.AddRange("0", "f", "127.0.0.1:443"))
 	assert.NoError(t, trie.Check())
 }
 
 func TestOneCompleteLevelTwoParts(t *testing.T) {
-	var trie Trie
+	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
 		"0-6": "127.0.0.1:443",
 		"7-f": "127.0.0.1:443",
@@ -29,7 +30,7 @@ func TestOneCompleteLevelTwoParts(t *testing.T) {
 }
 
 func TestTwoCompleteLevels(t *testing.T) {
-	var trie Trie
+	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
 		"00-0a": "127.0.0.1:443",
 		"0b-0f": "127.0.0.1:443",
@@ -42,7 +43,7 @@ func TestTwoCompleteLevels(t *testing.T) {
 }
 
 func TestOffset(t *testing.T) {
-	var trie Trie
+	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
 		"00-3f": "127.0.0.1:443",
 		"40-7f": "127.0.0.1:443",
@@ -56,4 +57,8 @@ func TestOffset(t *testing.T) {
 	// But 4 is
 	assert.NotEqual(t, trie.Get("0000"), trie.GetOffset("0000", 4))
 	assert.Equal(t, trie.Get("4000"), trie.GetOffset("0000", 4))
+}
+
+func callback(address string) (*grpc.ClientConn, error) {
+	return nil, nil
 }
