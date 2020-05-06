@@ -110,8 +110,10 @@ func (fc *fileCache) Set(ctx context.Context, key string, size int64) io.WriteCl
 }
 
 func (fc *fileCache) OnEvict(key, conflict uint64, value interface{}, cost int64) {
-	if err := os.Remove(value.(string)); err != nil {
-		log.Warning("Failed to remove evicted file %s from cache: %s", value, err)
+	if s, ok := value.(string); ok {
+		if err := os.Remove(s); err != nil {
+			log.Warning("Failed to remove evicted file %s from cache: %s", value, err)
+		}
 	}
 }
 
