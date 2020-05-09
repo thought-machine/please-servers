@@ -93,7 +93,7 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 				BlobDigest: digest,
 			}, nil
 		}
-		me = multierror.Append(me, err)
+		me = multierror.Append(me, fmt.Errorf("Failed fetching from %s: %s", u, err))
 	}
 	// TODO(peterebden): Really we should convert this into the Status field, but it's fiddly and we don't do much
 	//                   with it on the client side anyway.

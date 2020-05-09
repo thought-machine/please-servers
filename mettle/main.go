@@ -84,6 +84,7 @@ var opts = struct {
 		Size         int64        `long:"size" required:"true" description:"Size of the action digest to run"`
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
+		CacheSrcDir  string       `long:"cache_src_dir" description:"Directory to copy pre-cached blobs from initially"`
 		CacheCopy    bool         `long:"cache_copy" description:"Copy blobs from cache rather than attempting to link."`
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
@@ -142,20 +143,15 @@ func main() {
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.GRPC.TokenFile, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
+			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", "", opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.GRPC.TokenFile, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
-		if opts.Worker.CacheSrcDir != "" {
-			if err := worker.NewCache(opts.Worker.CacheSrcDir, true).CopyTo(opts.Worker.CacheDir); err != nil {
-				log.Fatalf("Failed to copy cache dir: %s", err)
-			}
-		}
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Storage.TokenFile, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.CacheSrcDir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Storage.TokenFile, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else if cmd == "cache" {
-		worker.NewCache(opts.Cache.Dir, false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile)
+		worker.NewCache(opts.Cache.Dir, "", false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile)
 	} else {
 		if err := one(); err != nil {
 			log.Fatalf("%s", err)
@@ -175,5 +171,5 @@ func one() error {
 		defer f.Close()
 		defer pprof.StopCPUProfile()
 	}
-	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.One.Sandbox, opts.One.Storage.TokenFile, false, opts.One.Storage.TLS, opts.One.CacheCopy, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
+	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.One.CacheSrcDir, opts.One.Sandbox, opts.One.Storage.TokenFile, false, opts.One.Storage.TLS, opts.One.CacheCopy, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
 }

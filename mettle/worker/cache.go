@@ -24,13 +24,13 @@ import (
 // Since all the blobs are keyed by hash we don't have to worry about invalidation.
 // In normal use the server never writes it; we prefill a selected artifact list offline.
 type Cache struct {
-	root string
+	root, src string
 	copier copyfile.Copier
 	copyfunc func(string, string, os.FileMode) error
 }
 
 // NewCache returns a new cache instance.
-func NewCache(root string, copy bool) *Cache {
+func NewCache(root, src string, copy bool) *Cache {
 	c := &Cache{root: root}
 	if copy {
 		c.copyfunc = c.copier.CopyMode
@@ -43,10 +43,23 @@ func NewCache(root string, copy bool) *Cache {
 // Retrieve copies a blob from the cache to the given location.
 // It returns true if retrieved.
 func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
-	if err := c.copyfunc(c.path(key), dest, mode); err != nil {
+	src := c.path(c.root, key)
+	if err := c.copyfunc(src, dest, mode); err == nil {
+		return true
+	} else if !os.IsNotExist(err) {
+		log.Warning("Failed to retrieve %s from cache: %s", key, err)
+		return false
+	} else if c.src == "" {
+		return false
+	}
+	// We can try retrieving from our source directory.
+	if err := c.copyfunc(c.path(c.src, key), src, mode); err != nil {
 		if !os.IsNotExist(err) {
-			log.Warning("Failed to retrieve %s from cache: %s", key, err)
+			log.Warning("Failed to retrieve %s from cache source: %s", key, err)
 		}
+		return false
+	} else if err := c.copyfunc(src, dest, mode); err != nil {
+		log.Warning("Failed to retrieve %s from cache source: %s", key, err)
 		return false
 	}
 	return true
@@ -181,7 +194,7 @@ func (c *Cache) storeOne(client *client.Client, hash string, size int64, isExecu
 	if err != nil {
 		return err
 	}
-	out := c.path(hash)
+	out := c.path(c.root, hash)
 	tmp := out + ".tmp"
 	if err := os.MkdirAll(path.Dir(out), os.ModeDir|0755); err != nil {
 		return err
@@ -194,7 +207,7 @@ func (c *Cache) storeOne(client *client.Client, hash string, size int64, isExecu
 }
 
 // path returns the file path for a cache item
-func (c *Cache) path(key string) string {
+func (c *Cache) path(root, key string) string {
 	// Prepend an intermediate directory of a couple of chars to make it a bit more explorable
-	return path.Join(c.root, string([]byte{key[0], key[1]}), key)
+	return path.Join(root, string([]byte{key[0], key[1]}), key)
 }
