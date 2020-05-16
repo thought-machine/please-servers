@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -14,9 +14,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
-	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 
-	"github.com/thought-machine/please-servers/grpcutil"
 	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
@@ -67,18 +65,12 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 
 // StoreAll reads the given file and stores all the blobs it finds into the cache.
 func (c *Cache) StoreAll(instanceName string, targets []string, storage string, secureStorage bool, tokenFile string) error {
-	log.Notice("Dialling remote %s...", storage)
-	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            storage,
-		NoSecurity:         !secureStorage,
-		TransportCredsOnly: secureStorage,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.RetryTransient())
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", "cache", storage, c.root, "", "", "", "", tokenFile, false, secureStorage, true, 1 * time.Hour, 100)
 	if err != nil {
 		return err
 	}
 	log.Notice("Querying outputs for %s...", strings.Join(targets, " "))
-	rclient := rpb.NewRecorderClient(client.CASConnection)
+	rclient := rpb.NewRecorderClient(w.client.CASConnection)
 	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Hour)
 	defer cancel()
 	resp, err := rclient.Query(ctx, &rpb.QueryRequest{
@@ -88,19 +80,35 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 	if err != nil {
 		return err
 	}
+	var mutex sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(len(resp.Digests))
 	keep := map[string]int64{}
 	exes := map[string]bool{}  // Tracks if any digests are executable as output from any action.
+	log.Notice("Resolving outputs for %d actions...", len(resp.Digests))
 	for _, digest := range resp.Digests {
-		outs, err := c.allOutputs(client, digest)
-		if err != nil {
-			log.Error("Error downloading outputs for %s: %s", digest.Hash, err)
-			continue
-		}
-		for _, out := range outs {
-			keep[out.Digest.Hash] = out.Digest.Size
-			exes[out.Digest.Hash] = exes[out.Digest.Hash] || out.IsExecutable
-		}
+		go func(digest *rpb.Digest) {
+			defer wg.Done()
+			if len(digest.Hash) != 64 {
+				log.Errorf("Invalid hash: [%s]", digest.Hash)
+				return
+			}
+			w.limiter <- struct{}{}
+			defer func() { <-w.limiter }()
+			outs, err := c.allOutputs(w.client, digest)
+			if err != nil {
+				log.Error("Error downloading outputs for %s: %s", digest.Hash, err)
+				return
+			}
+			mutex.Lock()
+			defer mutex.Unlock()
+			for _, out := range outs {
+				keep[out.Digest.Hash] = out.Digest.Size
+				exes[out.Digest.Hash] = exes[out.Digest.Hash] || out.IsExecutable
+			}
+		}(digest)
 	}
+	wg.Wait()
 	log.Notice("Removing extraneous artifacts...")
 	exists := map[string]bool{}
 	if _, err := os.Stat(c.root); err != nil {
@@ -127,27 +135,32 @@ func (c *Cache) StoreAll(instanceName string, targets []string, storage string, 
 		}
 		log.Notice("Removed %d extraneous entries", removed)
 	}
-	fetch := map[string]int64{}
-	for hash, size := range keep {
-		if !exists[hash] {
-			fetch[hash] = size
-		}
-	}
+	log.Notice("Reticulating splines...")
+	fetch := map[string]*pb.FileNode{}
 	var total int64
-	i := 0
-	for hash, size := range fetch {
-		i++
-		total += size
-		if exists[hash] {
-			log.Debug("Not re-downloading %s...", hash)
+	for hash, size := range keep {
+		if len(hash) != 64 {
+			log.Errorf("Invalid hash: [%s]", hash)
 			continue
 		}
-		if i % 10 == 0 {
-			log.Notice("Downloading artifact %d of %d...", i, len(fetch))
+		if !exists[hash] {
+			dest := c.path(c.root, hash)
+			fetch[dest] = &pb.FileNode{
+				Name:         hash,
+				Digest:       &pb.Digest{Hash: hash, SizeBytes: size},
+				IsExecutable: exes[hash],
+			}
+			if err := os.MkdirAll(path.Dir(dest), os.ModeDir | 0755); err != nil {
+				log.Error("Failed to create directory: %s", err)
+				return err
+			}
+			total += size
 		}
-		if err := c.storeOne(client, hash, size, exes[hash]); err != nil {
-			log.Error("Error downloading %s: %s", hash, err)
-		}
+	}
+	log.Notice("Downloading %d files...", len(fetch))
+	if err := w.downloadAllFiles(fetch); err != nil {
+		log.Error("Failed to fetch some files: %s", err)
+		return err
 	}
 	log.Notice("Downloads completed, total size: %s", humanize.Bytes(uint64(total)))
 	return nil
@@ -160,23 +173,6 @@ func (c *Cache) MustStoreAll(instanceName string, targets []string, storage stri
 	}
 }
 
-// CopyTo copies the entire contents of the cache dir to a destination.
-func (c *Cache) CopyTo(destination string) error {
-	log.Notice("Copying cached content from %s to %s...", c.root, destination)
-	return godirwalk.Walk(c.root, &godirwalk.Options{Callback: func(pathname string, entry *godirwalk.Dirent) error {
-		dest := path.Join(destination, strings.TrimLeft(strings.TrimPrefix(pathname, c.root), "/"))
-		if entry.IsDir() {
-			if entry.Name() == "lost+found" {  // Bit of a hack to skip unreadable directories
-				return filepath.SkipDir
-			}
-			return os.MkdirAll(dest, 0755 | os.ModeDir)
-		} else if err := c.copyfunc(pathname, dest, 0755); err != nil {
-			log.Warning("Failed to copy cache file: %s", err)  // Don't fail on this.
-		}
-		return nil
-	}})
-}
-
 func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) (map[string]*tree.Output, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
 	defer cancel()
@@ -185,25 +181,6 @@ func (c *Cache) allOutputs(client *client.Client, digest *rpb.Digest) (map[strin
 		return nil, err
 	}
 	return client.FlattenActionOutputs(ctx, ar)
-}
-
-func (c *Cache) storeOne(client *client.Client, hash string, size int64, isExecutable bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Minute)
-	defer cancel()
-	digest, err := sdkdigest.New(hash, size)
-	if err != nil {
-		return err
-	}
-	out := c.path(c.root, hash)
-	tmp := out + ".tmp"
-	if err := os.MkdirAll(path.Dir(out), os.ModeDir|0755); err != nil {
-		return err
-	} else if _, err := client.ReadBlobToFile(ctx, digest, tmp); err != nil {
-		return err
-	} else if err := os.Chmod(tmp, fileMode(isExecutable)); err != nil {
-		return err
-	}
-	return os.Rename(tmp, out)
 }
 
 // path returns the file path for a cache item

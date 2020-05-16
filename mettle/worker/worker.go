@@ -193,6 +193,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 			return nil, fmt.Errorf("Error checking sandbox tool: %s", err)
 		}
 	}
+	log.Notice("Dialling remote %s...", storage)
 	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
 		Service:            storage,
 		NoSecurity:         !secureStorage,

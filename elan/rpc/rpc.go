@@ -450,6 +450,9 @@ func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error
 		return nil, err
 	} else if err := proto.Unmarshal(b, digest); err != nil {
 		return nil, err
+	} else if len(digest.Hash) != 64 {
+		log.Error("Invalid digest for %s: %s", key, digest)
+		return nil, nil  // Don't fail the whole RPC on this
 	}
 	return []*rpb.Digest{digest}, nil
 }
@@ -484,6 +487,9 @@ func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Di
 }
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
+	if len(digest.Hash) < 2 {
+		return nil, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
+	}
 	key := s.key(prefix, digest)
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()

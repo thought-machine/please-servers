@@ -129,6 +129,9 @@ updated blobs dominating much of the data downloaded.
 }
 
 func main() {
+	const requests = "mem://requests"
+	const responses = "mem://responses"
+
 	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
 	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
 	if cmd != "one" && cmd != "cache" {
@@ -138,8 +141,6 @@ func main() {
 	}
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.
-		const requests = "mem://requests"
-		const responses = "mem://responses"
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
@@ -151,6 +152,9 @@ func main() {
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else if cmd == "cache" {
+		// We use these within MustStoreAll.
+		common.MustOpenTopic(requests)
+		common.MustOpenTopic(responses)
 		worker.NewCache(opts.Cache.Dir, "", false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile)
 	} else {
 		if err := one(); err != nil {

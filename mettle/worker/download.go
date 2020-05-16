@@ -157,6 +157,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
+	log.Debug("Downloading batch of %d files...", len(filenames))
 	digests := make([]*pb.Digest, 0, len(filenames))
 	digestToFilenames := make(map[string][]string, len(filenames))
 	for _, f := range filenames {
@@ -196,6 +197,7 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
+	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
