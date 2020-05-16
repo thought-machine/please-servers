@@ -86,7 +86,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 }
 
 func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (ar *pb.ActionResult, err error) {
-	err = s.replicator.Sequential(req.ActionDigest.Hash, func(s *trie.Server) error {
+	err = s.replicator.SequentialDigest(req.ActionDigest, func(s *trie.Server) error {
 		a, e := s.AC.GetActionResult(ctx, req)
 		if e == nil {
 			ar = a
@@ -97,7 +97,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 }
 
 func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (ar *pb.ActionResult, err error) {
-	err = s.replicator.Parallel(req.ActionDigest.Hash, func(s *trie.Server) error {
+	err = s.replicator.ParallelDigest(req.ActionDigest, func(s *trie.Server) error {
 		a, e := s.AC.UpdateActionResult(ctx, req)
 		if e == nil {
 			ar = a
@@ -220,7 +220,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	var fetchDir func(digest *pb.Digest) error
 	fetchDir = func(digest *pb.Digest) error {
 		var resp *pb.BatchReadBlobsResponse
-		if err := s.replicator.Sequential(digest.Hash, func(s *trie.Server) error {
+		if err := s.replicator.SequentialDigest(digest, func(s *trie.Server) error {
 			r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 				InstanceName: req.InstanceName,
 				Digests:      []*pb.Digest{digest},
@@ -416,7 +416,7 @@ func (s *server) assetHash(quals []*apb.Qualifier) string {
 }
 
 func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServer) error {
-	return s.exeReplicator.Sequential(req.ActionDigest.Hash, func(srv *trie.Server) error {
+	return s.exeReplicator.SequentialDigest(req.ActionDigest, func(srv *trie.Server) error {
 		client, err := srv.Exe.Execute(stream.Context(), req)
 		if err != nil {
 			return err

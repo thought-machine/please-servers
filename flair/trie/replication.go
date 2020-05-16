@@ -1,10 +1,13 @@
 package trie
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 )
 
 var log = cli.MustGetLogger()
@@ -56,6 +59,16 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 	return e
 }
 
+// SequentialDigest is like Sequential but takes a digest instead of the raw hash.
+func (r *Replicator) SequentialDigest(digest *pb.Digest, f ReplicatedFunc) error {
+	if digest == nil {
+		return fmt.Errorf("Missing digest")
+	} else if len(digest.Hash) != 64 {
+		return fmt.Errorf("Invalid digest: [%s]", digest.Hash)
+	}
+	return r.Sequential(digest.Hash, f)
+}
+
 // Parallel replicates the given function to all replicas at once.
 // It returns an error if all replicas fail, hence it is possible for some replicas not to receive data.
 func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
@@ -77,6 +90,16 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 		return err
 	}
 	return nil
+}
+
+// ParallelDigest is like Parallel but takes a digest instead of the raw hash.
+func (r *Replicator) ParallelDigest(digest *pb.Digest, f ReplicatedFunc) error {
+	if digest == nil {
+		return fmt.Errorf("Missing digest")
+	} else if len(digest.Hash) != 64 {
+		return fmt.Errorf("Invalid digest: [%s]", digest.Hash)
+	}
+	return r.Parallel(digest.Hash, f)
 }
 
 // shouldRetry returns true if the given error is retryable.
