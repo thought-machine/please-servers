@@ -458,19 +458,9 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			Result: ar,
 		}
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	if _, err := w.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
-		InstanceName: w.client.InstanceName,
-		ActionDigest: w.actionDigest,
-		ActionResult: ar,
-	}); err != nil {
-		log.Error("Failed to upload action result: %s", err)
-		return &pb.ExecuteResponse{
-			Status: status(codes.Internal, "Failed to upload action result: %s", err),
-			Result: ar,
-		}
-	}
+	end := time.Now()
+	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
+	uploadDurations.Observe(end.Sub(execEnd).Seconds())
 	if label := getEnvVar(command, "_TARGET"); label != "" {
 		ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 		defer cancel()
@@ -484,9 +474,20 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			log.Error("Failed to record action: %s", err)
 		}
 	}
-	end := time.Now()
-	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
-	uploadDurations.Observe(end.Sub(execEnd).Seconds())
+	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
+	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
+	defer cancel()
+	if _, err := w.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
+		InstanceName: w.client.InstanceName,
+		ActionDigest: w.actionDigest,
+		ActionResult: ar,
+	}); err != nil {
+		log.Error("Failed to upload action result: %s", err)
+		return &pb.ExecuteResponse{
+			Status: status(codes.Internal, "Failed to upload action result: %s", err),
+			Result: ar,
+		}
+	}
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
