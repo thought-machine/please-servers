@@ -1,0 +1,78 @@
+@import url('https://rsms.me/inter/inter.css');
+html,
+body {
+  height: 99%;
+}
+
+body {
+  # font-family: 'Inter', sans-serif;
+  letter-spacing: -0.02em;
+  background: #1c1c1c;
+  color: #f4f4f4;
+  margin: 2rem;
+}
+
+.container-fluid {
+  height: calc(100vh - 50px);
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 100px;
+}
+
+a {
+  color: #00a4a6;
+}
+
+a:hover {
+  color: #00a4a6;
+}
+
+a:visited {
+  color: #00a4a6;
+}
+
+i {
+  margin-right: 0.5rem !important;
+}
+
+tr {
+  background: #1c1c1c;
+}
+
+th {
+  padding: 0.75rem 1.25rem !important;
+  background-color: #636363 !important;
+  border: none !important;
+}
+
+.table-row td {
+  padding: 0.75rem 1.25rem !important;
+  border: none !important;
+  font-size: 1rem !important;
+  color: #f4f4f4 !important;
+}
+
+.dead {
+  background-color: #636363;
+}
+
+.unhealthy {
+  background-color: #da1a3f;
+}
+
+.healthy {
+  background-color: #fdb900;
+}
+
+.free {
+  background-color: #107f42;
+}
+
+.tick {
+  text-align: center !important;
+}

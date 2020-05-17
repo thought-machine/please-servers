@@ -12,7 +12,9 @@ import (
 )
 
 // Dial is a convenience function wrapping up some common gRPC functionality.
+// If the URL is prefixed by a protocol (grpc:// or grpcs://) that overrides the TLS flag.
 func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn, error) {
+	address, tls = parseAddress(address, tls)
 	return grpc.Dial(address, append(DialOptions(tokenFile), tlsOpt(tls, caFile))...)
 }
 
@@ -37,6 +39,16 @@ func tlsOpt(useTLS bool, caFile string) grpc.DialOption {
 		return grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
 	}
 	return grpc.WithInsecure()
+}
+
+// parseAddress parses a URL with an optional prefix like grpcs:// and returns the URL without it.
+func parseAddress(url string, tlsDefault bool) (string, bool) {
+	if strings.HasPrefix(url, "grpcs://") {
+		return strings.TrimPrefix(url, "grpcs://"), true
+	} else if strings.HasPrefix(url, "grpc://") {
+		return strings.TrimPrefix(url, "grpc://"), false
+	}
+	return url, tlsDefault
 }
 
 // mustLoadCACert loads a CA cert from a file and dies on any errors.

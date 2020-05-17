@@ -3,3 +3,9 @@ grpc_library(
     srcs = ["record.proto"],
     visibility = ["PUBLIC"],
 )
+
+grpc_library(
+    name = "lucidity",
+    srcs = ["lucidity.proto"],
+    visibility = ["PUBLIC"],
+)

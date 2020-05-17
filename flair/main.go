@@ -38,8 +38,6 @@ them that each handle a subset of storage. The hash space setup is configured st
 this server so Elan remains unaware of it; this implies that online rebalancing etc is not
 possible at present.
 
-Currently it does not support replication but we may add that later on.
-
 Flair continues the increasingly stretched naming scheme, referring to having a special
 or instinctive ability for something (hopefully load balancing in this case). You definitely
 want to have more than the minimum number of instances of it (hopefully more than fifteen...).

@@ -65,7 +65,7 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 
 // StoreAll reads the given file and stores all the blobs it finds into the cache.
 func (c *Cache) StoreAll(instanceName string, targets []string, storage string, secureStorage bool, tokenFile string) error {
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", "cache", storage, c.root, "", "", "", "", tokenFile, false, secureStorage, true, 1 * time.Hour, 100)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", "cache", storage, c.root, "", "", "", "", "", tokenFile, false, secureStorage, true, 1 * time.Hour, 100)
 	if err != nil {
 		return err
 	}

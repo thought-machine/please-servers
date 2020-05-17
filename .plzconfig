@@ -11,4 +11,4 @@ protocgoplugin = //third_party/go:protoc-gen-go
 language = go
 
 [alias "runlocal"]
-cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local
+cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local

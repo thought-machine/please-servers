@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package build.please.remote.lucidity;
+
+// The Lucidity service provides a small API for workers to report in to a
+// central server and send some basic information about their status.
+service Lucidity {
+  // Update sends the server an update on the current state of a worker.
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+}
+
+message UpdateRequest {
+  // The name of this worker.
+  string name = 1;
+  // The time the worker started at (as a Unix timestamp)
+  int64 start_time = 2;
+  // The time the server is reporting in at (the server may overwrite this)
+  int64 update_time = 3;
+  // A human-readable string describing the current state of the server.
+  string status = 4;
+  // Whether the worker currently considers itself healthy.
+  bool healthy = 5;
+  // Whether the worker was busy at the point it sent this request.
+  bool busy = 6;
+  // Whether the worker is now alive or not (note that it is possible to be
+  // alive but unhealthy)
+  bool alive = 7;
+  // A URL containing the last unit of work the server performed.
+  string last_task = 8;
+}
+
+message UpdateResponse {}
+
+// This is not part of the actual RPC API but is used to serve from HTTP.
+message Workers {
+  // List of all the currently known workers.
+  repeated UpdateRequest workers = 1;
+}

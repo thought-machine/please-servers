@@ -35,6 +35,7 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
+	lpb "github.com/thought-machine/please-servers/proto/lucidity"
 	rpb "github.com/thought-machine/please-servers/proto/record"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 )
@@ -96,8 +97,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -106,7 +107,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 func RunOne(instanceName, name, storage, dir, cacheDir, cacheSrcDir, sandbox, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, hash string, size int64) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, cacheSrcDir, "", sandbox, tokenFile, clean, secureStorage, cacheCopy, timeout, 0)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, cacheSrcDir, "", sandbox, "", tokenFile, clean, secureStorage, cacheCopy, timeout, 0)
 	if err != nil {
 		return err
 	}
@@ -138,8 +139,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, cacheSrcDir, sandbox, to
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize)
 	if err != nil {
 		return err
 	}
@@ -147,20 +148,32 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	go func() {
-		log.Warning("Received signal %s, shutting down when ready...", <-ch)
+		sig := <-ch
+		log.Warning("Received signal %s, shutting down when ready...", sig)
+		w.Report(false, false, false, "Received signal %s, shutting down when ready...", sig)
 		cancel()
-		log.Fatalf("Received another signal %s, shutting down immediately", <-ch)
+		sig = <-ch
+		log.Fatalf("Received another signal %s, shutting down immediately", sig)
+		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
 	}()
 	for {
+		w.Report(true, false, true, "Awaiting next task...")
 		if _, err := w.RunTask(ctx); err != nil {
+			if ctx.Err() != nil {
+				// Error came from a signal triggered above. Give a brief period to send reports then die.
+				time.Sleep(500 * time.Millisecond)
+				return fmt.Errorf("terminated by signal")
+			}
 			// If we get an error back here, we have failed to communicate with one of
 			// our queues, so we are basically doomed and should stop.
-			return fmt.Errorf("Failed to run task: %s", err)
+			err = fmt.Errorf("Failed to run task: %s", err)
+			w.Report(false, false, false, err.Error())
+			return err
 		}
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -211,6 +224,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to make path absolute: %s", err)
 	}
+
 	w := &worker{
 		requests:   common.MustOpenSubscription(requestQueue),
 		responses:  common.MustOpenTopic(responseQueue),
@@ -225,6 +239,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		iolimiter:  make(chan struct{}, ioParallelism),
 		browserURL: browserURL,
 		timeout:    timeout,
+		startTime:  time.Now(),
 	}
 	if cacheDir != "" {
 		w.fileCache = NewCache(cacheDir, cacheSrcDir, cacheCopy)
@@ -240,6 +255,16 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		}
 		w.cache = c
 	}
+	if lucidity != "" {
+		w.lucidChan = make(chan *lpb.UpdateRequest, 100)
+		log.Notice("Dialling Lucidity...")
+		conn, err := grpcutil.Dial(lucidity, true, "", tokenFile)  // CA is currently not configurable.
+		if err != nil {
+			return nil, fmt.Errorf("Failed to dial Lucidity server: %s", err)
+		}
+		w.lucidity = lpb.NewLucidityClient(conn)
+		go w.sendReports()
+	}
 	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize)
 	return w, nil
 }
@@ -249,6 +274,8 @@ type worker struct {
 	responses    *pubsub.Topic
 	client       *client.Client
 	recorder     rpb.RecorderClient
+	lucidity     lpb.LucidityClient
+	lucidChan    chan *lpb.UpdateRequest
 	cache        *ristretto.Cache
 	dir, rootDir string
 	home         string
@@ -258,6 +285,7 @@ type worker struct {
 	clean        bool
 	timeout      time.Duration
 	fileCache    *Cache
+	startTime    time.Time
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest
@@ -267,6 +295,7 @@ type worker struct {
 	metadataFetch   time.Duration
 	dirCreation     time.Duration
 	fileDownload    time.Duration
+	lastURL         string  // This is reset somewhat lazily.
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
@@ -314,6 +343,8 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 	}
 	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
 	w.actionDigest = req.ActionDigest
+	w.lastURL = w.actionURL()
+	w.Report(true, true, true, "Hard at work...")
 	if status := w.prepareDir(action, command); status != nil {
 		log.Warning("Failed to prepare directory for action digest %s: %s", w.actionDigest.Hash, status)
 		ar := &pb.ActionResult{
@@ -516,8 +547,17 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 		log.Warning("Failed to save uncached action result: %s", err)
 		return ""
 	}
-	s := fmt.Sprintf("\nFailed action details: %s/uncached_action_result/%s/%s/%d/\n", w.browserURL, w.client.InstanceName, digest.Hash, digest.Size)
-	return s + fmt.Sprintf("\n      Original action: %s/action/%s/%s/%d/\n", w.browserURL, w.client.InstanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
+	w.lastURL = fmt.Sprintf("%s/uncached_action_result/%s/%s/%d/", w.browserURL, w.client.InstanceName, digest.Hash, digest.Size)
+	s := "\nFailed action details: " + w.lastURL + "\n"
+	return s + "\n      Original action: " + w.actionURL() + "\n"
+}
+
+// actionURL returns a browser URL for the currently executed action, or the empty string if no browser is configured.
+func (w *worker) actionURL() string {
+	if w.browserURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/action/%s/%s/%d/", w.browserURL, w.client.InstanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
 }
 
 // shouldSandbox returns true if we should sandbox execution of the given command.
