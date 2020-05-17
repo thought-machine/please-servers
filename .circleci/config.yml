@@ -21,6 +21,7 @@ jobs:
            paths:
              - elan/elan
              - flair/flair
+             - lucidity/lucidity
              - mettle/mettle
              - zeal/zeal
              - scripts/gen_release.pex
