@@ -53,6 +53,7 @@ var opts = struct {
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
+		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		Storage      StorageOpts  `group:"Options controlling communication with the CAS server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
@@ -69,6 +70,7 @@ var opts = struct {
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
 		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
+		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		Storage struct {
 			Storage   string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -80,6 +82,7 @@ var opts = struct {
 		} `positional-args:"true" required:"true"`
 		Dir     string `short:"d" long:"dir" required:"true" description:"Directory to copy data into"`
 		Storage StorageOpts  `group:"Options controlling communication with the CAS server"`
+		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't populate cache unless at least this much space is available"`
 	} `command:"cache" description:"Download artifacts to cache dir"`
 	One struct {
 		Hash         string       `long:"hash" required:"true" description:"Hash of the action digest to run"`
@@ -146,18 +149,18 @@ func main() {
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", "", opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize))
+			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", "", opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize), int64(opts.Dual.MinDiskSpace))
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.CacheSrcDir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.CacheSrcDir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize), int64(opts.Worker.MinDiskSpace))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else if cmd == "cache" {
 		// We use these within MustStoreAll.
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)
-		worker.NewCache(opts.Cache.Dir, "", false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile)
+		worker.NewCache(opts.Cache.Dir, "", false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile, int64(opts.Cache.MinDiskSpace))
 	} else {
 		if err := one(); err != nil {
 			log.Fatalf("%s", err)

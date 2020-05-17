@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -97,8 +98,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize, minDiskSpace int64) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize, minDiskSpace); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -107,7 +108,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 func RunOne(instanceName, name, storage, dir, cacheDir, cacheSrcDir, sandbox, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, hash string, size int64) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, cacheSrcDir, "", sandbox, "", tokenFile, clean, secureStorage, cacheCopy, timeout, 0)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, cacheSrcDir, "", sandbox, "", tokenFile, clean, secureStorage, cacheCopy, timeout, 0, math.MaxInt64)
 	if err != nil {
 		return err
 	}
@@ -139,8 +140,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, cacheSrcDir, sandbox, to
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize, minDiskSpace int64) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile, clean, secureStorage, cacheCopy, timeout, maxCacheSize, minDiskSpace)
 	if err != nil {
 		return err
 	}
@@ -157,6 +158,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
 	}()
 	for {
+		w.waitForFreeSpace()
 		w.Report(true, false, true, "Awaiting next task...")
 		if _, err := w.RunTask(ctx); err != nil {
 			if ctx.Err() != nil {
@@ -173,7 +175,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize int64) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, cacheSrcDir, browserURL, sandbox, lucidity, tokenFile string, clean, secureStorage, cacheCopy bool, timeout time.Duration, maxCacheSize, minDiskSpace int64) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -240,6 +242,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		browserURL: browserURL,
 		timeout:    timeout,
 		startTime:  time.Now(),
+		diskSpace:  minDiskSpace,
 	}
 	if cacheDir != "" {
 		w.fileCache = NewCache(cacheDir, cacheSrcDir, cacheCopy)
@@ -286,6 +289,7 @@ type worker struct {
 	timeout      time.Duration
 	fileCache    *Cache
 	startTime    time.Time
+	diskSpace    int64
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest

@@ -3,7 +3,10 @@ package worker
 import (
 	"context"
 	"fmt"
+	"syscall"
 	"time"
+
+	"github.com/dustin/go-humanize"
 
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
 )
@@ -36,5 +39,35 @@ func (w *worker) sendReport(report *lpb.UpdateRequest) {
 	defer cancel()
 	if _, err := w.lucidity.Update(ctx, report); err != nil {
 		log.Warning("Failed to report status to Lucidity: %s", err)
+	}
+}
+
+// waitForFreeSpace checks the currently available disk space and reports unhealthy until it is under a threshold.
+func (w *worker) waitForFreeSpace() {
+	if w.checkFreeSpace() {
+		return
+	}
+	for range time.NewTicker(1 * time.Minute).C {
+		if w.checkFreeSpace() {
+			return
+		}
+	}
+}
+
+// checkFreeSpace returns true if the worker currently has sufficient free space.
+// If not it reports unhealthy.
+func (w *worker) checkFreeSpace() bool {
+	statfs := syscall.Statfs_t{}
+	if err := syscall.Statfs(w.rootDir, &statfs); err != nil {
+		log.Error("Failed to statfs %s: %s", w.rootDir, err)
+		w.Report(false, false, true, "Failed statfs: %s", err)
+		return false
+	} else if avail := int64(statfs.Bsize) * int64(statfs.Bavail); avail < w.diskSpace {
+		log.Warning("Disk free space %d is under healthy threshold %d, will not accept new jobs until resolved", avail, w.diskSpace)
+		w.Report(false, false, true, "Low disk space: %s free", humanize.Bytes(uint64(avail)))
+		return false
+	} else {
+		log.Debug("Disk free space %d is over healthy threshold %d", avail, w.diskSpace)
+		return true
 	}
 }
