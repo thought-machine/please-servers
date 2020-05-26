@@ -321,9 +321,11 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 				}
 				return err
 			}
+			log.Debug("dispatching write to all channels")
 			for _, ch := range chs {
 				ch <- req
 			}
+			log.Debug("dispatched write to all channels")
 		}
 	})
 	var resp *bs.WriteResponse
