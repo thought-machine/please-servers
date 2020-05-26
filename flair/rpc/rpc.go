@@ -329,6 +329,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	var resp *bs.WriteResponse
 	if err := s.replicator.Parallel(hash, func(s *trie.Server) error {
 		ch := <-chch
+		defer func() { for range ch {} }()  // Ensure we exhaust this channel if anything goes wrong
 		client, err := s.BS.Write(srv.Context())
 		if err != nil {
 			return err
