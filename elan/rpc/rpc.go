@@ -320,8 +320,12 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if err != nil {
 		return err
 	}
-	if req.ReadLimit == 0 {
+	if req.ReadOffset < 0 || req.ReadOffset > digest.SizeBytes {
+		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
+	} else if req.ReadLimit == 0 {
 		req.ReadLimit = -1
+	} else if req.ReadOffset + req.ReadLimit > digest.SizeBytes {
+		req.ReadLimit = digest.SizeBytes - req.ReadOffset
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
@@ -458,6 +462,10 @@ func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error
 }
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
+	if length == 0 {
+		// Special case any empty read request
+		return ioutil.NopCloser(bytes.NewReader(nil)), nil
+	}
 	key := s.key(prefix, digest)
 	if s.fileCache != nil {
 		if r := s.fileCache.Get(key); r != nil {
@@ -468,7 +476,7 @@ func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest,
 		if length > 0 {
 			blob = blob[offset : offset+length]
 		}
-		return &countingReader{ioutil.NopCloser(bytes.NewReader(blob))}, nil
+		return &countingReader{r: ioutil.NopCloser(bytes.NewReader(blob))}, nil
 	}
 	return s.readBlobUncached(ctx, key, digest, offset, length)
 }
