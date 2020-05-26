@@ -597,9 +597,11 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	if err != nil {
 		return err
 	}
+	log.Debug("Computed %d outputs to upload", len(m))
 	chomks := make([]*chunker.Chunker, 0, len(m))
 	for _, c := range m {
 		chomks = append(chomks, c)
+		log.Debug("Adding chunk %s", c.Digest())
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
