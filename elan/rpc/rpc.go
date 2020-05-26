@@ -475,6 +475,8 @@ func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest,
 	if blob, present := s.cachedBlob(key, digest); present {
 		if length > 0 {
 			blob = blob[offset : offset+length]
+		} else {
+			blob = blob[offset:]
 		}
 		return &countingReader{r: ioutil.NopCloser(bytes.NewReader(blob))}, nil
 	}
