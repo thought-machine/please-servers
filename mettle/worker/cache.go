@@ -51,6 +51,10 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 		return false
 	}
 	// We can try retrieving from our source directory.
+	if err := os.MkdirAll(path.Dir(src), os.ModeDir|0755); err != nil {
+		log.Warning("Failed to create cache directory: %s", err)
+		return false
+	}
 	if err := c.copyfunc(c.path(c.src, key), src, mode); err != nil {
 		if !os.IsNotExist(err) {
 			log.Warning("Failed to retrieve %s from cache source: %s", key, err)
