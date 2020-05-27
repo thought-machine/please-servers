@@ -42,7 +42,6 @@ func NewCache(root, src string, copy bool) *Cache {
 // It returns true if retrieved.
 func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 	src := c.path(c.root, key)
-	log.Debug("checking cache for %s", src)
 	if err := c.copyfunc(src, dest, mode); err == nil {
 		return true
 	} else if !os.IsNotExist(err) {
@@ -51,10 +50,12 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 	} else if c.src == "" {
 		return false
 	}
-	log.Debug("checking cache src %s", c.path(c.src, key))
 	// We can try retrieving from our source directory.
+	if err := os.MkdirAll(path.Dir(src), os.ModeDir|0755); err != nil {
+		log.Warning("Failed to create cache directory: %s", err)
+		return false
+	}
 	if err := c.copyfunc(c.path(c.src, key), src, mode); err != nil {
-		log.Debug("failed to copy %s: %s", c.path(c.src, key), err)
 		if !os.IsNotExist(err) {
 			log.Warning("Failed to retrieve %s from cache source: %s", key, err)
 		}
@@ -63,7 +64,6 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 		log.Warning("Failed to retrieve %s from cache source: %s", key, err)
 		return false
 	}
-	log.Debug("Successfully retrieved %s from cache", c.path(c.src, key))
 	return true
 }
 
