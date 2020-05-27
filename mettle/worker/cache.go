@@ -42,6 +42,7 @@ func NewCache(root, src string, copy bool) *Cache {
 // It returns true if retrieved.
 func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 	src := c.path(c.root, key)
+	log.Debug("checking cache for %s", src)
 	if err := c.copyfunc(src, dest, mode); err == nil {
 		return true
 	} else if !os.IsNotExist(err) {
@@ -50,6 +51,7 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 	} else if c.src == "" {
 		return false
 	}
+	log.Debug("checking cache src %s", c.path(c.src, key))
 	// We can try retrieving from our source directory.
 	if err := c.copyfunc(c.path(c.src, key), src, mode); err != nil {
 		if !os.IsNotExist(err) {
