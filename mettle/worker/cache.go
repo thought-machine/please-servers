@@ -29,7 +29,7 @@ type Cache struct {
 
 // NewCache returns a new cache instance.
 func NewCache(root, src string, copy bool) *Cache {
-	c := &Cache{root: root}
+	c := &Cache{root: root, src: src}
 	if copy {
 		c.copyfunc = c.copier.CopyMode
 	}  else {

@@ -180,6 +180,12 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
 	}
+	if cacheDir != "" && cacheSrcDir != "" {
+		// If we're gonna be copying to the cache dir we should make sure it exists first.
+		if err := os.MkdirAll(cacheDir, os.ModeDir|0755); err != nil {
+			return nil, fmt.Errorf("Failed to create cache directory: %s", err)
+		}
+	}
 	// Remove anything existing within this directory.
 	// We don't just do a RemoveAll above in case we don't have permissions to create it in the first place.
 	if clean {
