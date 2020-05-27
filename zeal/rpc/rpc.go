@@ -67,8 +67,7 @@ func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool) {
 	srv.client.Logger = logger{}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterFetchServer(s, srv)
-	err = s.Serve(lis)
-	log.Fatalf("%s", err)
+	grpcutil.ServeForever(lis, s)
 }
 
 type server struct {

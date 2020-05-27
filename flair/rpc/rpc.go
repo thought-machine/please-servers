@@ -49,8 +49,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 	if executorReplicator != nil {
 		pb.RegisterExecutionServer(s, srv)
 	}
-	err := s.Serve(lis)
-	log.Fatalf("%s", err)
+	grpcutil.ServeForever(lis, s)
 }
 
 type server struct {

@@ -66,7 +66,6 @@ func handleSignals(cancel context.CancelFunc, s Shutdownable) {
 			log.Error("Failed to shut down queue: %s", err)
 		}
 		cancel()
-		log.Fatalf("Shutting down server")
 	}()
 }
 

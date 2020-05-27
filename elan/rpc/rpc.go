@@ -119,8 +119,7 @@ func ServeForever(opts grpcutil.Opts, cachePort int, storage, self string, peers
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	rpb.RegisterRecorderServer(s, srv)
-	err = s.Serve(lis)
-	log.Fatalf("%s", err)
+	grpcutil.ServeForever(lis, s)
 }
 
 type server struct {

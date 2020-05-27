@@ -49,17 +49,11 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) {
-	if err := serveForever(opts, requestQueue, responseQueue, preResponseQueue); err != nil {
-		log.Fatalf("%s", err)
-	}
-}
-
-func serveForever(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) error {
 	s, lis, err := serve(opts, requestQueue, responseQueue, preResponseQueue)
 	if err != nil {
-		return err
+		log.Fatalf("%s", err)
 	}
-	return s.Serve(lis)
+	grpcutil.ServeForever(lis, s)
 }
 
 func serve(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {

@@ -64,9 +64,7 @@ func ServeForever(opts grpcutil.Opts, httpPort int) {
 	mux.HandleFunc("/", srv.ServeAsset)
 	log.Notice("Serving HTTP on %s:%d", opts.Host, httpPort)
 	go http.ListenAndServe(fmt.Sprintf("%s:%d", opts.Host, httpPort), mux)
-
-	err := s.Serve(lis)
-	log.Fatalf("%s", err)
+	grpcutil.ServeForever(lis, s)
 }
 
 type server struct{
