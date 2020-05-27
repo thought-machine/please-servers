@@ -113,7 +113,6 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 		}
 		if file.Digest.SizeBytes > maxBlobBatchSize {
 			// This blob is big enough that it must always be done on its own.
-			totalSize += file.Digest.SizeBytes
 			w.downloadedBytes += file.Digest.SizeBytes
 			fn := filename
 			f := file
