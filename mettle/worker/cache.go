@@ -54,6 +54,7 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 	log.Debug("checking cache src %s", c.path(c.src, key))
 	// We can try retrieving from our source directory.
 	if err := c.copyfunc(c.path(c.src, key), src, mode); err != nil {
+		log.Debug("failed to copy %s: %s", c.path(c.src, key), err)
 		if !os.IsNotExist(err) {
 			log.Warning("Failed to retrieve %s from cache source: %s", key, err)
 		}
@@ -62,6 +63,7 @@ func (c *Cache) Retrieve(key, dest string, mode os.FileMode) bool {
 		log.Warning("Failed to retrieve %s from cache source: %s", key, err)
 		return false
 	}
+	log.Debug("Successfully retrieved %s from cache", c.path(c.src, key))
 	return true
 }
 
