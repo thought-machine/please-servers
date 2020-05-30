@@ -8,6 +8,7 @@ function drawTable() {
     dt.addColumn('boolean', 'Healthy');
     dt.addColumn('boolean', 'Free');
     dt.addColumn('string', 'Uptime');
+    dt.addColumn('string', 'Last Update');
     dt.addColumn('string', 'Last Task');
     dt.addColumn('string', 'Status');
 
@@ -18,6 +19,7 @@ function drawTable() {
             w.healthy,
             w.healthy && !w.busy,
             moment.duration(moment().diff(moment.unix(w.start_time)), "milliseconds").format("d[d] h[h] m[m] s[s]", {trim: 'both'}),
+            moment.duration(moment().diff(moment.unix(w.update_time)), "milliseconds").format("d[d] h[h] m[m] s[s]", {trim: 'both'}),
             w.last_task ? `<a href="${w.last_task}">Last task</a>` : '',
             w.status,
         ]));

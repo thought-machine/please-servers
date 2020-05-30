@@ -2,11 +2,13 @@
 package main
 
 import (
+	"time"
+
 	"github.com/peterebden/go-cli-init"
 	"github.com/thought-machine/http-admin"
 
-	"github.com/thought-machine/please-servers/lucidity/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
+	"github.com/thought-machine/please-servers/lucidity/rpc"
 )
 
 var log = cli.MustGetLogger()
@@ -19,6 +21,7 @@ var opts = struct {
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
 	HTTPPort int           `long:"http_port" default:"7773" description:"Port to serve HTTP on"`
+	MaxAge   cli.Duration  `long:"max_age" description:"Forget results from any workers older than this"`
 	GRPC     grpcutil.Opts `group:"Options controlling the gRPC server"`
 	Admin    admin.Opts    `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
@@ -40,5 +43,5 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	rpc.ServeForever(opts.GRPC, opts.HTTPPort)
+	rpc.ServeForever(opts.GRPC, opts.HTTPPort, time.Duration(opts.MaxAge))
 }

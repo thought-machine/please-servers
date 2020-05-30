@@ -1,7 +1,7 @@
 ; This is a set of config properties for local development
 ; (use `plz runlocal` to start the servers in that mode)
 [remote]
-url = localhost:7775
+url = localhost:7772
 instance = mettle
 secure = false
 numexecutors = 10

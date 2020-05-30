@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/peterebden/go-cli-init"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/peterebden/go-cli-init"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -54,7 +54,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, httpPort int) {
+func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration) {
 	srv := &server{}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterLucidityServer(s, srv)
@@ -64,15 +64,22 @@ func ServeForever(opts grpcutil.Opts, httpPort int) {
 	mux.HandleFunc("/", srv.ServeAsset)
 	log.Notice("Serving HTTP on %s:%d", opts.Host, httpPort)
 	go http.ListenAndServe(fmt.Sprintf("%s:%d", opts.Host, httpPort), mux)
+	go srv.Clean(maxAge)
 	grpcutil.ServeForever(lis, s)
 }
 
-type server struct{
+type server struct {
 	workers sync.Map
 }
 
 func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	f := func(b bool) float64 { if b { return 1.0 } else { return 0.0 } }
+	f := func(b bool) float64 {
+		if b {
+			return 1.0
+		} else {
+			return 0.0
+		}
+	}
 	req.UpdateTime = time.Now().Unix()
 	s.workers.Store(req.Name, req)
 	liveWorkers.WithLabelValues(req.Name).Set(f(req.Alive))
@@ -111,4 +118,20 @@ func (s *server) ServeAsset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", mime.TypeByExtension(path.Ext(r.URL.Path)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(asset)
+}
+
+// Clean periodically checks all known workers and discards any older than the given duration.
+func (s *server) Clean(maxAge time.Duration) {
+	if maxAge <= 0 {
+		return
+	}
+	for range time.NewTicker(maxAge / 10).C {
+		min := time.Now().Add(-maxAge).Unix()
+		s.workers.Range(func(k, v interface{}) bool {
+			if v.(*pb.UpdateRequest).UpdateTime < min {
+				s.workers.Delete(k)
+			}
+			return true
+		})
+	}
 }
