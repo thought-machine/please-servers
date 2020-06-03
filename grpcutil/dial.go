@@ -18,6 +18,15 @@ func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn,
 	return grpc.Dial(address, append(DialOptions(tokenFile), tlsOpt(tls, caFile))...)
 }
 
+// MustDial is like Dial but dies on errors.
+func MustDial(address string, tls bool, caFile, tokenFile string) *grpc.ClientConn {
+	conn, err := Dial(address, tls, caFile, tokenFile)
+	if err != nil {
+		log.Fatalf("Failed to dial: %s", err)
+	}
+	return conn
+}
+
 // DialOptions returns some common dial options.
 func DialOptions(tokenFile string) []grpc.DialOption {
 	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400))}
@@ -79,5 +88,5 @@ func (cred tokenCredProvider) GetRequestMetadata(ctx context.Context, uri ...str
 }
 
 func (cred tokenCredProvider) RequireTransportSecurity() bool {
-	return false  // Allow these to be provided over an insecure channel; this facilitates e.g. service meshes like Istio.
+	return false // Allow these to be provided over an insecure channel; this facilitates e.g. service meshes like Istio.
 }
