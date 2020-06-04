@@ -27,6 +27,7 @@ go_get(
     ],
     repo = "github.com/google/go-cloud",
     revision = "v0.17.0",
+    patch = "batch_size.patch",
     deps = [
         ":cloud-pubsub",
         ":cloud-storage",
