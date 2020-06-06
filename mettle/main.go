@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"time"
 
@@ -24,6 +25,12 @@ type StorageOpts struct {
 	TokenFile string `long:"token_file" description:"File containing a pre-shared token to authenticate to storage server with."`
 }
 
+type CacheOpts struct {
+	Dir    string       `long:"cache_dir" description:"Directory to cache blobs in"`
+	Prefix []string     `long:"cache_prefix" description:"Path prefix for cache items to store"`
+	MaxMem cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
+}
+
 var opts = struct {
 	Usage   string
 	Logging struct {
@@ -32,69 +39,56 @@ var opts = struct {
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
 	InstanceName string `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
-	API         struct {
-		GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
+	API          struct {
+		GRPC   grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 			ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
-			PreResponseQueue string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+			PreResponseQueue    string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
 		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		CacheSrcDir  string       `long:"cache_src_dir" description:"Directory to copy pre-cached blobs from initially"`
-		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
-		CacheCopy    bool         `long:"cache_copy" description:"Copy blobs from cache rather than attempting to link."`
 		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
 		Name         string       `short:"n" long:"name" description:"Name of this worker"`
 		Browser      string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
 		Lucidity     string       `long:"lucidity" description:"URL of Lucidity server to report to"`
 		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
 		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		Cache        CacheOpts    `group:"Options controlling caching"`
 		Storage      StorageOpts  `group:"Options controlling communication with the CAS server"`
-		Queues struct {
-			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+		Queues       struct {
+			RequestQueue  string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
 		GRPC         grpcutil.Opts `group:"Options controlling the gRPC server"`
-		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		NoClean      bool         `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
-		NumWorkers   int          `short:"n" long:"num_workers" default:"1" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
-		Browser      string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Lucidity     string       `long:"lucidity" description:"URL of Lucidity server to report to"`
-		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		CacheMaxSize cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
-		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
-		Storage struct {
-			Storage   string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+		Dir          string        `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		NoClean      bool          `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
+		NumWorkers   int           `short:"n" long:"num_workers" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
+		Browser      string        `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Lucidity     string        `long:"lucidity" description:"URL of Lucidity server to report to"`
+		Sandbox      string        `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout      cli.Duration  `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		MinDiskSpace cli.ByteSize  `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		Cache        CacheOpts     `group:"Options controlling caching"`
+		Storage      struct {
+			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
-	Cache struct {
-		Args struct {
-			Targets []string `positional-arg-name:"targets" required:"true" description:"Targets to watch the sources of for changes"`
-		} `positional-args:"true" required:"true"`
-		Dir     string `short:"d" long:"dir" required:"true" description:"Directory to copy data into"`
-		Storage StorageOpts  `group:"Options controlling communication with the CAS server"`
-		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't populate cache unless at least this much space is available"`
-	} `command:"cache" description:"Download artifacts to cache dir"`
 	One struct {
-		Hash         string       `long:"hash" required:"true" description:"Hash of the action digest to run"`
-		Size         int64        `long:"size" required:"true" description:"Size of the action digest to run"`
-		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		CacheDir     string       `short:"c" long:"cache_dir" description:"Directory of pre-cached blobs"`
-		CacheSrcDir  string       `long:"cache_src_dir" description:"Directory to copy pre-cached blobs from initially"`
-		CacheCopy    bool         `long:"cache_copy" description:"Copy blobs from cache rather than attempting to link."`
-		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		ProfileFile  string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
-		Storage      StorageOpts  `group:"Options controlling communication with the CAS server"`
+		Hash        string       `long:"hash" required:"true" description:"Hash of the action digest to run"`
+		Size        int64        `long:"size" required:"true" description:"Size of the action digest to run"`
+		Dir         string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		Sandbox     string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout     cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		ProfileFile string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
+		Cache       CacheOpts    `group:"Options controlling caching"`
+		Storage     StorageOpts  `group:"Options controlling communication with the CAS server"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
@@ -139,7 +133,7 @@ func main() {
 
 	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
 	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	if cmd != "one" && cmd != "cache" {
+	if cmd != "one" {
 		opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 		opts.Admin.LogInfo = info
 		go admin.Serve(opts.Admin)
@@ -148,19 +142,17 @@ func main() {
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)
+		if opts.Dual.NumWorkers == 0 {
+			opts.Dual.NumWorkers = runtime.NumCPU()
+		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, "", "", opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, !opts.Dual.NoClean, opts.Dual.Storage.TLS, false, time.Duration(opts.Dual.Timeout), int64(opts.Dual.CacheMaxSize), int64(opts.Dual.MinDiskSpace))
+			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace))
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.CacheDir, opts.Worker.CacheSrcDir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, !opts.Worker.NoClean, opts.Worker.Storage.TLS, opts.Worker.CacheCopy, time.Duration(opts.Worker.Timeout), int64(opts.Worker.CacheMaxSize), int64(opts.Worker.MinDiskSpace))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace))
 	} else if cmd == "api" {
-		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue + opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
-	} else if cmd == "cache" {
-		// We use these within MustStoreAll.
-		common.MustOpenTopic(requests)
-		common.MustOpenTopic(responses)
-		worker.NewCache(opts.Cache.Dir, "", false).MustStoreAll(opts.InstanceName, opts.Cache.Args.Targets, opts.Cache.Storage.Storage, opts.Cache.Storage.TLS, opts.Cache.Storage.TokenFile, int64(opts.Cache.MinDiskSpace))
+		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else {
 		if err := one(); err != nil {
 			log.Fatalf("%s", err)
@@ -180,5 +172,5 @@ func one() error {
 		defer f.Close()
 		defer pprof.StopCPUProfile()
 	}
-	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.CacheDir, opts.One.CacheSrcDir, opts.One.Sandbox, opts.One.Storage.TokenFile, false, opts.One.Storage.TLS, opts.One.CacheCopy, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
+	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
 }

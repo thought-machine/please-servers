@@ -33,7 +33,7 @@ const ioParallelism = 10
 const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
-func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
+func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	ts1 := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
@@ -47,7 +47,7 @@ func (w *worker) downloadDirectory(root string, digest *pb.Digest) error {
 		m[digestProto(dir).Hash] = dir
 	}
 	files := map[string]*pb.FileNode{}
-	if err := w.createDirectory(m, files, root, digest); err != nil {
+	if err := w.createDirectory(m, files, w.dir, digest); err != nil {
 		return err
 	}
 	ts3 := time.Now()
@@ -102,7 +102,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			fn := filename
 			f := file
 			g.Go(func() error {
-				return w.writeFile(fn, nil, fileMode(f.IsExecutable))
+				return w.writeFile(fn, nil, f)
 			})
 			continue
 		}
@@ -126,7 +126,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			fn := filename
 			f := file
 			g.Go(func() error {
-				return w.writeFile(fn, blob.([]byte), fileMode(f.IsExecutable))
+				return w.writeFile(fn, blob.([]byte), f)
 			})
 			continue
 		}
@@ -183,7 +183,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 			return fmt.Errorf("Unknown digest %s in response", r.Digest.Hash)
 			// The below isn't *quite* right since it assumes file modes are consistent across all files with a matching
 			// digest, which isn't actually what the protocol says....
-		} else if err := w.writeFiles(filenames, r.Data, fileMode(files[filenames[0]].IsExecutable)); err != nil {
+		} else if err := w.writeFiles(filenames, r.Data, files[filenames[0]]); err != nil {
 			return err
 		}
 		w.cache.Set(r.Digest.Hash, r.Data, int64(len(r.Data)))
@@ -201,23 +201,27 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	defer cancel()
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return fmt.Errorf("Failed to download file: %s", err)
-	} else if file.IsExecutable {
-		if err := os.Chmod(filename, 0755); err != nil {
-			return fmt.Errorf("Failed to chmod file: %s", err)
-		}
+	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
+		return fmt.Errorf("Failed to chmod file: %s", err)
 	}
+	w.fileCache.Store(w.dir, filename, file.Digest.Hash)
 	return nil
 }
 
 // writeFile writes a blob to disk.
-func (w *worker) writeFile(filename string, data []byte, mode os.FileMode) error {
+func (w *worker) writeFile(filename string, data []byte, f *pb.FileNode) error {
 	w.iolimiter <- struct{}{}
 	defer func() { <-w.iolimiter }()
-	return ioutil.WriteFile(filename, data, mode)
+	if err := ioutil.WriteFile(filename, data, fileMode(f.IsExecutable)); err != nil {
+		return err
+	}
+	w.fileCache.Store(w.dir, filename, f.Digest.Hash)
+	return nil
 }
 
 // writeFiles writes a blob to a series of files.
-func (w *worker) writeFiles(filenames []string, data []byte, mode os.FileMode) error {
+func (w *worker) writeFiles(filenames []string, data []byte, f *pb.FileNode) error {
+	mode := fileMode(f.IsExecutable)
 	w.iolimiter <- struct{}{}
 	defer func() { <-w.iolimiter }()
 	// We could potentially be slightly smarter here by writing only the first file and linking others, although
@@ -227,6 +231,7 @@ func (w *worker) writeFiles(filenames []string, data []byte, mode os.FileMode) e
 			return err
 		}
 	}
+	w.fileCache.StoreAny(w.dir, filenames, f.Digest.Hash)
 	return nil
 }
 
