@@ -114,7 +114,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, cacheSrcDir, sandbox, to
 	}
 	// Have to do this async since mempubsub doesn't seem to store messages?
 	go func() {
-		time.Sleep(500 * time.Millisecond)  // this is dodgy obvs
+		time.Sleep(500 * time.Millisecond) // this is dodgy obvs
 		b, _ := proto.Marshal(&pb.ExecuteRequest{
 			InstanceName: instanceName,
 			ActionDigest: &pb.Digest{
@@ -191,7 +191,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if clean {
 		files, err := ioutil.ReadDir(dir)
 		if err != nil {
-			return nil, err  // If we can't even list the directory, may as well bomb out now.
+			return nil, err // If we can't even list the directory, may as well bomb out now.
 		}
 		for _, file := range files {
 			if err := os.RemoveAll(path.Join(dir, file.Name())); err != nil {
@@ -267,7 +267,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if lucidity != "" {
 		w.lucidChan = make(chan *lpb.UpdateRequest, 100)
 		log.Notice("Dialling Lucidity...")
-		conn, err := grpcutil.Dial(lucidity, true, "", tokenFile)  // CA is currently not configurable.
+		conn, err := grpcutil.Dial(lucidity, true, "", tokenFile) // CA is currently not configurable.
 		if err != nil {
 			return nil, fmt.Errorf("Failed to dial Lucidity server: %s", err)
 		}
@@ -305,7 +305,7 @@ type worker struct {
 	metadataFetch   time.Duration
 	dirCreation     time.Duration
 	fileDownload    time.Duration
-	lastURL         string  // This is reset somewhat lazily.
+	lastURL         string // This is reset somewhat lazily.
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
@@ -518,11 +518,12 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if _, err := w.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
+	ar, err := w.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
 		InstanceName: w.client.InstanceName,
 		ActionDigest: w.actionDigest,
 		ActionResult: ar,
-	}); err != nil {
+	})
+	if err != nil {
 		log.Error("Failed to upload action result: %s", err)
 		return &pb.ExecuteResponse{
 			Status: status(codes.Internal, "Failed to upload action result: %s", err),

@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/flair/trie"
+	"github.com/thought-machine/please-servers/grpcutil"
 	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
@@ -68,7 +68,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				pb.DigestFunction_SHA256,
 			},
 			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
-				UpdateEnabled: true,
+				UpdateEnabled: false,
 			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 		},
@@ -328,7 +328,10 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	var resp *bs.WriteResponse
 	if err := s.replicator.Parallel(hash, func(s *trie.Server) error {
 		ch := <-chch
-		defer func() { for range ch {} }()  // Ensure we exhaust this channel if anything goes wrong
+		defer func() {
+			for range ch {
+			}
+		}() // Ensure we exhaust this channel if anything goes wrong
 		client, err := s.BS.Write(srv.Context())
 		if err != nil {
 			return err

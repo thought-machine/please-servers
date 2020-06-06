@@ -13,8 +13,8 @@ import (
 	"io/ioutil"
 	"path"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,8 +37,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	rpb "github.com/thought-machine/please-servers/proto/record"
 	"github.com/thought-machine/please-servers/grpcutil"
+	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
 const timeout = 2 * time.Minute
@@ -139,7 +139,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				pb.DigestFunction_SHA256,
 			},
 			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
-				UpdateEnabled: true,
+				UpdateEnabled: false,
 			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 		},
@@ -167,6 +167,13 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 }
 
 func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
+	if ar, err := s.GetActionResult(ctx, &pb.GetActionResultRequest{
+		InstanceName: req.InstanceName,
+		ActionDigest: req.ActionDigest,
+	}); err == nil {
+		log.Debug("Returning existing action result for UpdateActionResult request for %s", req.ActionDigest.Hash)
+		return ar, nil
+	}
 	return req.ActionResult, s.writeMessage(ctx, "ac", req.ActionDigest, req.ActionResult)
 }
 
@@ -323,7 +330,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
 	} else if req.ReadLimit == 0 {
 		req.ReadLimit = -1
-	} else if req.ReadOffset + req.ReadLimit > digest.SizeBytes {
+	} else if req.ReadOffset+req.ReadLimit > digest.SizeBytes {
 		req.ReadLimit = digest.SizeBytes - req.ReadOffset
 	}
 	s.limiter <- struct{}{}
@@ -412,7 +419,7 @@ func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
 	if !strings.HasSuffix(key, "/...") {
 		return s.queryOne(ctx, key)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10 * time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	iter := s.bucket.List(&blob.ListOptions{Prefix: strings.TrimSuffix(key, "...")})
 	ret := []*rpb.Digest{}
@@ -455,7 +462,7 @@ func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error
 		return nil, err
 	} else if len(digest.Hash) != 64 {
 		log.Error("Invalid digest for %s: %s", key, digest)
-		return nil, nil  // Don't fail the whole RPC on this
+		return nil, nil // Don't fail the whole RPC on this
 	}
 	return []*rpb.Digest{digest}, nil
 }
@@ -586,7 +593,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	n, err := io.Copy(wr, r)
 	bytesReceived.Add(float64(n))
 	if err != nil {
-		cancel()  // ensure this happens before w.Close()
+		cancel() // ensure this happens before w.Close()
 		return err
 	}
 	if prefix == "cas" {
