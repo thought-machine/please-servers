@@ -4,7 +4,6 @@ go_library(
     deps = [
         "//grpcutil",
         "//proto:lucidity",
-        "//proto:record",
         "//third_party/go/gocloud",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",

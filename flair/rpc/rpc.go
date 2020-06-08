@@ -24,7 +24,6 @@ import (
 
 	"github.com/thought-machine/please-servers/flair/trie"
 	"github.com/thought-machine/please-servers/grpcutil"
-	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
 var log = cli.MustGetLogger()
@@ -42,7 +41,6 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
-	rpb.RegisterRecorderServer(s, srv)
 	if assetReplicator != nil {
 		apb.RegisterFetchServer(s, srv)
 	}
@@ -450,15 +448,4 @@ func (s *server) streamExecution(client pb.Execution_ExecuteClient, server pb.Ex
 			return err
 		}
 	}
-}
-
-// Record and Query are silently unimplemented for now. They are nontrivial in terms of how we
-// distribute & later retrieve the recorded digests (e.g. Query probably needs to be able to hit all servers).
-// Right now we don't actually need it to work in this scenario anyway.
-func (s *server) Record(ctx context.Context, req *rpb.RecordRequest) (*rpb.RecordResponse, error) {
-	return &rpb.RecordResponse{}, nil
-}
-
-func (s *server) Query(ctx context.Context, req *rpb.QueryRequest) (*rpb.QueryResponse, error) {
-	return &rpb.QueryResponse{}, nil
 }

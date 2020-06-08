@@ -37,7 +37,6 @@ import (
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
-	rpb "github.com/thought-machine/please-servers/proto/record"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 )
 
@@ -237,7 +236,6 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		requests:   common.MustOpenSubscription(requestQueue),
 		responses:  common.MustOpenTopic(responseQueue),
 		client:     client,
-		recorder:   rpb.NewRecorderClient(client.CASConnection),
 		rootDir:    abspath,
 		clean:      clean,
 		home:       home,
@@ -282,7 +280,6 @@ type worker struct {
 	requests     *pubsub.Subscription
 	responses    *pubsub.Topic
 	client       *client.Client
-	recorder     rpb.RecorderClient
 	lucidity     lpb.LucidityClient
 	lucidChan    chan *lpb.UpdateRequest
 	cache        *ristretto.Cache
@@ -502,19 +499,6 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
 	uploadDurations.Observe(end.Sub(execEnd).Seconds())
-	if label := getEnvVar(command, "_TARGET"); label != "" {
-		ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
-		defer cancel()
-		if _, err := w.recorder.Record(ctx, &rpb.RecordRequest{
-			Name: label,
-			Digest: &rpb.Digest{
-				Hash:      w.actionDigest.Hash,
-				SizeBytes: w.actionDigest.SizeBytes,
-			},
-		}); err != nil {
-			log.Error("Failed to record action: %s", err)
-		}
-	}
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()

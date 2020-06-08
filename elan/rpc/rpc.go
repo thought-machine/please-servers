@@ -30,7 +30,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -38,7 +37,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
-	rpb "github.com/thought-machine/please-servers/proto/record"
 )
 
 const timeout = 2 * time.Minute
@@ -118,7 +116,6 @@ func ServeForever(opts grpcutil.Opts, cachePort int, storage, self string, peers
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
-	rpb.RegisterRecorderServer(s, srv)
 	grpcutil.ServeForever(lis, s)
 }
 
@@ -389,82 +386,6 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 	// We don't track partial writes or allow resuming them. Might add later if plz gains
 	// the ability to do this as a client.
 	return nil, status.Errorf(codes.NotFound, "write %s not found", req.ResourceName)
-}
-
-func (s *server) Record(ctx context.Context, req *rpb.RecordRequest) (*rpb.RecordResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	b, _ := proto.Marshal(req.Digest)
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
-	if err := s.bucket.WriteAll(ctx, s.labelKey(req.Name), b, nil); err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to write record: %s", err)
-	}
-	return &rpb.RecordResponse{}, nil
-}
-
-func (s *server) Query(ctx context.Context, req *rpb.QueryRequest) (*rpb.QueryResponse, error) {
-	resp := &rpb.QueryResponse{}
-	for _, query := range req.Queries {
-		digests, err := s.query(ctx, s.labelKey(query))
-		if err != nil {
-			return nil, err
-		}
-		resp.Digests = append(resp.Digests, digests...)
-	}
-	return resp, nil
-}
-
-func (s *server) query(ctx context.Context, key string) ([]*rpb.Digest, error) {
-	if !strings.HasSuffix(key, "/...") {
-		return s.queryOne(ctx, key)
-	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	iter := s.bucket.List(&blob.ListOptions{Prefix: strings.TrimSuffix(key, "...")})
-	ret := []*rpb.Digest{}
-	var g errgroup.Group
-	var mtx sync.Mutex
-	for {
-		obj, err := iter.Next(ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		} else if obj.IsDir {
-			continue
-		}
-		key := obj.Key
-		g.Go(func() error {
-			digest, err := s.queryOne(ctx, key)
-			if err != nil {
-				return err
-			}
-			mtx.Lock()
-			defer mtx.Unlock()
-			ret = append(ret, digest...)
-			return nil
-		})
-	}
-	return ret, g.Wait()
-}
-
-func (s *server) queryOne(ctx context.Context, key string) ([]*rpb.Digest, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	digest := &rpb.Digest{}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
-	b, err := s.bucket.ReadAll(ctx, key)
-	if err != nil {
-		return nil, err
-	} else if err := proto.Unmarshal(b, digest); err != nil {
-		return nil, err
-	} else if len(digest.Hash) != 64 {
-		log.Error("Invalid digest for %s: %s", key, digest)
-		return nil, nil // Don't fail the whole RPC on this
-	}
-	return []*rpb.Digest{digest}, nil
 }
 
 func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {

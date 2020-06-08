@@ -7,38 +7,34 @@ import (
 	"fmt"
 	"strings"
 
-	"google.golang.org/grpc"
-	bs "google.golang.org/genproto/googleapis/bytestream"
 	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-
-	rpb "github.com/thought-machine/please-servers/proto/record"
-
+	bs "google.golang.org/genproto/googleapis/bytestream"
+	"google.golang.org/grpc"
 )
 
 // A Trie provides fast lookups on hash keys.
 type Trie struct {
 	dialCallback DialCallback
-	root node
-	nodes []node  // premature optimisation
-	servers []Server
+	root         node
+	nodes        []node // premature optimisation
+	servers      []Server
 }
 
 // A Server holds several gRPC connections to the same server.
 type Server struct {
-	CAS pb.ContentAddressableStorageClient
-	AC  pb.ActionCacheClient
-	BS  bs.ByteStreamClient
-	Rec rpb.RecorderClient
-	Exe pb.ExecutionClient
+	CAS   pb.ContentAddressableStorageClient
+	AC    pb.ActionCacheClient
+	BS    bs.ByteStreamClient
+	Exe   pb.ExecutionClient
 	Fetch apb.FetchClient
 	Start string
-	End string
+	End   string
 }
 
 // A node represents a single node within the trie.
 type node struct {
-	children [16]struct{
+	children [16]struct {
 		server *Server
 		node   *node
 	}
@@ -107,14 +103,13 @@ func (t *Trie) AddRange(start, end, address string) error {
 	}
 	// We always set up all clients here, even if they won't all be used for this connection.
 	s := Server{
-		CAS: pb.NewContentAddressableStorageClient(conn),
-		AC:  pb.NewActionCacheClient(conn),
-		BS:  bs.NewByteStreamClient(conn),
-		Rec: rpb.NewRecorderClient(conn),
-		Exe: pb.NewExecutionClient(conn),
+		CAS:   pb.NewContentAddressableStorageClient(conn),
+		AC:    pb.NewActionCacheClient(conn),
+		BS:    bs.NewByteStreamClient(conn),
+		Exe:   pb.NewExecutionClient(conn),
 		Fetch: apb.NewFetchClient(conn),
 		Start: start,
-		End: end,
+		End:   end,
 	}
 	t.servers = append(t.servers, s)
 	return t.add(&t.root, start, end, &s)
@@ -138,24 +133,41 @@ func (t *Trie) add(n *node, start, end string, server *Server) error {
 }
 
 func toInt(c byte) int {
-	switch(c) {
-	case '0': return 0
-	case '1': return 1
-	case '2': return 2
-	case '3': return 3
-	case '4': return 4
-	case '5': return 5
-	case '6': return 6
-	case '7': return 7
-	case '8': return 8
-	case '9': return 9
-	case 'a', 'A': return 10
-	case 'b', 'B': return 11
-	case 'c', 'C': return 12
-	case 'd', 'D': return 13
-	case 'e', 'E': return 14
-	case 'f', 'F': return 15
-	default: return 0 // Shouldn't happen...
+	switch c {
+	case '0':
+		return 0
+	case '1':
+		return 1
+	case '2':
+		return 2
+	case '3':
+		return 3
+	case '4':
+		return 4
+	case '5':
+		return 5
+	case '6':
+		return 6
+	case '7':
+		return 7
+	case '8':
+		return 8
+	case '9':
+		return 9
+	case 'a', 'A':
+		return 10
+	case 'b', 'B':
+		return 11
+	case 'c', 'C':
+		return 12
+	case 'd', 'D':
+		return 13
+	case 'e', 'E':
+		return 14
+	case 'f', 'F':
+		return 15
+	default:
+		return 0 // Shouldn't happen...
 	}
 }
 
@@ -170,7 +182,7 @@ func (t *Trie) GetOffset(key string, offset int) *Server {
 	node := &t.root
 	for {
 		idx := toInt(key[0]) + offset
-		child := &node.children[idx % 16]
+		child := &node.children[idx%16]
 		if child.server != nil {
 			return child.server
 		}

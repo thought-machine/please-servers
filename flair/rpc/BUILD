@@ -3,7 +3,6 @@ go_library(
     srcs = glob(["*.go"]),
     deps = [
         "//grpcutil",
-        "//proto:record",
         "//flair/trie",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
