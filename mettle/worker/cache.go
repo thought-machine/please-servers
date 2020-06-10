@@ -70,7 +70,9 @@ func (c *cache) shouldStore(dir, src string) bool {
 func (c *cache) store(src, key string) {
 	log.Debug("Storing blob %s (from %s) in local cache", key, src)
 	dest := c.path(key)
-	if err := os.MkdirAll(path.Dir(dest), os.ModeDir|0755); err != nil {
+	if _, err := os.Stat(dest); err == nil {
+		log.Debug("Artifact %s already exists in cache, not storing", key)
+	} else if err := os.MkdirAll(path.Dir(dest), os.ModeDir|0755); err != nil {
 		log.Warning("Failed to store %s in cache: %s", src, err)
 	} else if err := c.copier.LinkMode(src, dest, 0555); err != nil {
 		log.Warning("Failed to store %s in cache: %s", src, err)

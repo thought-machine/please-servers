@@ -60,12 +60,14 @@ var hotEvictionsTotal = prometheus.NewGauge(prometheus.GaugeOpts{
 // newCache returns a new cache based on the given settings.
 func newCache(s *server, host string, port int, self string, peers []string, maxSize, maxItemSize int64) *cache {
 	pool := groupcache.NewHTTPPoolOpts(self, &groupcache.HTTPPoolOptions{})
-	mux := http.NewServeMux()
-	mux.Handle("/_groupcache/", pool)
-	go func() {
-		log.Notice("Serving groupcache on %s:%d", host, port)
-		log.Fatalf("http.ListenAndServe failed: %s", http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), mux))
-	}()
+	if len(peers) > 0 {
+		go func() {
+			mux := http.NewServeMux()
+			mux.Handle("/_groupcache/", pool)
+			log.Notice("Serving groupcache on %s:%d", host, port)
+			log.Fatalf("http.ListenAndServe failed: %s", http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), mux))
+		}()
+	}
 	c := &cache{
 		server:      s,
 		pool:        pool,
@@ -192,7 +194,7 @@ func (c *cache) resolveAddress(address string) ([]string, error) {
 		if addr == c.selfIP {
 			log.Debug("Skipping self (%s) from cache peers", addr)
 		} else {
-			ret = append(ret, addr + ":" + parts[1])
+			ret = append(ret, addr+":"+parts[1])
 		}
 	}
 	return ret, err
