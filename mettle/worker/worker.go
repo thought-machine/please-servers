@@ -543,8 +543,7 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 		return ""
 	}
 	w.lastURL = fmt.Sprintf("%s/uncached_action_result/%s/%s/%d/", w.browserURL, w.client.InstanceName, digest.Hash, digest.Size)
-	s := "\nFailed action details: " + w.lastURL + "\n"
-	return s + "\n      Original action: " + w.actionURL() + "\n"
+	return "\nFailed action details: " + w.lastURL + "\n      Original action: " + w.actionURL()
 }
 
 // actionURL returns a browser URL for the currently executed action, or the empty string if no browser is configured.
