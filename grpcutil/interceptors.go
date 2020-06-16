@@ -13,18 +13,21 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
+
+	// Register the gzip compressor on the server side.
+	_ "google.golang.org/grpc/encoding/gzip"
 )
 
 // Opts is the set of common options for gRPC servers.
 type Opts struct {
-	Host        string `long:"host" description:"Host to listen on"`
-	Port        int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
-	KeyFile  string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
-	CertFile string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
+	Host      string `long:"host" description:"Host to listen on"`
+	Port      int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
+	KeyFile   string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
+	CertFile  string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	TokenFile string `long:"token_file" description:"File containing a pre-shared token that clients must provide as authentication."`
-	AuthAll bool `long:"auth_all" description:"Require authentication on all RPCs (by default only on RPCs that mutate state)"`
+	AuthAll   bool   `long:"auth_all" description:"Require authentication on all RPCs (by default only on RPCs that mutate state)"`
 }
 
 // NewServer creates a new gRPC server with a standard set of interceptors.
@@ -68,7 +71,7 @@ func unaryAuthInterceptor(opts Opts) []grpc.UnaryServerInterceptor {
 	}
 	token := strings.TrimSpace(string(contents))
 	return []grpc.UnaryServerInterceptor{
-		func (ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 			if err := authenticate(ctx, info.FullMethod, token, opts.AuthAll); err != nil {
 				return nil, err
 			}
@@ -93,29 +96,29 @@ func streamAuthInterceptor(opts Opts) []grpc.StreamServerInterceptor {
 }
 
 var (
-	errMissingToken     = status.Errorf(codes.Unauthenticated, "No auth token provided")
-	errTooManyTokens    = status.Errorf(codes.Unauthenticated, "More than one auth token provided")
-	errUnauthenticated  = status.Errorf(codes.Unauthenticated, "Invalid auth token")
+	errMissingToken    = status.Errorf(codes.Unauthenticated, "No auth token provided")
+	errTooManyTokens   = status.Errorf(codes.Unauthenticated, "More than one auth token provided")
+	errUnauthenticated = status.Errorf(codes.Unauthenticated, "Invalid auth token")
 )
 
 var authenticatedMethods = map[string]bool{
-	"/build.bazel.remote.execution.v2.Capabilities/GetCapabilities": false,
-	"/build.bazel.remote.asset.v1.Fetch/FetchBlob": true,
-	"/build.bazel.remote.asset.v1.Fetch/FetchDirectory": true,
-	"/build.bazel.remote.execution.v2.ActionCache/GetActionResult": false,
-	"/build.bazel.remote.execution.v2.ActionCache/UpdateActionResult": true,
-	"/build.bazel.remote.execution.v2.ContentAddressableStorage/BatchReadBlobs": false,
+	"/build.bazel.remote.execution.v2.Capabilities/GetCapabilities":               false,
+	"/build.bazel.remote.asset.v1.Fetch/FetchBlob":                                true,
+	"/build.bazel.remote.asset.v1.Fetch/FetchDirectory":                           true,
+	"/build.bazel.remote.execution.v2.ActionCache/GetActionResult":                false,
+	"/build.bazel.remote.execution.v2.ActionCache/UpdateActionResult":             true,
+	"/build.bazel.remote.execution.v2.ContentAddressableStorage/BatchReadBlobs":   false,
 	"/build.bazel.remote.execution.v2.ContentAddressableStorage/BatchUpdateBlobs": true,
 	"/build.bazel.remote.execution.v2.ContentAddressableStorage/FindMissingBlobs": false,
-	"/build.bazel.remote.execution.v2.ContentAddressableStorage/GetTree": false,
-	"/build.bazel.remote.execution.v2.Execution/Execute": true,
-	"/build.bazel.remote.execution.v2.Execution/WaitExecution": true,
-	"/build.please.remote.record.Recorder/Query": false,
-	"/build.please.remote.record.Recorder/Record": true,
-	"/google.bytestream.ByteStream/QueryWriteStatus": true,
-	"/google.bytestream.ByteStream/Read": false,
-	"/google.bytestream.ByteStream/Write": true,
-	"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo": false,
+	"/build.bazel.remote.execution.v2.ContentAddressableStorage/GetTree":          false,
+	"/build.bazel.remote.execution.v2.Execution/Execute":                          true,
+	"/build.bazel.remote.execution.v2.Execution/WaitExecution":                    true,
+	"/build.please.remote.record.Recorder/Query":                                  false,
+	"/build.please.remote.record.Recorder/Record":                                 true,
+	"/google.bytestream.ByteStream/QueryWriteStatus":                              true,
+	"/google.bytestream.ByteStream/Read":                                          false,
+	"/google.bytestream.ByteStream/Write":                                         true,
+	"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo":              false,
 }
 
 // authenticate authenticates an incoming RPC and returns an error if it's not permitted.
