@@ -57,6 +57,9 @@ func (c *cache) StoreAny(dir string, srcs []string, key string) {
 
 // shouldStore returns true if the cache should store a file by this name.
 func (c *cache) shouldStore(dir, src string) bool {
+	if c == nil {
+		return false
+	}
 	src = strings.TrimLeft(strings.TrimPrefix(src, dir), "/")
 	for _, p := range c.prefixes {
 		if strings.HasPrefix(src, p) {
