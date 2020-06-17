@@ -27,12 +27,26 @@ message UpdateRequest {
   bool alive = 7;
   // A URL containing the last unit of work the server performed.
   string last_task = 8;
+  // Server-side only; indicates whether this server has been shut down.
+  bool disabled = 9;
 }
 
-message UpdateResponse {}
+message UpdateResponse {
+  // True if the receiving server should become unavailable until it receives
+  // another response saying it's ok to come back to life again.
+  bool should_disable = 1;
+}
 
 // This is not part of the actual RPC API but is used to serve from HTTP.
 message Workers {
   // List of all the currently known workers.
   repeated UpdateRequest workers = 1;
+}
+
+// This is part of the HTTP API; the request to disable a worker.
+message Disable {
+  // Name of the worker to disable
+  string name = 1;
+  // If true, worker is disabled; if false, it will become enabled.
+  bool disable = 2;
 }

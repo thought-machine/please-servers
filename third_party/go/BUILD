@@ -91,7 +91,7 @@ go_get(
         "tap",
     ],
     repo = "github.com/grpc/grpc-go",
-    revision = "v1.26.0",
+    revision = "v1.29.1",
     deps = [
         ":cmp",
         ":oauth2",
@@ -295,7 +295,7 @@ go_get(
         "jws",
         "jwt",
     ],
-    revision = "d668ce993890a79bda886613ee587a69dd5da7a6",
+    revision = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
     visibility = ["//third_party/go/..."],
     deps = [
         ":cloud-metadata",

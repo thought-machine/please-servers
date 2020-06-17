@@ -158,6 +158,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}()
 	for {
 		w.waitForFreeSpace()
+		w.waitIfDisabled()
 		w.Report(true, false, true, "Awaiting next task...")
 		if _, err := w.RunTask(ctx); err != nil {
 			if ctx.Err() != nil {
@@ -289,6 +290,7 @@ type worker struct {
 	browserURL   string
 	sandbox      string
 	clean        bool
+	disabled     bool
 	timeout      time.Duration
 	fileCache    *cache
 	startTime    time.Time

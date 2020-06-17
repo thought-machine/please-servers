@@ -29,7 +29,7 @@ func (w *worker) Report(healthy, busy, alive bool, status string, args ...interf
 
 // sendReports sends reports to Lucidity indefinitely.
 func (w *worker) sendReports() {
-	t := time.NewTicker(5 * time.Minute)
+	t := time.NewTicker(5 * time.Second)
 	var last *lpb.UpdateRequest
 	for {
 		select {
@@ -47,8 +47,11 @@ func (w *worker) sendReports() {
 func (w *worker) sendReport(report *lpb.UpdateRequest) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := w.lucidity.Update(ctx, report); err != nil {
+	if resp, err := w.lucidity.Update(ctx, report); err != nil {
 		log.Warning("Failed to report status to Lucidity: %s", err)
+	} else if resp.ShouldDisable && !w.disabled {
+		log.Warning("Server has disabled us!")
+		w.disabled = true
 	}
 }
 
@@ -79,5 +82,18 @@ func (w *worker) checkFreeSpace() bool {
 	} else {
 		log.Debug("Disk free space %d is over healthy threshold %d", avail, w.diskSpace)
 		return true
+	}
+}
+
+// waitIfDisabled waits until the server marks this worker as enabled again.
+func (w *worker) waitIfDisabled() {
+	if w.disabled {
+		log.Warning("Waiting until we are re-enabled to accept another build...")
+		for range time.NewTicker(10 * time.Second).C {
+			if !w.disabled {
+				log.Notice("Server has re-enabled us, continuing")
+				return
+			}
+		}
 	}
 }

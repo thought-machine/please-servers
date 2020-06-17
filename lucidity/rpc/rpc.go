@@ -54,7 +54,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration) {
+func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, audience string, allowedUsers []string) {
 	srv := &server{}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterLucidityServer(s, srv)
@@ -62,8 +62,10 @@ func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/workers", srv.ServeWorkers)
 	mux.HandleFunc("/", srv.ServeAsset)
+	mux.HandleFunc("/disable", srv.ServeDisable)
+	authed := maybeAddValidation(mux, audience, allowedUsers)
 	log.Notice("Serving HTTP on %s:%d", opts.Host, httpPort)
-	go http.ListenAndServe(fmt.Sprintf("%s:%d", opts.Host, httpPort), mux)
+	go http.ListenAndServe(fmt.Sprintf("%s:%d", opts.Host, httpPort), authed)
 	go srv.Clean(maxAge)
 	grpcutil.ServeForever(lis, s)
 }
@@ -81,13 +83,15 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 		}
 	}
 	req.UpdateTime = time.Now().Unix()
+	v, ok := s.workers.Load(req.Name)
+	req.Disabled = ok && v.(*pb.UpdateRequest).Disabled
 	s.workers.Store(req.Name, req)
 	liveWorkers.WithLabelValues(req.Name).Set(f(req.Alive))
 	deadWorkers.WithLabelValues(req.Name).Set(f(!req.Alive))
 	healthyWorkers.WithLabelValues(req.Name).Set(f(req.Healthy))
 	unhealthyWorkers.WithLabelValues(req.Name).Set(f(!req.Healthy))
 	busyWorkers.WithLabelValues(req.Name).Set(f(req.Busy))
-	return &pb.UpdateResponse{}, nil
+	return &pb.UpdateResponse{ShouldDisable: req.Disabled}, nil
 }
 
 func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +122,22 @@ func (s *server) ServeAsset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", mime.TypeByExtension(path.Ext(r.URL.Path)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(asset)
+}
+
+func (s *server) ServeDisable(w http.ResponseWriter, r *http.Request) {
+	req := &pb.Disable{}
+	if r.Method != http.MethodPost {
+		log.Warning("Rejecting request to %s with method %s", r.URL.Path, r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	} else if err := jsonpb.Unmarshal(r.Body, req); err != nil {
+		log.Warning("Invalid request: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
+	} else if v, ok := s.workers.Load(req.Name); !ok {
+		log.Warning("Request to disable unknown worker %s", req.Name)
+		w.WriteHeader(http.StatusNotFound)
+	} else {
+		v.(*pb.UpdateRequest).Disabled = req.Disable
+	}
 }
 
 // Clean periodically checks all known workers and discards any older than the given duration.

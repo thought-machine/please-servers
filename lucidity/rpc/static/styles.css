@@ -57,7 +57,7 @@ th {
   color: #f4f4f4 !important;
 }
 
-.dead {
+.dead, .disabled {
   background-color: #636363;
 }
 

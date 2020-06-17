@@ -34,7 +34,7 @@ go_get(
         ":gax-go",
         ":go.opencensus.io",
         "//third_party/go:grpc",
-        ":oauth2",
+        "//third_party/go:oauth2",
         ":wire",
         ":x_errors",
     ],
@@ -117,16 +117,19 @@ go_get(
     install = [
         "calendar/v3",
         "googleapi",
-        "googleapi/internal/uritemplates",
         "googleapi/transport",
+        "idtoken",
         "internal",
         "internal/gensupport",
+        "internal/third_party/uritemplates",
         "iterator",
         "option",
+        "option/internaloption",
         "storage/v1",
         "sheets/v4",
         "support/bundler",
         "transport",
+        "transport/cert",
         "transport/grpc",
         "transport/http",
         "transport/http/internal/propagation",
@@ -136,13 +139,13 @@ go_get(
         "drive/v3",
     ],
     repo = "https://github.com/googleapis/google-api-go-client",
-    revision = "v0.11.0",
+    revision = "v0.27.0",
     deps = [
         ":gax-go",
         ":go.opencensus.io",
         ":semaphore",
         "//third_party/go:grpc",
-        ":oauth2",
+        "//third_party/go:oauth2",
     ],
 )
 
@@ -177,24 +180,6 @@ go_get(
         "lru",
     ],
     revision = "404acd9df4cc9859d64fb9eed42e5c026187287a",
-)
-
-go_get(
-    name = "oauth2",
-    get = "golang.org/x/oauth2",
-    install = [
-        "",
-        "google",
-        "internal",
-        "jws",
-        "jwt",
-    ],
-    revision = "d668ce993890a79bda886613ee587a69dd5da7a6",
-    deps = [
-        ":cloud-metadata",
-        "//third_party/go:net",
-    ],
-    visibility = ["//third_party/go/..."],
 )
 
 go_get(
