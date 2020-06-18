@@ -167,7 +167,8 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 				return fmt.Errorf("terminated by signal")
 			}
 			// If we get an error back here, we have failed to communicate with one of
-			// our queues, so we are basically doomed and should stop.
+			// our queues or something else bad happened internally  so we are basically doomed
+			// and should stop.
 			err = fmt.Errorf("Failed to run task: %s", err)
 			w.Report(false, false, false, err.Error())
 			return err
@@ -320,13 +321,14 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 		log.Error("Error receiving message: %s", err)
 		return nil, err
 	}
-	// Mark message as consumed now. Alternatively we could not ack it until we
-	// run the command, but we *probably* want to do that kind of retrying at a
-	// higher level. TBD.
-	msg.Ack()
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
 	response := w.runTask(msg.Body)
+	if shouldNack(response) {
+		msg.Nack()
+		return response, fmt.Errorf("Execution failed: %s", response.Status)
+	}
+	msg.Ack()
 	return response, w.update(pb.ExecutionStage_COMPLETED, response)
 }
 
@@ -672,4 +674,19 @@ func getEnvVar(command *pb.Command, name string) string {
 		}
 	}
 	return ""
+}
+
+// shouldNack returns true if a status corresponds to something we should attempt to
+// retry at a higher level by nack'ing the message to get it redelivered to someone else.
+// This is a bit different to retryable gRPC errors where we wouldn't consider Internal retryable,
+// but if we ourselves have encountered an Internal error we can hope someone else will be OK.
+func shouldNack(response *pb.ExecuteResponse) bool {
+	if response.Status == nil {
+		return false // should nae get here
+	}
+	switch codes.Code(response.Status.Code) {
+	case codes.Internal, codes.Canceled, codes.DeadlineExceeded, codes.ResourceExhausted:
+		return true
+	}
+	return false
 }

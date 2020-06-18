@@ -16,6 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -178,9 +179,9 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	}
 	for _, r := range resp.Responses {
 		if r.Status.Code != int32(codes.OK) {
-			return fmt.Errorf("Error fetching %s: %s", r.Digest.Hash, r.Status.Message)
+			return grpcstatus.Errorf(codes.Code(r.Status.Code), "Error fetching %s: %s", r.Digest.Hash, r.Status.Message)
 		} else if filenames, present := digestToFilenames[r.Digest.Hash]; !present {
-			return fmt.Errorf("Unknown digest %s in response", r.Digest.Hash)
+			return grpcstatus.Errorf(codes.InvalidArgument, "Unknown digest %s in response", r.Digest.Hash)
 			// The below isn't *quite* right since it assumes file modes are consistent across all files with a matching
 			// digest, which isn't actually what the protocol says....
 		} else if err := w.writeFiles(filenames, r.Data, files[filenames[0]]); err != nil {
@@ -200,7 +201,7 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
-		return fmt.Errorf("Failed to download file: %s", err)
+		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
 	}

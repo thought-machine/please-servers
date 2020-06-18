@@ -77,6 +77,11 @@ func (w *worker) checkFreeSpace() bool {
 		log.Error("Failed to statfs %s: %s", w.rootDir, err)
 		w.Report(false, false, true, "Failed statfs: %s", err)
 		return false
+	} else if (statfs.Flags & syscall.MS_RDONLY) == syscall.MS_RDONLY {
+		// This should really be ST_RDONLY but syscall doesn't define it and they happen to be the same.
+		log.Error("Read-only file system")
+		w.Report(false, false, true, "Filesystem has gone read-only")
+		return false
 	} else if avail := int64(statfs.Bsize) * int64(statfs.Bavail); avail < w.diskSpace {
 		log.Warning("Disk free space %d is under healthy threshold %d, will not accept new jobs until resolved", avail, w.diskSpace)
 		w.Report(false, false, true, "Low disk space: %s free", humanize.Bytes(uint64(avail)))
