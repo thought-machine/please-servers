@@ -29,7 +29,7 @@ func (w *worker) Report(healthy, busy, alive bool, status string, args ...interf
 
 // sendReports sends reports to Lucidity indefinitely.
 func (w *worker) sendReports() {
-	t := time.NewTicker(5 * time.Second)
+	t := time.NewTicker(5 * time.Minute)
 	var last *lpb.UpdateRequest
 	for {
 		select {
@@ -45,7 +45,7 @@ func (w *worker) sendReports() {
 }
 
 func (w *worker) sendReport(report *lpb.UpdateRequest) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if resp, err := w.lucidity.Update(ctx, report); err != nil {
 		log.Warning("Failed to report status to Lucidity: %s", err)

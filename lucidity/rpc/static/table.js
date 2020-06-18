@@ -19,7 +19,7 @@ function drawTable() {
             w.alive,
             w.healthy,
             w.healthy && !w.busy,
-            `<a href="/disable" onClick="return disable('${w.name}', ${!w.disabled})">${w.disabled ? '✗' : '✓'}</a>`,
+            link(w.name, w.disabled),
             moment.duration(moment().diff(moment.unix(w.start_time)), "milliseconds").format("d[d] h[h] m[m] s[s]", {trim: 'both'}),
             moment.duration(moment().diff(moment.unix(w.update_time)), "milliseconds").format("d[d] h[h] m[m] s[s]", {trim: 'both'}),
             w.last_task ? `<a href="${w.last_task}">Last task</a>` : '',
@@ -63,7 +63,7 @@ function addStyles() {
     $('td:contains(✔):nth-child(3)').parent().addClass('alive unhealthy').removeClass('dead');
     $('td:contains(✔):nth-child(4)').parent().addClass('healthy').removeClass('alive dead unhealthy');
     $('td:contains(✔):nth-child(5)').parent().addClass('free').removeClass('alive healthy');
-    $('td:contains(✗):nth-child(6)').parent().addClass('disabled').removeClass('alive healthy');
+    $('td:contains("✗"):nth-child(6)').parent().addClass('disabled').removeClass('alive healthy');
     $('td:contains(✔)').addClass('tick');
 }
 
@@ -73,6 +73,10 @@ function disable(name, disable) {
         'disable': disable,
     }));
     addStyles();
-    $(`td:contains(${name}):nth-child(2)`).parent().children().eq(5).text(disable ? '✗' : '✓');
+    $(`td:contains(${name}):nth-child(2)`).parent().children().eq(5).html(link(name, disable));
     return false;
+}
+
+function link(name, disabled) {
+    return `<a href="/disable" onClick="return disable('${name}', ${!disabled})">${disabled ? '✗' : '✓'}</a>`
 }
