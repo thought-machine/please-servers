@@ -45,13 +45,15 @@ func (w *worker) sendReports() {
 }
 
 func (w *worker) sendReport(report *lpb.UpdateRequest) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	if resp, err := w.lucidity.Update(ctx, report); err != nil {
 		log.Warning("Failed to report status to Lucidity: %s", err)
-	} else if resp.ShouldDisable && !w.disabled {
-		log.Warning("Server has disabled us!")
-		w.disabled = true
+	} else if resp.ShouldDisable {
+		if !w.disabled {
+			log.Warning("Server has disabled us!")
+		}
+		w.disabled = resp.ShouldDisable
 	}
 }
 
