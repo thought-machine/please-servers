@@ -150,8 +150,8 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	go func() {
 		sig := <-ch
 		log.Warning("Received signal %s, shutting down when ready...", sig)
-		w.Report(false, false, false, "Received signal %s, shutting down when ready...", sig)
 		cancel()
+		w.Report(false, false, false, "Received signal %s, shutting down when ready...", sig)
 		sig = <-ch
 		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
@@ -315,8 +315,7 @@ type worker struct {
 // Note that it only returns errors for reasons this service controls (i.e. queue comms),
 // failures at actually running the task are communicated back on the responses queue.
 func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
-	log.Notice("Waiting for next task...")
-	msg, err := w.requests.Receive(ctx)
+	msg, err := w.receiveTask(ctx)
 	if err != nil {
 		log.Error("Error receiving message: %s", err)
 		return nil, err
@@ -330,6 +329,27 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	}
 	msg.Ack()
 	return response, w.update(pb.ExecutionStage_COMPLETED, response)
+}
+
+// receiveTask receives a task off the queue.
+func (w *worker) receiveTask(ctx context.Context) (*pubsub.Message, error) {
+	log.Notice("Waiting for next task...")
+	for {
+		msg, err := w.receiveOne(ctx)
+		if err == context.DeadlineExceeded {
+			log.Debug("Task receive timed out, retrying...")
+			w.waitForFreeSpace()
+			w.waitIfDisabled()
+			continue
+		}
+		return msg, err
+	}
+}
+
+func (w *worker) receiveOne(ctx context.Context) (*pubsub.Message, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5 * time.Minute)
+	defer cancel()
+	return w.requests.Receive(ctx)
 }
 
 // runTask does the actual running of a task.
