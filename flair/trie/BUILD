@@ -1,6 +1,7 @@
 go_library(
     name = "trie",
     srcs = [
+        "errgroup.go",
         "replication.go",
         "trie.go",
     ],
