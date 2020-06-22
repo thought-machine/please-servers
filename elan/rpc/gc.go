@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"path"
-	"strings"
 	"syscall"
 	"time"
 
@@ -18,11 +17,11 @@ import (
 )
 
 func (s *server) Info(ctx context.Context, req *ppb.InfoRequest) (*ppb.InfoResponse, error) {
-	if !strings.HasPrefix(s.storage, "file://") {
+	if !s.isFileStorage {
 		return nil, status.Errorf(codes.Unimplemented, "This server does not support GC")
 	}
 	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(strings.TrimPrefix(s.storage, "file://"), &statfs); err != nil {
+	if err := syscall.Statfs(s.storageRoot, &statfs); err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to determine available space: %s", err)
 	}
 	return &ppb.InfoResponse{

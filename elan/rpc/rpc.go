@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -100,7 +101,8 @@ func ServeForever(opts grpcutil.Opts, cachePort int, storage, self string, peers
 	}
 	srv := &server{
 		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storage:          storage,
+		storageRoot:      strings.TrimPrefix(storage, "file://"),
+		isFileStorage:    strings.HasPrefix(storage, "file://"),
 		bucket:           bucket,
 		maxCacheItemSize: maxCacheItemSize,
 		limiter:          make(chan struct{}, parallelism),
@@ -123,7 +125,8 @@ func ServeForever(opts grpcutil.Opts, cachePort int, storage, self string, peers
 }
 
 type server struct {
-	storage          string
+	storageRoot      string
+	isFileStorage    bool
 	bucket           *blob.Bucket
 	bytestreamRe     *regexp.Regexp
 	limiter          chan struct{}
@@ -162,6 +165,12 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		// (the client can still request the actual blob themselves).
 		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest); err == nil {
 			ar.StdoutRaw = b
+		}
+	}
+	if s.isFileStorage {
+		now := time.Now()
+		if err := os.Chtimes(path.Join(s.storageRoot, s.key("ac", req.ActionDigest)), now, now); err != nil {
+			log.Warning("Failed to change times on file: %s", err)
 		}
 	}
 	return ar, nil
