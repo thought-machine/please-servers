@@ -3,10 +3,12 @@ go_library(
     srcs = glob(["*.go"]),
     deps = [
         "//grpcutil",
+        "//proto:purity",
         "//third_party/go/gocloud",
         "//third_party/go/gocloud:api",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
+        "//third_party/go:go-multierror",
         "//third_party/go:grpc",
         "//third_party/go:groupcache",
         "//third_party/go:longrunning",

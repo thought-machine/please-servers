@@ -4,7 +4,7 @@ package build.please.remote.purity;
 
 // The GC service provides an API for storage servers to report on their
 // current status (free storage capacity and management of existing blobs).
-service Lucidity {
+service GC {
   // Info returns current information about the server.
   rpc Info(InfoRequest) returns (InfoResponse);
   // List provides a listing of currently stored items in the AC / CAS.
