@@ -35,7 +35,7 @@ func newFileCache(root string, maxSize int64) (*fileCache, error) {
 	}
 	log.Notice("Initialising file cache...")
 	defer func() { log.Notice("Initialised file cache") }()
-	if err := os.MkdirAll(root, 0775 | os.ModeDir); err != nil {
+	if err := os.MkdirAll(root, 0775|os.ModeDir); err != nil {
 		return nil, fmt.Errorf("Failed to create cache directory: %s", err)
 	}
 	fc.cache = c
@@ -94,7 +94,7 @@ func (fc *fileCache) Set(ctx context.Context, key string, size int64) io.WriteCl
 		log.Debug("Cache rejected write for %s [%d]", key, size)
 		return discardCloser{}
 	}
-	if err := os.MkdirAll(path.Dir(filename), 0775 | os.ModeDir); err != nil {
+	if err := os.MkdirAll(path.Dir(filename), 0775|os.ModeDir); err != nil {
 		log.Warning("Failed to create cache directory: %s", err)
 		fc.cache.Del(key)
 		return discardCloser{}
@@ -117,15 +117,22 @@ func (fc *fileCache) OnEvict(key, conflict uint64, value interface{}, cost int64
 	}
 }
 
+// Remove removes an item from this cache.
+func (fc *fileCache) Remove(key string) {
+	if err := os.RemoveAll(path.Join(fc.root, key)); err != nil {
+		log.Warning("Failed to remove item from cache: %s", err)
+	}
+}
+
 // A discardCloser is like ioutil's discard but also implements a no-op Close so it's a WriteCloser too.
-type discardCloser struct {}
+type discardCloser struct{}
 
 func (discardCloser) Write(p []byte) (int, error) { return len(p), nil }
-func (discardCloser) Close() error { return nil }
+func (discardCloser) Close() error                { return nil }
 
 // An atomicFile wraps a file to do atomic writing; it writes to a temp file and moves on close.
 // If its context is cancelled it aborts the write.
-type atomicFile struct{
+type atomicFile struct {
 	ctx  context.Context
 	f    *os.File
 	name string
@@ -133,11 +140,11 @@ type atomicFile struct{
 
 func newAtomicFile(ctx context.Context, filename string) (*atomicFile, error) {
 	af := &atomicFile{
-		ctx:      ctx,
+		ctx:  ctx,
 		name: filename,
 	}
 	dir, file := path.Split(filename)
-	f, err := ioutil.TempFile(dir, file + ".tmp")
+	f, err := ioutil.TempFile(dir, file+".tmp")
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +162,7 @@ func (af *atomicFile) Close() error {
 		log.Warning("Error closing cache file: %s", err)
 		os.Remove(tmpfile)
 		return err
-	} else if err := af.ctx.Err(); err != nil {  // Don't log this since it's a cancellation
+	} else if err := af.ctx.Err(); err != nil { // Don't log this since it's a cancellation
 		os.Remove(tmpfile)
 		return err
 	} else if err := os.Rename(tmpfile, af.name); err != nil {

@@ -9,12 +9,11 @@ service GC {
   rpc Info(InfoRequest) returns (InfoResponse);
   // List provides a listing of currently stored items in the AC / CAS.
   rpc List(ListRequest) returns (ListResponse);
-  // Delete removes an ittm (or items) from the server.
+  // Delete removes some items from the server.
   rpc Delete(DeleteRequest) returns (DeleteResponse);
 }
 
-message InfoRequest {
-}
+message InfoRequest {}
 
 message InfoResponse {
   // Total bytes available to the node
@@ -23,8 +22,7 @@ message InfoResponse {
   int64 free_bytes = 2;
 }
 
-message ListRequest {
-}
+message ListRequest {}
 
 message ListResponse {
   // List of results in the AC on this server.
@@ -33,7 +31,8 @@ message ListResponse {
   repeated Blob blobs = 2;
 }
 
-// An ActionResult is a reference to an action result with a little additional information.
+// An ActionResult is a reference to an action result with a little additional
+// information.
 message ActionResult {
   string hash = 1;
   int64 size_bytes = 2;
@@ -52,5 +51,4 @@ message DeleteRequest {
   repeated Blob blobs = 2;
 }
 
-message DeleteResponse {
-}
+message DeleteResponse {}

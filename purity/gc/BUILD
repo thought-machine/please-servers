@@ -4,6 +4,8 @@ go_library(
     deps = [
         "//grpcutil",
         "//proto:purity",
+        "//third_party/go:go-multierror",
         "//third_party/go:remote-apis",
+        "//third_party/go:remote-apis-sdks",
     ],
 )
