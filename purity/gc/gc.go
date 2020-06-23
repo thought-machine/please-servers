@@ -27,7 +27,18 @@ func RunForever(proxy string, urls []string, tokenFile string, tls bool, minAge,
 
 // Run runs once against the remote servers and triggers a GC if needed.
 func Run(proxy, urls []string, instanceName, tokenFile string, tls bool, minAge time.Duration, proportion float64, dryRun bool) error {
-	gc, err := newCollector(proxy, urls, instanceName, tokenFile, tls, dryRun)
+	gc, err := newCollector(proxy, urls, instanceName, tokenFile, tls, dryRun, minAge)
+	if err != nil {
+		return err
+	} else if err := gc.LoadAllBlobs(); err != nil {
+		return err
+	} else if err := MarkReferencedBlobs(); err != nil {
+		return err
+	} else if err := gc.RemoveBlobs(); err != nil {
+		return err
+	}
+	log.Notice("Complete!")
+	return nil
 }
 
 type collector struct {
@@ -35,12 +46,13 @@ type collector struct {
 	clients         []ppb.GCClient
 	actionResults   []*ppb.ActionResult
 	allBlobs        []*ppb.Blob
-	referencedBlobs sync.Map
+	referencedBlobs map[string]struct{}
 	mutex           sync.Mutex
+	ageThreshold    int64
 	dryRun          bool
 }
 
-func newCollector(proxy, urls []string, instanceName, tokenFile string, tls, dryRun bool) (*collector, error) {
+func newCollector(proxy, urls []string, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
 	log.Notice("Dialling remotes...")
 	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
 		Service:            proxy,
@@ -52,9 +64,11 @@ func newCollector(proxy, urls []string, instanceName, tokenFile string, tls, dry
 		return nil, err
 	}
 	c := &collector{
-		client:  client,
-		clients: make([]ppb.GCClient, len(urls)),
-		dryRun:  dryRun,
+		client:          client,
+		clients:         make([]ppb.GCClient, len(urls)),
+		dryRun:          dryRun,
+		referencedBlobs: map[string]struct{}{},
+		ageThreshold:    time.Now().Add(-minAge).Unix(),
 	}
 	for i, url := range urls {
 		conn, err := grpcutil.Dial(url, tls, "", tokenFile)
@@ -87,11 +101,10 @@ func (c *collector) LoadAllBlobs() error {
 	return g.Wait()
 }
 
-func (c *collector) MarkReferencedBlobs(minAge time.Duration) error {
+func (c *collector) MarkReferencedBlobs() error {
 	// Get a little bit of parallelism here, but not too much.
 	const parallelism = 4
 	log.Notice("Finding referenced blobs...")
-	threshold := time.Now().Add(-minAge).Unix()
 	var wg sync.WaitGroup
 	wg.Add(parallelism)
 	step := len(c.actionResults) / parallelism
@@ -99,7 +112,7 @@ func (c *collector) MarkReferencedBlobs(minAge time.Duration) error {
 	for i := 0; i < parallelism; i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
-				if ar.LastAccessed < threshold {
+				if c.shouldDelete(ar) {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Warning("Failed to find referenced blobs for %s: %s", ar.Hash, err)
@@ -125,8 +138,10 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
 	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	for _, f := range ar.OutputFiles {
-		c.referencedBlobs.Store(f.Digest.Hash, nil)
+		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 	}
 	for _, d := range ar.OutputDirectories {
 		c.markDirectory(d.Root)
@@ -141,13 +156,46 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 
 func (c *collector) markDirectory(d *pb.Directory) {
 	for _, f := range d.Files {
-		c.referencedBlobs.Store(f.Digest.Hash, nil)
+		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 	}
-	for _ d := range d.Directories {
-		c.referencedBlobs.Store(d.Digest.Hash, nil)
+	for _, d := range d.Directories {
+		c.referencedBlobs[d.Digest.Hash] = struct{}{}
 	}
 }
 
 func (c *collector) RemoveBlobs() error {
+	log.Notice("Determining blobs to remove...")
+	req := &ppb.DeleteRequest{}
+	var size int64
+	for _, ar := range c.actionResults {
+		if c.shouldDelete(ar) {
+			req.ActionResults = append(req.ActionResults, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
+			size += ar.SizeBytes
+		}
+	}
+	for _, blob := range c.allBlobs {
+		if _, present := c.referencedBlobs[blob.Hash]; !present {
+			req.Blobs = append(req.Blobs, blob)
+			size += blob.SizeBytes
+		}
+	}
+	if c.dryRun {
+		log.Notice("Would delete %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
+	}
+	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	var g multierror.Group
+	for _, client := range c.clients {
+		client := client
+		g.Go(func() error {
+			_, err := client.Delete(ctx, req)
+			return err
+		})
+	}
+	return g.Wait()
+}
 
+func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
+	return ar.LastAccessed < c.ageThreshold
 }
