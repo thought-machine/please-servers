@@ -32,7 +32,12 @@ var opts = struct {
 	Usage: `
 Purity is a service to implement GC logic for Elan.
 
-It queries the given servers (which can be more than one) to find all
+It queries the given servers to identify the set of action results to
+retain, finds all blobs transitively referred to by them, and exiles all
+others.
+
+The name refers simply GC as a means of "purifying" things and vaguely
+retains the "personal characteristics" theme.
 `,
 }
 

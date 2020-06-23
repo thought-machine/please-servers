@@ -87,7 +87,7 @@ func (c *collector) LoadAllBlobs() error {
 	return g.Wait()
 }
 
-func (c *collector) FindAllReferencedBlobs(minAge time.Duration) error {
+func (c *collector) MarkReferencedBlobs(minAge time.Duration) error {
 	// Get a little bit of parallelism here, but not too much.
 	const parallelism = 4
 	log.Notice("Finding referenced blobs...")
@@ -100,7 +100,7 @@ func (c *collector) FindAllReferencedBlobs(minAge time.Duration) error {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				if ar.LastAccessed < threshold {
-					if err := c.findReferencedBlobs(ar); err != nil {
+					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Warning("Failed to find referenced blobs for %s: %s", ar.Hash, err)
 					}
@@ -115,7 +115,7 @@ func (c *collector) FindAllReferencedBlobs(minAge time.Duration) error {
 	wg.Wait()
 }
 
-func (c *collector) findReferencedBlobs(ar *ppb.ActionResult) error {
+func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
@@ -125,14 +125,27 @@ func (c *collector) findReferencedBlobs(ar *ppb.ActionResult) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
 	}
-	outs, err := c.client.FlattenActionOutputs(ctx, result)
-	if err != nil {
-		return fmt.Errorf("Couldn't download action outputs for %s: %s", ar.Hash, err)
+	for _, f := range ar.OutputFiles {
+		c.referencedBlobs.Store(f.Digest.Hash, nil)
 	}
-	for _, out := range outs {
-		c.referencedBlobs.Store(out.Digest.Hash, nil)
+	for _, d := range ar.OutputDirectories {
+		c.markDirectory(d.Root)
+		for _, child := range d.Children {
+			c.markDirectory(child)
+		}
 	}
+	// N.B. we do not mark the original action or its sources, those are irrelevant to us
+	//      (unless they are also referenced as the output of something else).
 	return nil
+}
+
+func (c *collector) markDirectory(d *pb.Directory) {
+	for _, f := range d.Files {
+		c.referencedBlobs.Store(f.Digest.Hash, nil)
+	}
+	for _ d := range d.Directories {
+		c.referencedBlobs.Store(d.Digest.Hash, nil)
+	}
 }
 
 func (c *collector) RemoveBlobs() error {
