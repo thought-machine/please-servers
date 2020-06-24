@@ -63,15 +63,17 @@ func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.Delet
 }
 
 func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob) error {
-	var e error
+	var me *multierror.Error
 	for _, blob := range blobs {
 		key := s.key(prefix, &pb.Digest{Hash: blob.Hash, SizeBytes: blob.SizeBytes})
-		if err := s.bucket.Delete(ctx, key); err != nil {
-			e = err
+		if exists, _ := s.bucket.Exists(ctx, key); exists {
+			if err := s.bucket.Delete(ctx, key); err != nil {
+				me = multierror.Append(me, err)
+			}
 		}
 		if s.fileCache != nil {
 			s.fileCache.Remove(key)
 		}
 	}
-	return e
+	return me.ErrorOrNil()
 }

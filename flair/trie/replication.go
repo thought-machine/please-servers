@@ -108,7 +108,7 @@ func (r *Replicator) All(f ReplicatedFunc) error {
 			return f(s)
 		})
 	}
-	return g.Wait()
+	return g.Wait().ErrorOrNil()
 }
 
 // shouldRetry returns true if the given error is retryable.
