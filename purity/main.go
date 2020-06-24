@@ -2,11 +2,15 @@
 package main
 
 import (
+	"time"
+
 	"github.com/peterebden/go-cli-init"
 	admin "github.com/thought-machine/http-admin"
 
 	"github.com/thought-machine/please-servers/purity/gc"
 )
+
+var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
@@ -48,10 +52,10 @@ func main() {
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
 	if opts.GC.Oneshot {
-		if err := gc.Run(opts.GC.Proxy, opts.GC.Storage, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.MinAge, opts.GC.Proportion, opts.GC.DryRun); err != nil {
+		if err := gc.Run(opts.GC.Proxy, opts.GC.Storage, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.GC.MinAge), opts.GC.Proportion, opts.GC.DryRun); err != nil {
 			log.Fatalf("Failed to GC: %s", err)
 		}
 	} else {
-		gc.RunForever(opts.GC.Proxy, opts.GC.Storage, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.MinAge, opts.GC.Frequency, opts.GC.Proportion, opts.GC.DryRun)
+		gc.RunForever(opts.GC.Proxy, opts.GC.Storage, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.GC.MinAge), time.Duration(opts.GC.Frequency), opts.GC.Proportion, opts.GC.DryRun)
 	}
 }

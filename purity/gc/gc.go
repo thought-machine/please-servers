@@ -9,30 +9,34 @@ import (
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/hashicorp/go-multierror"
+	"github.com/peterebden/go-cli-init"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
 
+var log = cli.MustGetLogger()
+
 // RunForever runs indefinitely, periodically hitting the remote server and possibly GC'ing it.
-func RunForever(proxy string, urls []string, tokenFile string, tls bool, minAge, frequency time.Duration, proportion float64, dryRun bool) {
+func RunForever(proxy string, urls []string, instanceName, tokenFile string, tls bool, minAge, frequency time.Duration, proportion float64, dryRun bool) {
 	for range time.NewTicker(frequency).C {
-		if err := Run(proxy, urls, tokenFile, tls, minAge, proportion, dryRun); err != nil {
+		if err := Run(proxy, urls, instanceName, tokenFile, tls, minAge, proportion, dryRun); err != nil {
 			log.Error("Failed to GC: %s", err)
 		}
 	}
 }
 
 // Run runs once against the remote servers and triggers a GC if needed.
-func Run(proxy, urls []string, instanceName, tokenFile string, tls bool, minAge time.Duration, proportion float64, dryRun bool) error {
+func Run(proxy string, urls []string, instanceName, tokenFile string, tls bool, minAge time.Duration, proportion float64, dryRun bool) error {
 	gc, err := newCollector(proxy, urls, instanceName, tokenFile, tls, dryRun, minAge)
 	if err != nil {
 		return err
 	} else if err := gc.LoadAllBlobs(); err != nil {
 		return err
-	} else if err := MarkReferencedBlobs(); err != nil {
+	} else if err := gc.MarkReferencedBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
@@ -52,7 +56,7 @@ type collector struct {
 	dryRun          bool
 }
 
-func newCollector(proxy, urls []string, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
+func newCollector(proxy string, urls []string, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
 	log.Notice("Dialling remotes...")
 	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
 		Service:            proxy,
@@ -95,7 +99,8 @@ func (c *collector) LoadAllBlobs() error {
 			c.mutex.Lock()
 			defer c.mutex.Unlock()
 			c.actionResults = append(c.actionResults, resp.ActionResults...)
-			c.allBlobs = append(c.allBlobs, resp.Blobs)
+			c.allBlobs = append(c.allBlobs, resp.Blobs...)
+			return nil
 		})
 	}
 	return g.Wait()
@@ -126,6 +131,7 @@ func (c *collector) MarkReferencedBlobs() error {
 		}(c.actionResults[step*i : step*(i+1)])
 	}
 	wg.Wait()
+	return nil
 }
 
 func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
@@ -138,23 +144,36 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
 	}
+	for _, d := range result.OutputDirectories {
+		if err := c.markTree(d); err != nil {
+			return fmt.Errorf("Couldn't download output tree for %s: %s", ar.Hash, err)
+		}
+	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for _, f := range ar.OutputFiles {
+	for _, f := range result.OutputFiles {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
-	}
-	for _, d := range ar.OutputDirectories {
-		c.markDirectory(d.Root)
-		for _, child := range d.Children {
-			c.markDirectory(child)
-		}
 	}
 	// N.B. we do not mark the original action or its sources, those are irrelevant to us
 	//      (unless they are also referenced as the output of something else).
 	return nil
 }
 
+func (c *collector) markTree(d *pb.OutputDirectory) error {
+	tree := &pb.Tree{}
+	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
+		return err
+	}
+	c.markDirectory(tree.Root)
+	for _, child := range tree.Children {
+		c.markDirectory(child)
+	}
+	return nil
+}
+
 func (c *collector) markDirectory(d *pb.Directory) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	for _, f := range d.Files {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 	}
@@ -181,6 +200,7 @@ func (c *collector) RemoveBlobs() error {
 	}
 	if c.dryRun {
 		log.Notice("Would delete %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
+		return nil
 	}
 	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
