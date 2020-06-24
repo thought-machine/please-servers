@@ -11,6 +11,8 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/grpc"
+
+	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
 
 // A Trie provides fast lookups on hash keys.
@@ -28,6 +30,7 @@ type Server struct {
 	BS    bs.ByteStreamClient
 	Exe   pb.ExecutionClient
 	Fetch apb.FetchClient
+	GC    ppb.GCClient
 	Start string
 	End   string
 }
@@ -108,6 +111,7 @@ func (t *Trie) AddRange(start, end, address string) error {
 		BS:    bs.NewByteStreamClient(conn),
 		Exe:   pb.NewExecutionClient(conn),
 		Fetch: apb.NewFetchClient(conn),
+		GC:    ppb.NewGCClient(conn),
 		Start: start,
 		End:   end,
 	}

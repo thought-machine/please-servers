@@ -24,6 +24,7 @@ import (
 
 	"github.com/thought-machine/please-servers/flair/trie"
 	"github.com/thought-machine/please-servers/grpcutil"
+	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
 
 var log = cli.MustGetLogger()
@@ -47,6 +48,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 	if executorReplicator != nil {
 		pb.RegisterExecutionServer(s, srv)
 	}
+	ppb.RegisterGCServer(s, srv)
 	grpcutil.ServeForever(lis, s)
 }
 
@@ -448,4 +450,28 @@ func (s *server) streamExecution(client pb.Execution_ExecuteClient, server pb.Ex
 			return err
 		}
 	}
+}
+
+func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
+	var mutex sync.Mutex
+	resp := &ppb.ListResponse{}
+	err := s.replicator.All(func(srv *trie.Server) error {
+		r, err := srv.GC.List(ctx, req)
+		if err != nil {
+			return err
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
+		resp.ActionResults = append(resp.ActionResults, r.ActionResults...)
+		resp.Blobs = append(resp.Blobs, r.Blobs...)
+		return nil
+	})
+	return resp, err
+}
+
+func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.DeleteResponse, error) {
+	return &ppb.DeleteResponse{}, s.replicator.All(func(srv *trie.Server) error {
+		_, err := srv.GC.Delete(ctx, req)
+		return err
+	})
 }

@@ -5,21 +5,10 @@ package build.please.remote.purity;
 // The GC service provides an API for storage servers to report on their
 // current status (free storage capacity and management of existing blobs).
 service GC {
-  // Info returns current information about the server.
-  rpc Info(InfoRequest) returns (InfoResponse);
   // List provides a listing of currently stored items in the AC / CAS.
   rpc List(ListRequest) returns (ListResponse);
   // Delete removes some items from the server.
   rpc Delete(DeleteRequest) returns (DeleteResponse);
-}
-
-message InfoRequest {}
-
-message InfoResponse {
-  // Total bytes available to the node
-  int64 total_bytes = 1;
-  // Currently free bytes.
-  int64 free_bytes = 2;
 }
 
 message ListRequest {}

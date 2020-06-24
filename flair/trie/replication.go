@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -95,6 +96,19 @@ func (r *Replicator) ParallelDigest(digest *pb.Digest, f ReplicatedFunc) error {
 		return fmt.Errorf("Invalid digest: [%s]", digest.Hash)
 	}
 	return r.Parallel(digest.Hash, f)
+}
+
+// All sends a request to all replicas simultaneously.
+// It returns an error that is a collection of all errors.
+func (r *Replicator) All(f ReplicatedFunc) error {
+	var g multierror.Group
+	for _, server := range r.Trie.servers {
+		s := &server
+		g.Go(func() error {
+			return f(s)
+		})
+	}
+	return g.Wait()
 }
 
 // shouldRetry returns true if the given error is retryable.

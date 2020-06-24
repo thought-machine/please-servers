@@ -4,31 +4,14 @@ import (
 	"context"
 	"io"
 	"path"
-	"syscall"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"gocloud.dev/blob"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
-
-func (s *server) Info(ctx context.Context, req *ppb.InfoRequest) (*ppb.InfoResponse, error) {
-	if !s.isFileStorage {
-		return nil, status.Errorf(codes.Unimplemented, "This server does not support GC")
-	}
-	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(s.storageRoot, &statfs); err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to determine available space: %s", err)
-	}
-	return &ppb.InfoResponse{
-		FreeBytes:  int64(statfs.Bsize) * int64(statfs.Bavail),
-		TotalBytes: int64(statfs.Bsize) * int64(statfs.Blocks),
-	}, nil
-}
 
 func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
 	var g multierror.Group
