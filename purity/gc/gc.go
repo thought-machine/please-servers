@@ -11,7 +11,6 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -21,17 +20,17 @@ import (
 var log = cli.MustGetLogger()
 
 // RunForever runs indefinitely, periodically hitting the remote server and possibly GC'ing it.
-func RunForever(proxy string, urls []string, instanceName, tokenFile string, tls bool, minAge, frequency time.Duration, proportion float64, dryRun bool) {
+func RunForever(url, instanceName, tokenFile string, tls bool, minAge, frequency time.Duration, proportion float64, dryRun bool) {
 	for range time.NewTicker(frequency).C {
-		if err := Run(proxy, urls, instanceName, tokenFile, tls, minAge, proportion, dryRun); err != nil {
+		if err := Run(url, instanceName, tokenFile, tls, minAge, proportion, dryRun); err != nil {
 			log.Error("Failed to GC: %s", err)
 		}
 	}
 }
 
 // Run runs once against the remote servers and triggers a GC if needed.
-func Run(proxy string, urls []string, instanceName, tokenFile string, tls bool, minAge time.Duration, proportion float64, dryRun bool) error {
-	gc, err := newCollector(proxy, urls, instanceName, tokenFile, tls, dryRun, minAge)
+func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, proportion float64, dryRun bool) error {
+	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, minAge)
 	if err != nil {
 		return err
 	} else if err := gc.LoadAllBlobs(); err != nil {
@@ -47,7 +46,7 @@ func Run(proxy string, urls []string, instanceName, tokenFile string, tls bool, 
 
 type collector struct {
 	client          *client.Client
-	clients         []ppb.GCClient
+	gcclient        ppb.GCClient
 	actionResults   []*ppb.ActionResult
 	allBlobs        []*ppb.Blob
 	referencedBlobs map[string]struct{}
@@ -56,10 +55,10 @@ type collector struct {
 	dryRun          bool
 }
 
-func newCollector(proxy string, urls []string, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
-	log.Notice("Dialling remotes...")
+func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
+	log.Notice("Dialling remote...")
 	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            proxy,
+		Service:            url,
 		NoSecurity:         !tls,
 		TransportCredsOnly: tls,
 		DialOpts:           grpcutil.DialOptions(tokenFile),
@@ -67,43 +66,26 @@ func newCollector(proxy string, urls []string, instanceName, tokenFile string, t
 	if err != nil {
 		return nil, err
 	}
-	c := &collector{
+	return &collector{
 		client:          client,
-		clients:         make([]ppb.GCClient, len(urls)),
+		gcclient:        ppb.NewGCClient(client.Connection),
 		dryRun:          dryRun,
 		referencedBlobs: map[string]struct{}{},
 		ageThreshold:    time.Now().Add(-minAge).Unix(),
-	}
-	for i, url := range urls {
-		conn, err := grpcutil.Dial(url, tls, "", tokenFile)
-		if err != nil {
-			return nil, err
-		}
-		c.clients[i] = ppb.NewGCClient(conn)
-	}
-	return c, nil
+	}, nil
 }
 
 func (c *collector) LoadAllBlobs() error {
 	log.Notice("Receiving current list of items...")
-	var g multierror.Group
-	for _, client := range c.clients {
-		client := client
-		g.Go(func() error {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			defer cancel()
-			resp, err := client.List(ctx, &ppb.ListRequest{})
-			if err != nil {
-				return fmt.Errorf("Failed to list blobs: %s", err)
-			}
-			c.mutex.Lock()
-			defer c.mutex.Unlock()
-			c.actionResults = append(c.actionResults, resp.ActionResults...)
-			c.allBlobs = append(c.allBlobs, resp.Blobs...)
-			return nil
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	resp, err := c.gcclient.List(ctx, &ppb.ListRequest{})
+	if err != nil {
+		return fmt.Errorf("Failed to list blobs: %s", err)
 	}
-	return g.Wait()
+	c.actionResults = append(c.actionResults, resp.ActionResults...)
+	c.allBlobs = append(c.allBlobs, resp.Blobs...)
+	return nil
 }
 
 func (c *collector) MarkReferencedBlobs() error {
@@ -205,15 +187,8 @@ func (c *collector) RemoveBlobs() error {
 	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	var g multierror.Group
-	for _, client := range c.clients {
-		client := client
-		g.Go(func() error {
-			_, err := client.Delete(ctx, req)
-			return err
-		})
-	}
-	return g.Wait()
+	_, err := c.gcclient.Delete(ctx, req)
+	return err
 }
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
