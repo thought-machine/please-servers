@@ -15,7 +15,7 @@ jobs:
            path: plz-out/results
        - run:
            name: Package
-           command: ./pleasew build //elan //mettle //zeal //flair //lucidity //scripts:gen_release -p --profile ci -v 2
+           command: ./pleasew build //elan //mettle //zeal //flair //lucidity //purity //scripts:gen_release -p --profile ci -v 2
        - persist_to_workspace:
            root: plz-out/bin
            paths:
@@ -23,6 +23,7 @@ jobs:
              - flair/flair
              - lucidity/lucidity
              - mettle/mettle
+             - purity/purity
              - zeal/zeal
              - scripts/gen_release.pex
        - store_artifacts:
@@ -37,7 +38,7 @@ jobs:
      steps:
        - attach_workspace:
            at: /tmp/workspace
-       - run: /tmp/workspace/scripts/gen_release.pex /tmp/workspace/elan/elan /tmp/workspace/flair/flair /tmp/workspace/mettle/mettle /tmp/workspace/zeal/zeal /tmp/workspace/lucidity/lucidity
+       - run: /tmp/workspace/scripts/gen_release.pex /tmp/workspace/elan/elan /tmp/workspace/flair/flair /tmp/workspace/mettle/mettle /tmp/workspace/purity/purity /tmp/workspace/zeal/zeal /tmp/workspace/lucidity/lucidity
 
 workflows:
   version: 2
