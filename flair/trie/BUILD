@@ -7,6 +7,7 @@ go_library(
     ],
     visibility = ["//flair/..."],
     deps = [
+        "//proto:purity",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
         "//third_party/go:go-multierror",
