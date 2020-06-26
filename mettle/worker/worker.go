@@ -33,6 +33,7 @@ import (
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -347,7 +348,7 @@ func (w *worker) receiveTask(ctx context.Context) (*pubsub.Message, error) {
 }
 
 func (w *worker) receiveOne(ctx context.Context) (*pubsub.Message, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5 * time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	return w.requests.Receive(ctx)
 }
@@ -421,7 +422,7 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
-		return status(codes.Internal, "Failed to download input root: %s", err)
+		return inferStatus(codes.Internal, "Failed to download input root: %s", err)
 	}
 	// We are required to create directories for all the outputs.
 	if !containsEnvVar(command, "_CREATE_OUTPUT_DIRS", "false") {
@@ -516,7 +517,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	if err := w.collectOutputs(ar, command); err != nil {
 		log.Error("Failed to collect outputs: %s", err)
 		return &pb.ExecuteResponse{
-			Status: status(codes.Internal, "Failed to collect outputs: %s", err),
+			Status: inferStatus(codes.Internal, "Failed to collect outputs: %s", err),
 			Result: ar,
 		}
 	}
@@ -664,6 +665,14 @@ func status(code codes.Code, msg string, args ...interface{}) *rpcstatus.Status 
 		Code:    int32(code),
 		Message: fmt.Sprintf(msg, args...),
 	}
+}
+
+// inferStatus tries to infer a status from the given error, otherwise uses the given default.
+func inferStatus(defaultCode codes.Code, msg string, err error) *rpcstatus.Status {
+	if code := grpcstatus.Code(err); code != codes.Unknown {
+		return status(code, msg, err)
+	}
+	return status(defaultCode, msg, err)
 }
 
 // appendStd appends the contents of a std stream to an error message, if it is not empty.
