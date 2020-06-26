@@ -422,7 +422,7 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
-		return inferStatus(codes.Internal, "Failed to download input root: %s", err)
+		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
 	// We are required to create directories for all the outputs.
 	if !containsEnvVar(command, "_CREATE_OUTPUT_DIRS", "false") {
