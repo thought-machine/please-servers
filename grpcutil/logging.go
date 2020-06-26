@@ -8,8 +8,8 @@ import (
 	"github.com/peterebden/go-cli-init"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -18,22 +18,23 @@ var log = cli.MustGetLogger()
 // grpcLogMabob is an implementation of grpc's logging interface using our backend.
 type grpcLogMabob struct{}
 
-func (g *grpcLogMabob) Info(args ...interface{})                    { log.Info("%s", args) }
-func (g *grpcLogMabob) Infof(format string, args ...interface{})    { log.Info(format, args...) }
-func (g *grpcLogMabob) Infoln(args ...interface{})                  { log.Info("%s", args) }
-func (g *grpcLogMabob) Warning(args ...interface{})                 { log.Warning("%s", args) }
-func (g *grpcLogMabob) Warningf(format string, args ...interface{}) { log.Warning(format, args...) }
-func (g *grpcLogMabob) Warningln(args ...interface{}) {
-	// Lower priority of a gRPC message which is triggered by e.g. k8s TCP healthchecks.
-	if len(args) == 2 && args[0] == "grpc: Server.Serve failed to create ServerTransport: " {
-		if err, ok := args[1].(error); ok {
-			if err.Error() == `connection error: desc = "transport: http2Server.HandleStreams failed to receive the preface from client: EOF"` {
-				log.Debug("%s %s", args[0], args[1])
-				return
-			}
-		}
+func (g *grpcLogMabob) Info(args ...interface{})                 { log.Info("%s", args) }
+func (g *grpcLogMabob) Infof(format string, args ...interface{}) { log.Info(format, args...) }
+func (g *grpcLogMabob) Infoln(args ...interface{})               { log.Info("%s", args) }
+func (g *grpcLogMabob) Warning(args ...interface{}) {
+	if !g.handleEmptyRequest(args) {
+		log.Warning("%s", args)
 	}
-	log.Warning("%s", args)
+}
+func (g *grpcLogMabob) Warningf(format string, args ...interface{}) {
+	if !g.handleEmptyRequest(args) {
+		log.Warning(format, args...)
+	}
+}
+func (g *grpcLogMabob) Warningln(args ...interface{}) {
+	if !g.handleEmptyRequest(args) {
+		log.Warning("%s", args)
+	}
 }
 func (g *grpcLogMabob) Error(args ...interface{})                 { log.Error("%s", args) }
 func (g *grpcLogMabob) Errorf(format string, args ...interface{}) { log.Errorf(format, args...) }
@@ -42,6 +43,20 @@ func (g *grpcLogMabob) Fatal(args ...interface{})                 { log.Fatal(ar
 func (g *grpcLogMabob) Fatalf(format string, args ...interface{}) { log.Fatalf(format, args...) }
 func (g *grpcLogMabob) Fatalln(args ...interface{})               { log.Fatal(args...) }
 func (g *grpcLogMabob) V(l int) bool                              { return log.IsEnabledFor(logging.Level(l)) }
+
+// handleEmptyRequest lowers the priority of a gRPC warning triggered by a request that closes
+// immediately; that makes it convenient to use for k8s healthchecks, for example.
+func (*grpcLogMabob) handleEmptyRequest(args []interface{}) bool {
+	if len(args) == 2 && args[0] == "grpc: Server.Serve failed to create ServerTransport: " {
+		if err, ok := args[1].(error); ok {
+			if err.Error() == `connection error: desc = "transport: http2Server.HandleStreams failed to receive the preface from client: EOF"` {
+				log.Debug("%s %s", args[0], args[1])
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func init() {
 	// Change grpc to log using our implementation

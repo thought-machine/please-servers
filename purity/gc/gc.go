@@ -77,7 +77,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 
 func (c *collector) LoadAllBlobs() error {
 	log.Notice("Receiving current list of items...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 	resp, err := c.gcclient.List(ctx, &ppb.ListRequest{})
 	if err != nil {
@@ -191,7 +191,7 @@ func (c *collector) RemoveBlobs() error {
 		return nil
 	}
 	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 	_, err := c.gcclient.Delete(ctx, req)
 	return err
