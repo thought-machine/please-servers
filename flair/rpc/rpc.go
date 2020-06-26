@@ -180,22 +180,50 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	resp := &pb.BatchReadBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
+	failures := []*pb.BatchReadBlobsResponse_Response{}
+
+	defer func() {
+		if len(failures) > 0 {
+			// Need to be careful since these might have succeeded on other replicas.
+			successes := map[string]struct{}{}
+			for _, rr := range resp.Responses {
+				successes[rr.Digest.Hash] = struct{}{}
+			}
+			for _, fail := range failures {
+				if _, present := successes[fail.Digest.Hash]; !present {
+					resp.Responses = append(resp.Responses, fail)
+				}
+			}
+		}
+	}()
+
 	for srv, d := range blobs {
 		srv := srv
 		d := d
 		g.Go(func() error {
-			return s.replicator.Sequential(srv.Start, func(s *trie.Server) error {
+			return s.replicator.SequentialAck(srv.Start, func(s *trie.Server) (bool, error) {
 				r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 					InstanceName: req.InstanceName,
 					Digests:      d,
 				})
 				if err != nil {
-					return err
+					return false, err
 				}
+				shouldContinue := false
 				mutex.Lock()
 				defer mutex.Unlock()
-				resp.Responses = append(resp.Responses, r.Responses...)
-				return nil
+				for _, rr := range r.Responses {
+					switch rr.Status.Code {
+					case int32(codes.OK):
+						resp.Responses = append(resp.Responses, rr)
+					case int32(codes.NotFound):
+						shouldContinue = true
+						fallthrough
+					default:
+						failures = append(failures, rr)
+					}
+				}
+				return shouldContinue, nil
 			})
 		})
 	}

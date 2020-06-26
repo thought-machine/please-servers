@@ -34,18 +34,34 @@ func NewReplicator(t *Trie, replicas int) *Replicator {
 // errors where the server is down, we wouldn't retry InvalidArgument where it seems it would be pointless).
 type ReplicatedFunc func(*Server) error
 
+// A ReplicatedAckFunc is like a ReplicatedFunc but allows the caller to specify whether the
+// call should retry on the next replica by returning true, or not by returning false.
+type ReplicatedAckFunc func(*Server) (bool, error)
+
 // Sequential runs the function sequentially from the primary, attempting each replica in sequence until either one is
 // successful or they all fail.
 // It returns an error if all replicas fail, which is the error of the primary replica (with appropriate status code etc).
 func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
+	return r.SequentialAck(key, func(s *Server) (bool, error) {
+		return false, f(s)
+	})
+}
+
+// SequentialAck is like Sequential but allows the caller to specify whether the call should
+// continue to the next replica even on a non-error response.
+// This facilitates the BatchReadBlobs endpoint that basically never returns an 'actual' error
+// because they're all inline.
+func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	var e error
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
-		err := f(r.Trie.GetOffset(key, offset))
-		if !r.shouldRetry(err) {
+		shouldContinue, err := f(r.Trie.GetOffset(key, offset))
+		if !r.shouldRetry(err) && !shouldContinue {
 			return err
 		}
-		if i < r.Replicas-1 {
+		if err == nil {
+			log.Debug("Caller requested to continue on next replica for %s", key)
+		} else if i < r.Replicas-1 {
 			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
 			log.Debug("Error reading from replica for %s: %s.", key, err)
@@ -55,7 +71,9 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 		}
 		offset += r.increment
 	}
-	log.Info("Reads from all replicas failed: %s", e)
+	if e != nil {
+		log.Info("Reads from all replicas failed: %s", e)
+	}
 	return e
 }
 
