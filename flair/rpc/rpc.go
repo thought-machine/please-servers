@@ -481,11 +481,14 @@ func (s *server) streamExecution(client pb.Execution_ExecuteClient, server pb.Ex
 }
 
 func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
+	if len(req.Prefix) != 2 {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
+	}
 	var mutex sync.Mutex
 	resp := &ppb.ListResponse{}
 	ars := map[string]struct{}{}
 	blobs := map[string]struct{}{}
-	err := s.replicator.All(func(srv *trie.Server) error {
+	err := s.replicator.All(req.Prefix, func(srv *trie.Server) error {
 		r, err := srv.GC.List(ctx, req)
 		if err != nil {
 			return err
@@ -510,7 +513,10 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 }
 
 func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.DeleteResponse, error) {
-	return &ppb.DeleteResponse{}, s.replicator.All(func(srv *trie.Server) error {
+	if len(req.Prefix) != 2 {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
+	}
+	return &ppb.DeleteResponse{}, s.replicator.All(req.Prefix, func(srv *trie.Server) error {
 		_, err := srv.GC.Delete(ctx, req)
 		return err
 	})

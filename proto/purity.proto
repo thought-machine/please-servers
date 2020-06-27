@@ -11,7 +11,10 @@ service GC {
   rpc Delete(DeleteRequest) returns (DeleteResponse);
 }
 
-message ListRequest {}
+message ListRequest {
+  // The prefix of blobs to list. Should be exactly two hex characters.
+  string prefix = 1;
+}
 
 message ListResponse {
   // List of results in the AC on this server.
@@ -34,6 +37,8 @@ message Blob {
 }
 
 message DeleteRequest {
+  // Prefix of blobs to delete. Should be exactly two hex characters.
+  string prefix = 3;
   // Action results to delete.
   repeated Blob action_results = 1;
   // CAS blobs to delete.
