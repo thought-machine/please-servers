@@ -3,6 +3,7 @@ package gc
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -11,7 +12,10 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init"
+	"google.golang.org/grpc"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
@@ -61,7 +65,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		Service:            url,
 		NoSecurity:         !tls,
 		TransportCredsOnly: tls,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
+		DialOpts:           append(grpcutil.DialOptions(tokenFile), grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor())),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err
@@ -77,16 +81,35 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 
 func (c *collector) LoadAllBlobs() error {
 	log.Notice("Receiving current list of items...")
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
-	defer cancel()
-	resp, err := c.gcclient.List(ctx, &ppb.ListRequest{})
-	if err != nil {
-		return fmt.Errorf("Failed to list blobs: %s", err)
+	ch := newProgressBar("Enumerating blobs", 256)
+	defer func() {
+		log.Notice("Received %d action results and %d blobs", len(c.actionResults), len(c.allBlobs))
+		close(ch)
+	}()
+	var g multierror.Group
+	var mutex sync.Mutex
+	for i := 0; i < 16; i++ {
+		i := i
+		g.Go(func() error {
+			for j := 0; j < 16; j++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer cancel()
+				resp, err := c.gcclient.List(ctx, &ppb.ListRequest{
+					Prefix: hex.EncodeToString([]byte{byte(i*16 + j)}),
+				})
+				if err != nil {
+					return err
+				}
+				mutex.Lock()
+				c.actionResults = append(c.actionResults, resp.ActionResults...)
+				c.allBlobs = append(c.allBlobs, resp.Blobs...)
+				mutex.Unlock()
+				ch <- 1
+			}
+			return nil
+		})
 	}
-	c.actionResults = resp.ActionResults
-	c.allBlobs = resp.Blobs
-	log.Notice("Received %d action results and %d blobs", len(c.actionResults), len(c.allBlobs))
-	return nil
+	return g.Wait().ErrorOrNil()
 }
 
 func (c *collector) MarkReferencedBlobs() error {
@@ -171,30 +194,53 @@ func (c *collector) markDirectory(d *pb.Directory) {
 
 func (c *collector) RemoveBlobs() error {
 	log.Notice("Determining blobs to remove...")
-	req := &ppb.DeleteRequest{}
+	blobs := map[string][]*ppb.Blob{}
+	ars := map[string][]*ppb.Blob{}
 	var size int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
-			req.ActionResults = append(req.ActionResults, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
+			key := ar.Hash[:2]
+			ars[key] = append(ars[key], &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
 			size += ar.SizeBytes
 		}
 	}
 	for _, blob := range c.allBlobs {
 		if _, present := c.referencedBlobs[blob.Hash]; !present {
-			req.Blobs = append(req.Blobs, blob)
+			key := blob.Hash[:2]
+			blobs[key] = append(blobs[key], blob)
 			size += blob.SizeBytes
 			log.Debug("delete %s / %d", blob.Hash, blob.SizeBytes)
 		}
 	}
 	if c.dryRun {
-		log.Notice("Would delete %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
+		log.Notice("Would delete %d action results and %d blobs, total size %d bytes", len(ars), len(blobs), size)
 		return nil
 	}
-	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(req.ActionResults), len(req.Blobs), size)
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
-	defer cancel()
-	_, err := c.gcclient.Delete(ctx, req)
-	return err
+	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(ars), len(blobs), size)
+	ch := newProgressBar("Deleting blobs", 256)
+	defer close(ch)
+	var g multierror.Group
+	for i := 0; i < 16; i++ {
+		i := i
+		g.Go(func() error {
+			for j := 0; j < 16; j++ {
+				key := hex.EncodeToString([]byte{byte(i*16 + j)})
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer cancel()
+				_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+					Prefix:        key,
+					Blobs:         blobs[key],
+					ActionResults: ars[key],
+				})
+				if err != nil {
+					return err
+				}
+				ch <- 1
+			}
+			return nil
+		})
+	}
+	return g.Wait().ErrorOrNil()
 }
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
