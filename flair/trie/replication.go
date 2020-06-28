@@ -116,15 +116,17 @@ func (r *Replicator) ParallelDigest(digest *pb.Digest, f ReplicatedFunc) error {
 	return r.Parallel(digest.Hash, f)
 }
 
-// All sends a request to all replicas simultaneously.
-// It returns an error that is a collection of all errors.
-func (r *Replicator) All(f ReplicatedFunc) error {
+// All sends a request to all replicas for a particular key simultaneously;
+// it is like Parallel but waits for all replicas to complete.
+func (r *Replicator) All(key string, f ReplicatedFunc) error {
 	var g multierror.Group
-	for _, server := range r.Trie.servers {
-		s := &server
+	offset := 0
+	for i := 0; i < r.Replicas; i++ {
+		o := offset
 		g.Go(func() error {
-			return f(s)
+			return f(r.Trie.GetOffset(key, o))
 		})
+		offset += r.increment
 	}
 	return g.Wait().ErrorOrNil()
 }

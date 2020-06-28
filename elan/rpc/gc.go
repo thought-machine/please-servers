@@ -8,21 +8,26 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	"gocloud.dev/blob"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
 
 func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
+	if len(req.Prefix) != 2 {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
+	}
 	var g multierror.Group
 	resp := &ppb.ListResponse{}
 	g.Go(func() error {
-		ar, err := s.list(ctx, "ac")
+		ar, err := s.list(ctx, "ac", req.Prefix)
 		resp.ActionResults = ar
 		return err
 	})
 	g.Go(func() error {
-		ar, err := s.list(ctx, "cas")
+		ar, err := s.list(ctx, "cas", req.Prefix)
 		for _, a := range ar {
 			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes})
 		}
@@ -31,10 +36,10 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	return resp, g.Wait().ErrorOrNil()
 }
 
-func (s *server) list(ctx context.Context, prefix string) ([]*ppb.ActionResult, error) {
+func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.ActionResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	iter := s.bucket.List(&blob.ListOptions{Prefix: prefix})
+	iter := s.bucket.List(&blob.ListOptions{Prefix: prefix + "/" + prefix2 + "/"})
 	ret := []*ppb.ActionResult{}
 	for {
 		obj, err := iter.Next(ctx)
