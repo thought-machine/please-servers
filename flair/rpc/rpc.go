@@ -180,15 +180,11 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	resp := &pb.BatchReadBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
+	successes := map[string]struct{}{}
 	failures := []*pb.BatchReadBlobsResponse_Response{}
 
 	defer func() {
 		if len(failures) > 0 {
-			// Need to be careful since these might have succeeded on other replicas.
-			successes := map[string]struct{}{}
-			for _, rr := range resp.Responses {
-				successes[rr.Digest.Hash] = struct{}{}
-			}
 			for _, fail := range failures {
 				if _, present := successes[fail.Digest.Hash]; !present {
 					resp.Responses = append(resp.Responses, fail)
@@ -215,7 +211,10 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 				for _, rr := range r.Responses {
 					switch rr.Status.Code {
 					case int32(codes.OK):
-						resp.Responses = append(resp.Responses, rr)
+						if _, present := successes[rr.Digest.Hash]; !present {
+							resp.Responses = append(resp.Responses, rr)
+							successes[rr.Digest.Hash] = struct{}{}
+						}
 					case int32(codes.NotFound):
 						shouldContinue = true
 						fallthrough
