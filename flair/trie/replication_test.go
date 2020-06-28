@@ -1,6 +1,8 @@
 package trie
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,29 +48,37 @@ func TestReplicatedSequentialNotRetryable(t *testing.T) {
 }
 
 func TestReplicatedParallelSuccess(t *testing.T) {
-	called := 0
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var called int64
 	trie := testTrie(t)
 	r := NewReplicator(trie, 2)
 	// This should succeed on the second server, and hence overall
 	assert.NoError(t, r.Parallel("0000", func(s *Server) error {
-		called++
+		defer wg.Done()
+		atomic.AddInt64(&called, 1)
 		if s == trie.Get("0000") {
 			return status.Errorf(codes.Unavailable, "Server down")
 		}
 		return nil
 	}))
-	assert.Equal(t, 2, called)
+	wg.Wait() // Make sure both have completed before we check
+	assert.EqualValues(t, 2, called)
 }
 
 func TestReplicatedParallelFailure(t *testing.T) {
-	called := 0
+	var wg sync.WaitGroup
+	wg.Add(3)
+	var called int64
 	r := NewReplicator(testTrie(t), 3)
 	// This should fail since all writes fail
 	assert.Error(t, r.Parallel("0000", func(s *Server) error {
-		called++
+		defer wg.Done()
+		atomic.AddInt64(&called, 1)
 		return status.Errorf(codes.Unavailable, "Server down")
 	}))
-	assert.Equal(t, 3, called)
+	wg.Wait() // Make sure both have completed before we check
+	assert.EqualValues(t, 3, called)
 }
 
 func testTrie(t *testing.T) *Trie {
