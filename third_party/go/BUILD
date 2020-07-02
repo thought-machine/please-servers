@@ -436,7 +436,7 @@ go_get(
 go_get(
     name = "groupcache",
     get = "github.com/peterebden/groupcache/...",
-    revision = "7802ab2b12fde1d6c85b66a66bfa494654cb5448",
+    revision = "a163c23558ba1c8b92b96fb16558550b6e803948",
     deps = [
         ":protobuf",
     ],

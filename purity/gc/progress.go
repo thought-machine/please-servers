@@ -34,7 +34,7 @@ func (bar *progressBar) Animate() {
 		proportion := float64(bar.current) / float64(bar.total)
 		percentage := 100.0 * proportion
 		if bar.cols == 0 {
-			bar.Printf("%0.1%%\n", percentage)
+			bar.Printf("%0.1f%%\n", percentage)
 		} else {
 			bar.render(proportion, percentage)
 		}

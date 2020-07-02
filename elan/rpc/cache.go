@@ -123,6 +123,10 @@ func (c *cache) Set(key string, value []byte) {
 	}
 }
 
+func (c *cache) Remove(key string) {
+	c.group.Remove(key)
+}
+
 // getter is a getter function for groupcache; it's called when an item needs to be loaded.
 func (c *cache) getter(ctx context.Context, key string, dest groupcache.Sink) error {
 	// This is kinda dodgy that we don't know the size of the digest at this point.

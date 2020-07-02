@@ -137,11 +137,16 @@ func (c *collector) MarkReferencedBlobs() error {
 	// Get a little bit of parallelism here, but not too much.
 	const parallelism = 4
 	log.Notice("Finding referenced blobs...")
+	ch := newProgressBar("Checking action results", len(c.actionResults))
+	var live int64
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+		log.Notice("Found %d live action results and %d referenced blobs", live, len(c.referencedBlobs))
+	}()
 	var wg sync.WaitGroup
 	wg.Add(parallelism)
 	step := len(c.actionResults) / parallelism
-	var done int64
-	live := 0
 	for i := 0; i < parallelism; i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
@@ -150,17 +155,14 @@ func (c *collector) MarkReferencedBlobs() error {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Warning("Failed to find referenced blobs for %s: %s", ar.Hash, err)
 					}
-					live++
+					atomic.AddInt64(&live, 1)
 				}
-				if atomic.AddInt64(&done, 1)%100 == 0 {
-					log.Notice("Checked %d of %d action results", done, len(c.actionResults))
-				}
+				ch <- 1
 			}
 			wg.Done()
 		}(c.actionResults[step*i : step*(i+1)])
 	}
 	wg.Wait()
-	log.Notice("Found %d live action results and %d referenced blobs", live, len(c.referencedBlobs))
 	return nil
 }
 
@@ -268,5 +270,5 @@ func (c *collector) RemoveBlobs() error {
 }
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
-	return ar.LastAccessed < c.ageThreshold
+	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
 }
