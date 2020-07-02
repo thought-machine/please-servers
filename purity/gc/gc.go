@@ -48,6 +48,26 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dr
 	return nil
 }
 
+// Delete deletes a series of build actions from the remote server.
+func Delete(url, instanceName, tokenFile string, tls bool, hashes []string) error {
+	c, err := newCollector(url, instanceName, tokenFile, tls, false, 0)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	for _, hash := range hashes {
+		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+			Prefix:        hash[:2],
+			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: hash}},
+		}); err != nil {
+			return err
+		}
+	}
+	log.Notice("Deleted %d action results", len(hashes))
+	return nil
+}
+
 type collector struct {
 	client          *client.Client
 	gcclient        ppb.GCClient

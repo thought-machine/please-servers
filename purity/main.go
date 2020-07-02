@@ -32,6 +32,11 @@ var opts = struct {
 	Periodic struct {
 		Frequency cli.Duration `long:"frequency" default:"1h" description:"Length of time to wait between updates"`
 	} `command:"periodic" description:"Run continually, triggering GCs at a regular interval"`
+	Delete struct {
+		Args struct {
+			Hashes []string `positional-arg-name:"hashes" required:"true" description:"Hashes to delete"`
+		} `positional-args:"true" required:"true"`
+	} `command:"delete" description:"Deletes one or more build actions from the server."`
 	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
@@ -53,10 +58,14 @@ func main() {
 		if err := gc.Run(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.GC.MinAge), opts.One.DryRun); err != nil {
 			log.Fatalf("Failed to GC: %s", err)
 		}
-	} else {
+	} else if cmd == "periodic" {
 		opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 		opts.Admin.LogInfo = info
 		go admin.Serve(opts.Admin)
 		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.GC.MinAge), time.Duration(opts.Periodic.Frequency))
+	} else if cmd == "delete" {
+		if err := gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Delete.Args.Hashes); err != nil {
+			log.Fatalf("Failed to delete: %s", err)
+		}
 	}
 }
