@@ -31,6 +31,10 @@ var log = cli.MustGetLogger()
 
 const timeout = 10 * time.Second
 
+// retentionTime is the length of time we retain completed actions for; after this we
+// can no longer answer WaitExecution requests for them.
+const retentionTime = 5 * time.Minute
+
 var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
@@ -203,7 +207,7 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 	defer s.mutex.Unlock()
 	job, present := s.jobs[digest.Hash]
 	if !present {
-		log.Debug("stopStream for non-existant job %s", digest.Hash) // Nearly always this is just timing when a connection closes prematurely
+		log.Warning("stopStream for non-existant job %s", digest.Hash)
 		return
 	}
 	for i, stream := range job.Streams {
@@ -273,10 +277,19 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 		if op.Done {
 			log.Notice("Job %s is complete", metadata.ActionDigest.Hash)
-			delete(s.jobs, metadata.ActionDigest.Hash)
+			go s.deleteJob(metadata.ActionDigest.Hash)
 			currentRequests.Dec()
 		}
 	}
+}
+
+// deleteJob waits for a period then removes the given job from memory.
+func (s *server) deleteJob(hash string) {
+	time.Sleep(retentionTime)
+	log.Debug("Removing job %s", hash)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	delete(s.jobs, hash)
 }
 
 // A job represents a single execution request.
