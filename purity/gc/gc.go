@@ -76,6 +76,7 @@ type collector struct {
 	referencedBlobs map[string]struct{}
 	mutex           sync.Mutex
 	ageThreshold    int64
+	missingInputs   int64
 	dryRun          bool
 }
 
@@ -135,7 +136,7 @@ func (c *collector) LoadAllBlobs() error {
 
 func (c *collector) MarkReferencedBlobs() error {
 	// Get a little bit of parallelism here, but not too much.
-	const parallelism = 4
+	const parallelism = 16
 	log.Notice("Finding referenced blobs...")
 	ch := newProgressBar("Checking action results", len(c.actionResults))
 	var live int64
@@ -143,6 +144,9 @@ func (c *collector) MarkReferencedBlobs() error {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
 		log.Notice("Found %d live action results and %d referenced blobs", live, len(c.referencedBlobs))
+		if c.missingInputs > 0 {
+			log.Warning("Missing inputs for %d action results", c.missingInputs)
+		}
 	}()
 	var wg sync.WaitGroup
 	wg.Add(parallelism)
@@ -169,9 +173,10 @@ func (c *collector) MarkReferencedBlobs() error {
 func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+	dg := &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes}
 	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
 		InstanceName: c.client.InstanceName,
-		ActionDigest: &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes},
+		ActionDigest: dg,
 	})
 	if err != nil {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
@@ -181,14 +186,51 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 			return fmt.Errorf("Couldn't download output tree for %s: %s", ar.Hash, err)
 		}
 	}
+	// Mark all the inputs as well. There are some fringe cases that make things awkward
+	// and it means things look more sensible in the browser.
+	dirs := c.inputDirs(dg)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, f := range result.OutputFiles {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 	}
+	for _, d := range dirs {
+		c.markDirectory(d)
+	}
+	if result.StdoutDigest != nil {
+		c.referencedBlobs[result.StdoutDigest.Hash] = struct{}{}
+	}
+	if result.StderrDigest != nil {
+		c.referencedBlobs[result.StderrDigest.Hash] = struct{}{}
+	}
 	// N.B. we do not mark the original action or its sources, those are irrelevant to us
 	//      (unless they are also referenced as the output of something else).
 	return nil
+}
+
+// inputDirs returns all the inputs for an action. It doesn't return any errors because we don't
+// want it to be fatal on failure; otherwise anything missing breaks the whole process.
+func (c *collector) inputDirs(dg *pb.Digest) []*pb.Directory {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	action := &pb.Action{}
+	if err := c.client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), action); err != nil {
+		atomic.AddInt64(&c.missingInputs, 1)
+		return nil
+	}
+	if action.InputRootDigest == nil {
+		atomic.AddInt64(&c.missingInputs, 1)
+		return nil
+	}
+	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
+	if err != nil {
+		atomic.AddInt64(&c.missingInputs, 1)
+		return nil
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.referencedBlobs[action.CommandDigest.Hash] = struct{}{}
+	return dirs
 }
 
 func (c *collector) markTree(d *pb.OutputDirectory) error {
