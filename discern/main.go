@@ -1,8 +1,9 @@
-// Package main implements a simple utility to diff two build actions.
+// Package main implements a simple utility to visualise build actions.
 package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
@@ -15,6 +16,11 @@ import (
 
 var log = cli.MustGetLogger()
 
+type Action struct {
+	Hash string `long:"hash" required:"true" description:"Hash of the build action"`
+	Size int    `long:"size" required:"true" description:"Size in bytes of the build action"`
+}
+
 var opts = struct {
 	Usage     string
 	Verbosity cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
@@ -23,17 +29,15 @@ var opts = struct {
 		Storage      string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS          bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling connection to the CAS server"`
-	Before struct {
-		Hash string `long:"hash" description:"Hash of the build action"`
-		Size int    `long:"size" description:"Size in bytes of the build action"`
-	} `group:"Options identifying the 'before' build action" namespace:"before"`
-	After struct {
-		Hash string `long:"hash" description:"Hash of the build action"`
-		Size int    `long:"size" description:"Size in bytes of the build action"`
-	} `group:"Options identifying the 'after' build action" namespace:"after"`
+	Diff struct {
+		Before Action `group:"Options identifying the 'before' build action" namespace:"before"`
+		After  Action `group:"Options identifying the 'after' build action" namespace:"after"`
+	} `command:"diff" description:"Show differences between two actions"`
+	Show Action `command:"show" description:"Show detail about a single action"`
 }{
 	Usage: `
-Discern is a simple binary for showing differences between two build actions.
+Discern is a simple binary for visualising build actions; either showing differences
+between two or displaying the inputs to a single one.
 This can be useful for a "what's changed" kind of question.
 
 Note that it does not support every field exhaustively right now - notably we leave
@@ -45,7 +49,7 @@ also isn't a server so #dealwithit
 }
 
 func main() {
-	cli.ParseFlagsOrDie("Discern", &opts)
+	cmd := cli.ParseFlagsOrDie("Discern", &opts)
 	cli.InitLogging(opts.Verbosity)
 	client, err := client.NewClient(context.Background(), opts.Storage.InstanceName, client.DialParams{
 		Service:            opts.Storage.Storage,
@@ -56,10 +60,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to contact CAS server: %s", err)
 	}
+	if cmd == "diff" {
+		diff(client)
+	} else {
+		show(client)
+	}
+}
+
+func diff(client *client.Client) {
 	before := &pb.Action{}
 	after := &pb.Action{}
-	mustGetProto(client, opts.Before.Hash, opts.Before.Size, before)
-	mustGetProto(client, opts.After.Hash, opts.After.Size, after)
+	mustGetProto(client, opts.Diff.Before.Hash, opts.Diff.Before.Size, before)
+	mustGetProto(client, opts.Diff.After.Hash, opts.Diff.After.Size, after)
 	if before.CommandDigest.Hash == after.CommandDigest.Hash {
 		log.Notice("Commands are identical")
 	} else {
@@ -163,4 +175,48 @@ func exe(is bool) string {
 		return " (exe)"
 	}
 	return ""
+}
+
+func show(client *client.Client) {
+	action := &pb.Action{}
+	command := &pb.Command{}
+	mustGetProto(client, opts.Show.Hash, opts.Show.Size, action)
+	mustGetProtoDigest(client, action.CommandDigest, command)
+	log.Notice("Inputs:")
+	showDir(client, action.InputRootDigest, "")
+}
+
+func showDir(client *client.Client, dg *pb.Digest, indent string) {
+	dir := &pb.Directory{}
+	if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(dg), dir); err != nil {
+		log.Error("[%s/%08d] %s: Not found!", dg.Hash, dg.SizeBytes, indent)
+		return
+	}
+	for _, d := range dir.Directories {
+		log.Notice("[%s/%08d] %s%s/", d.Digest.Hash, d.Digest.SizeBytes, indent, d.Name)
+		showDir(client, d.Digest, indent+"  ")
+	}
+	req := &pb.FindMissingBlobsRequest{InstanceName: client.InstanceName}
+	for _, f := range dir.Files {
+		req.BlobDigests = append(req.BlobDigests, f.Digest)
+	}
+	resp, err := client.FindMissingBlobs(context.Background(), req)
+	if err != nil {
+		log.Error("%s: Request failed! %s", indent, err)
+		return
+	}
+	m := map[string]bool{}
+	for _, r := range resp.MissingBlobDigests {
+		m[r.Hash] = true
+	}
+	for _, f := range dir.Files {
+		if m[f.Digest.Hash] {
+			log.Error("[%s/%08d] %s%s Not found!", f.Digest.Hash, f.Digest.SizeBytes, indent, f.Name)
+		} else {
+			log.Notice("[%s/%08d] %s%s", f.Digest.Hash, f.Digest.SizeBytes, indent, f.Name)
+		}
+	}
+	for _, s := range dir.Symlinks {
+		log.Notice("[%s/%08d]%s%-50s -> %s", strings.Repeat(" ", 64), 0, indent, s.Name, s.Target)
+	}
 }
