@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/chunker"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -253,6 +254,11 @@ func (c *collector) markTree(d *pb.OutputDirectory) error {
 	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
 		return err
 	}
+	// Here we attempt to fix up any outputs that don't also have the input facet.
+	// This is an incredibly sucky part of the API; the output doesn't contain some of the blobs
+	// that will get used on the input facet, so it's really nonobvious where they come from.
+	c.checkDirectories(append(tree.Children, tree.Root))
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[d.TreeDigest.Hash] = struct{}{}
@@ -269,6 +275,27 @@ func (c *collector) markDirectory(d *pb.Directory) {
 	}
 	for _, d := range d.Directories {
 		c.referencedBlobs[d.Digest.Hash] = struct{}{}
+	}
+}
+
+// checkDirectory checks that the directory protos from a Tree still exist in the CAS and uploads it if not.
+func (c *collector) checkDirectories(dirs []*pb.Directory) {
+	chunkers := make([]*chunker.Chunker, len(dirs))
+	for i, d := range dirs {
+		chomk, _ := chunker.NewFromProto(d, int(c.client.ChunkMaxSize))
+		chunkers[i] = chomk
+	}
+	if !c.dryRun {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		if err := c.client.UploadIfMissing(ctx, chunkers...); err != nil {
+			log.Warning("Failed to upload missing directory protos: %s", err)
+		}
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for _, chomk := range chunkers {
+		c.referencedBlobs[chomk.Digest().Hash] = struct{}{}
 	}
 }
 
@@ -333,6 +360,9 @@ func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 func (c *collector) RemoveSpecificBlobs(hashes []string) error {
 	if c.dryRun {
 		log.Notice("Would remove %d actions", len(hashes))
+		return nil
+	} else if len(hashes) == 0 {
+		log.Notice("Nothing to do")
 		return nil
 	}
 	ch := newProgressBar("Deleting actions", len(hashes))
