@@ -50,28 +50,24 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dr
 
 // Delete deletes a series of build actions from the remote server.
 func Delete(url, instanceName, tokenFile string, tls bool, hashes []string) error {
-	c, err := newCollector(url, instanceName, tokenFile, tls, false, 0)
+	gc, err := newCollector(url, instanceName, tokenFile, tls, false, 0)
 	if err != nil {
 		return err
 	}
-	ch := newProgressBar("Deleting actions", len(hashes))
-	defer func() {
-		close(ch)
-		time.Sleep(10 * time.Millisecond)
-		log.Notice("Deleted %d action results", len(hashes))
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	for _, hash := range hashes {
-		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-			Prefix:        hash[:2],
-			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: hash}},
-		}); err != nil {
-			return err
-		}
-		ch <- 1
+	return gc.RemoveSpecificBlobs(hashes)
+}
+
+// Clean cleans any build actions referencing missing blobs from the server.
+func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
+	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, 1000000*time.Hour)
+	if err != nil {
+		return err
+	} else if err := gc.LoadAllBlobs(); err != nil {
+		return err
+	} else if err := gc.MarkReferencedBlobs(); err != nil {
+		return err
 	}
-	return nil
+	return gc.RemoveBrokenBlobs()
 }
 
 type collector struct {
@@ -80,6 +76,7 @@ type collector struct {
 	actionResults   []*ppb.ActionResult
 	allBlobs        []*ppb.Blob
 	referencedBlobs map[string]struct{}
+	brokenResults   map[string]struct{}
 	mutex           sync.Mutex
 	ageThreshold    int64
 	missingInputs   int64
@@ -102,6 +99,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		gcclient:        ppb.NewGCClient(client.Connection),
 		dryRun:          dryRun,
 		referencedBlobs: map[string]struct{}{},
+		brokenResults:   map[string]struct{}{},
 		ageThreshold:    time.Now().Add(-minAge).Unix(),
 	}, nil
 }
@@ -164,6 +162,7 @@ func (c *collector) MarkReferencedBlobs() error {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Warning("Failed to find referenced blobs for %s: %s", ar.Hash, err)
+						c.markBroken(ar.Hash)
 					}
 					atomic.AddInt64(&live, 1)
 				}
@@ -221,15 +220,18 @@ func (c *collector) inputDirs(dg *pb.Digest) []*pb.Directory {
 	defer cancel()
 	action := &pb.Action{}
 	if err := c.client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), action); err != nil {
+		log.Debug("Failed to read action %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
 	if action.InputRootDigest == nil {
+		log.Debug("nil input root for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
 	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
 	if err != nil {
+		log.Debug("Failed to read directory tree for %s (input root %s)", dg.Hash, action.InputRootDigest)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
@@ -237,6 +239,13 @@ func (c *collector) inputDirs(dg *pb.Digest) []*pb.Directory {
 	defer c.mutex.Unlock()
 	c.referencedBlobs[action.CommandDigest.Hash] = struct{}{}
 	return dirs
+}
+
+// markBroken marks an action result as missing some relevant files.
+func (c *collector) markBroken(hash string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.brokenResults[hash] = struct{}{}
 }
 
 func (c *collector) markTree(d *pb.OutputDirectory) error {
@@ -319,4 +328,38 @@ func (c *collector) RemoveBlobs() error {
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
+}
+
+func (c *collector) RemoveSpecificBlobs(hashes []string) error {
+	if c.dryRun {
+		log.Notice("Would remove %d actions", len(hashes))
+		return nil
+	}
+	ch := newProgressBar("Deleting actions", len(hashes))
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+		log.Notice("Deleted %d action results", len(hashes))
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	for _, hash := range hashes {
+		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+			Prefix:        hash[:2],
+			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: hash}},
+		}); err != nil {
+			return err
+		}
+		ch <- 1
+	}
+	return nil
+}
+
+// RemoveBrokenBlobs removes any blobs previously marked as broken.
+func (c *collector) RemoveBrokenBlobs() error {
+	hashes := make([]string, 0, len(c.brokenResults))
+	for h := range c.brokenResults {
+		hashes = append(hashes, h)
+	}
+	return c.RemoveSpecificBlobs(hashes)
 }

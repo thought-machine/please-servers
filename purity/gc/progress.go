@@ -3,6 +3,7 @@ package gc
 import (
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -25,7 +26,7 @@ func newProgressBar(message string, total int) chan<- int {
 type progressBar struct {
 	message              string
 	total, current, cols int
-	nextUpdate           float64
+	nextUpdate           time.Time
 	ch                   chan int
 }
 
@@ -34,13 +35,14 @@ func (bar *progressBar) Animate() {
 		bar.current += inc
 		proportion := float64(bar.current) / float64(bar.total)
 		percentage := 100.0 * proportion
-		if bar.cols == 0 {
-			if percentage > bar.nextUpdate {
+		now := time.Now()
+		if now.After(bar.nextUpdate) {
+			bar.nextUpdate = now.Add(50 * time.Millisecond)
+			if bar.cols == 0 {
 				bar.Printf("%0.1f%%\n", percentage)
-				bar.nextUpdate = percentage + 0.1
+			} else {
+				bar.render(proportion, percentage)
 			}
-		} else {
-			bar.render(proportion, percentage)
 		}
 	}
 	bar.Printf("\n")
