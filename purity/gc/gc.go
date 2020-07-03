@@ -54,6 +54,12 @@ func Delete(url, instanceName, tokenFile string, tls bool, hashes []string) erro
 	if err != nil {
 		return err
 	}
+	ch := newProgressBar("Deleting actions", len(hashes))
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+		log.Notice("Deleted %d action results", len(hashes))
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	for _, hash := range hashes {
@@ -63,8 +69,8 @@ func Delete(url, instanceName, tokenFile string, tls bool, hashes []string) erro
 		}); err != nil {
 			return err
 		}
+		ch <- 1
 	}
-	log.Notice("Deleted %d action results", len(hashes))
 	return nil
 }
 
