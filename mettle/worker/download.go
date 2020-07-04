@@ -33,6 +33,9 @@ const ioParallelism = 10
 // else lost the size for some reason (it will be more obvious to debug that mismatch than mysteriously empty files).
 const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
+// compressionKey is the context key we use to indicate whether we'll apply compression to an RPC.
+type compressionKey struct{}
+
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	ts1 := time.Now()
@@ -200,6 +203,9 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
+	if shouldCompress(filename) {
+		ctx = context.WithValue(ctx, compressionKey{}, true)
+	}
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
@@ -257,3 +263,12 @@ func fileMode(isExecutable bool) os.FileMode {
 	}
 	return 0444
 }
+
+// shouldCompress returns true if the given filename should be compressed.
+func shouldCompress(filename string) bool {
+	return !(strings.HasSuffix(filename, ".zip") || strings.HasSuffix(filename, ".pex") ||
+		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz"))
+}
+
+// CompressionInterceptor applies compression to RPCs based on the
+//type StreamClientInterceptor func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error)

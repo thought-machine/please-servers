@@ -9,7 +9,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding/gzip"
 )
 
 // Dial is a convenience function wrapping up some common gRPC functionality.
@@ -32,7 +31,6 @@ func MustDial(address string, tls bool, caFile, tokenFile string) *grpc.ClientCo
 func DialOptions(tokenFile string) []grpc.DialOption {
 	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(
 		grpc.MaxCallRecvMsgSize(419430400),
-		grpc.UseCompressor(gzip.Name),
 	)}
 	if tokenFile == "" {
 		return opts
