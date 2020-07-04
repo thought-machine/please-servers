@@ -523,7 +523,9 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	}
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
-	uploadDurations.Observe(end.Sub(execEnd).Seconds())
+	uploadDuration := end.Sub(execEnd)
+	uploadDurations.Observe(uploadDuration.Seconds())
+	log.Info("Outputs uploaded in %s", uploadDuration)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
