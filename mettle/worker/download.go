@@ -18,7 +18,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 	grpcstatus "google.golang.org/grpc/status"
+
+	"github.com/thought-machine/please-servers/grpcutil"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -282,16 +285,19 @@ func shouldCompressAll(filenames []string) bool {
 
 // unaryCompressionInterceptor applies compression to unary RPCs based on the context.
 func unaryCompressionInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
+	ctx, opts = compressionInterceptor(ctx, opts)
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
 // streamCompressionInterceptor applies compression to streaming RPCs based on the given context.
 func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
+	ctx, opts = compressionInterceptor(ctx, opts)
 	return streamer(ctx, desc, cc, method, opts...)
+}
+
+func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) (context.Context, []grpc.CallOption) {
+	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
+		return ctx, append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	return metadata.AppendToOutgoingContext(ctx, grpcutil.SkipCompressionKey, "true"), opts
 }
