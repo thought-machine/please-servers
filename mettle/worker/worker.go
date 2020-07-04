@@ -222,7 +222,10 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts:           append(grpcutil.DialOptions(tokenFile, false), grpc.WithChainStreamInterceptor(CompressionInterceptor)),
+		DialOpts: append(grpcutil.DialOptions(tokenFile, false),
+			grpc.WithChainUnaryInterceptor(unaryCompressionInterceptor),
+			grpc.WithChainStreamInterceptor(streamCompressionInterceptor),
+		),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err

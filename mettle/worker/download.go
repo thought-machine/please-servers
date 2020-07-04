@@ -280,8 +280,16 @@ func shouldCompressAll(filenames []string) bool {
 	return false
 }
 
-// CompressionInterceptor applies compression to RPCs based on the given context.
-func CompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+// unaryCompressionInterceptor applies compression to unary RPCs based on the context.
+func unaryCompressionInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
+// streamCompressionInterceptor applies compression to streaming RPCs based on the given context.
+func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
 		opts = append(opts, grpc.UseCompressor(gzip.Name))
 	}
