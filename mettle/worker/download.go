@@ -273,10 +273,7 @@ func shouldCompress(filename string) bool {
 // CompressionInterceptor applies compression to RPCs based on the given context.
 func CompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
-		log.Warning("Applying compression to %s", method)
 		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	} else {
-		log.Warning("Not applying compression to %s", method)
 	}
 	return streamer(ctx, desc, cc, method, opts...)
 }
