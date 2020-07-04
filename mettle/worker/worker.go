@@ -32,6 +32,7 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -221,7 +222,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts:           grpcutil.DialOptions(tokenFile, false),
+		DialOpts:           append(grpcutil.DialOptions(tokenFile, false), grpc.WithStreamInterceptor(CompressionInterceptor)),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err

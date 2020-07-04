@@ -15,7 +15,9 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding/gzip"
 	grpcstatus "google.golang.org/grpc/status"
 )
 
@@ -203,9 +205,7 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if shouldCompress(filename) {
-		ctx = context.WithValue(ctx, compressionKey{}, true)
-	}
+	ctx = context.WithValue(ctx, compressionKey{}, shouldCompress(filename))
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
@@ -270,5 +270,13 @@ func shouldCompress(filename string) bool {
 		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz"))
 }
 
-// CompressionInterceptor applies compression to RPCs based on the
-//type StreamClientInterceptor func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error)
+// CompressionInterceptor applies compression to RPCs based on the given context.
+func CompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
+		log.Warning("Applying compression to %s", method)
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	} else {
+		log.Warning("Not applying compression to %s", method)
+	}
+	return streamer(ctx, desc, cc, method, opts...)
+}

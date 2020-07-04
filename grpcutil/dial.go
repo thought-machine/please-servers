@@ -16,7 +16,7 @@ import (
 // If the URL is prefixed by a protocol (grpc:// or grpcs://) that overrides the TLS flag.
 func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn, error) {
 	address, tls = parseAddress(address, tls)
-	return grpc.Dial(address, append(DialOptions(tokenFile), tlsOpt(tls, caFile))...)
+	return grpc.Dial(address, append(DialOptions(tokenFile, true), tlsOpt(tls, caFile))...)
 }
 
 // MustDial is like Dial but dies on errors.
@@ -34,7 +34,10 @@ func DialOptions(tokenFile string, compress bool) []grpc.DialOption {
 		grpc.MaxCallRecvMsgSize(419430400),
 	)}
 	if compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
+		opts = []grpc.DialOption{grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(419430400),
+			grpc.UseCompressor(gzip.Name),
+		)}
 	}
 	if tokenFile == "" {
 		return opts
