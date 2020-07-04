@@ -221,7 +221,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
+		DialOpts:           grpcutil.DialOptions(tokenFile, false),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err
