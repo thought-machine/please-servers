@@ -270,6 +270,16 @@ func shouldCompress(filename string) bool {
 		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz"))
 }
 
+// shouldCompressAll returns true if all of the given filenames should be compressed.
+func shouldCompressAll(filenames []string) bool {
+	for _, f := range filenames {
+		if shouldCompress(f) {
+			return true
+		}
+	}
+	return false
+}
+
 // CompressionInterceptor applies compression to RPCs based on the given context.
 func CompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {

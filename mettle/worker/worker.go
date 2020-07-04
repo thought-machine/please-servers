@@ -621,6 +621,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
+	ctx = context.WithValue(ctx, compressionKey{}, shouldCompressAll(cmd.OutputPaths))
 	err = w.client.UploadIfMissing(ctx, chomks...)
 	// This is not strictly required but makes things slightly nicer for plz; it won't need
 	// to do this itself and re-update the actionresult.
