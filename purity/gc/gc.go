@@ -197,6 +197,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	dirs := c.inputDirs(dg)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+	c.referencedBlobs[ar.Hash] = struct{}{}
 	for _, f := range result.OutputFiles {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 	}
@@ -239,6 +240,8 @@ func (c *collector) inputDirs(dg *pb.Digest) []*pb.Directory {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[action.CommandDigest.Hash] = struct{}{}
+	c.referencedBlobs[dg.Hash] = struct{}{}
+	c.referencedBlobs[action.InputRootDigest.Hash] = struct{}{}
 	return dirs
 }
 
