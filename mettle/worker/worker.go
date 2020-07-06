@@ -328,10 +328,6 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
 	response := w.runTask(msg.Body)
-	if shouldNack(response) {
-		msg.Nack()
-		return response, fmt.Errorf("Execution failed: %s", response.Status)
-	}
 	msg.Ack()
 	return response, w.update(pb.ExecutionStage_COMPLETED, response)
 }
@@ -710,19 +706,4 @@ func getEnvVar(command *pb.Command, name string) string {
 		}
 	}
 	return ""
-}
-
-// shouldNack returns true if a status corresponds to something we should attempt to
-// retry at a higher level by nack'ing the message to get it redelivered to someone else.
-// This is a bit different to retryable gRPC errors where we wouldn't consider Internal retryable,
-// but if we ourselves have encountered an Internal error we can hope someone else will be OK.
-func shouldNack(response *pb.ExecuteResponse) bool {
-	if response.Status == nil {
-		return false // should nae get here
-	}
-	switch codes.Code(response.Status.Code) {
-	case codes.Internal, codes.Canceled, codes.DeadlineExceeded, codes.ResourceExhausted:
-		return true
-	}
-	return false
 }
