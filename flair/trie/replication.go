@@ -90,7 +90,7 @@ func (r *Replicator) SequentialDigest(digest *pb.Digest, f ReplicatedFunc) error
 // Parallel replicates the given function to all replicas at once.
 // It returns an error if all replicas fail, hence it is possible for some replicas not to receive data.
 func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
-	g := newErrGroup(key, r.Replicas)
+	var g multierror.Group
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
 		o := offset
@@ -100,6 +100,10 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 		offset += r.increment
 	}
 	if err := g.Wait(); err != nil {
+		if len(err.Errors) < r.Replicas {
+			log.Debug("Writes to some replicas for %s failed: %s", key, err)
+			return nil
+		}
 		log.Info("Writes to all replicas for %s failed: %s", key, err)
 		return err
 	}
