@@ -20,14 +20,14 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
-	GRPC     grpcutil.Opts `group:"Options controlling the gRPC server"`
-	Geometry map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
-	AssetGeometry map[string]string `short:"a" long:"asset_geometry" description:"Asset server geometry to forward requests to. If not given then the remote asset API will be unavailable."`
+	GRPC             grpcutil.Opts     `group:"Options controlling the gRPC server"`
+	Geometry         map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
+	AssetGeometry    map[string]string `short:"a" long:"asset_geometry" description:"Asset server geometry to forward requests to. If not given then the remote asset API will be unavailable."`
 	ExecutorGeometry map[string]string `short:"e" long:"executor_geometry" description:"Executor server geometry to forward request to. If not given then the executor API will be unavailable."`
-	Replicas int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
-	ConnTLS bool `long:"tls" description:"Use TLS for connecting to other servers"`
-	CA      string `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
-	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Replicas         int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
+	ConnTLS          bool              `long:"tls" description:"Use TLS for connecting to other servers"`
+	CA               string            `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
+	Admin            admin.Opts        `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Flair is a proxy server used to forward requests to Elan.

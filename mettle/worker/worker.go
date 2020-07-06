@@ -32,6 +32,7 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -221,7 +222,10 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
+		DialOpts: append(grpcutil.DialOptions(tokenFile),
+			grpc.WithChainUnaryInterceptor(unaryCompressionInterceptor),
+			grpc.WithChainStreamInterceptor(streamCompressionInterceptor),
+		),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err
@@ -523,7 +527,9 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	}
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
-	uploadDurations.Observe(end.Sub(execEnd).Seconds())
+	uploadDuration := end.Sub(execEnd)
+	uploadDurations.Observe(uploadDuration.Seconds())
+	log.Info("Outputs uploaded in %s", uploadDuration)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
@@ -618,6 +624,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
+	ctx = context.WithValue(ctx, compressionKey{}, shouldCompressAll(cmd.OutputPaths))
 	err = w.client.UploadIfMissing(ctx, chomks...)
 	// This is not strictly required but makes things slightly nicer for plz; it won't need
 	// to do this itself and re-update the actionresult.

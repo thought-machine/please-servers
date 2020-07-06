@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 )
 
 // Dial is a convenience function wrapping up some common gRPC functionality.
@@ -19,21 +20,13 @@ func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn,
 	return grpc.Dial(address, append(DialOptions(tokenFile), tlsOpt(tls, caFile))...)
 }
 
-// MustDial is like Dial but dies on errors.
-func MustDial(address string, tls bool, caFile, tokenFile string) *grpc.ClientConn {
-	conn, err := Dial(address, tls, caFile, tokenFile)
-	if err != nil {
-		log.Fatalf("Failed to dial: %s", err)
-	}
-	return conn
-}
-
 // DialOptions returns some common dial options.
 func DialOptions(tokenFile string) []grpc.DialOption {
-	opts := []grpc.DialOption{grpc.WithDefaultCallOptions(
-		grpc.MaxCallRecvMsgSize(419430400),
-		grpc.UseCompressor(gzip.Name),
-	)}
+	opts := []grpc.DialOption{
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
+		grpc.WithChainUnaryInterceptor(unaryCompressionInterceptor),
+		grpc.WithChainStreamInterceptor(streamCompressionInterceptor),
+	}
 	if tokenFile == "" {
 		return opts
 	}
@@ -94,3 +87,24 @@ func (cred tokenCredProvider) GetRequestMetadata(ctx context.Context, uri ...str
 func (cred tokenCredProvider) RequireTransportSecurity() bool {
 	return false // Allow these to be provided over an insecure channel; this facilitates e.g. service meshes like Istio.
 }
+
+// unaryCompressionInterceptor compresses all outgoing RPCs unless SkipCompressionKey is set.
+func unaryCompressionInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	return invoker(ctx, method, req, reply, cc, compressionInterceptor(ctx, opts)...)
+}
+
+// unaryCompressionInterceptor compresses all outgoing RPCs unless SkipCompressionKey is set.
+func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	return streamer(ctx, desc, cc, method, compressionInterceptor(ctx, opts)...)
+}
+
+func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) []grpc.CallOption {
+	if md, ok := metadata.FromIncomingContext(ctx); !ok || len(md.Get(SkipCompressionKey)) == 0 {
+		return append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	return opts
+}
+
+// SkipCompressionKey is a metadata key that can be set by the client indicating that the server-side
+// should skip compression of further RPCs because it believes the contents are incompressible.
+const SkipCompressionKey = "mettle-skip-compression"
