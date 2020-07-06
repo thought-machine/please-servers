@@ -90,7 +90,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		Service:            url,
 		NoSecurity:         !tls,
 		TransportCredsOnly: tls,
-		DialOpts:           append(grpcutil.DialOptions(tokenFile, true), grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor())),
+		DialOpts:           append(grpcutil.DialOptions(tokenFile), grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor())),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err
