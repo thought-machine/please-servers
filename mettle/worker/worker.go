@@ -463,7 +463,6 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	start := time.Now()
 	w.metadata.ExecutionStartTimestamp = toTimestamp(start)
 	duration, _ := ptypes.Duration(action.Timeout)
-	duration = 10 * time.Second
 	log.Info("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
 	cmd := exec.Command(command.Arguments[0], command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
