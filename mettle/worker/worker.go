@@ -463,6 +463,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	duration, _ := ptypes.Duration(action.Timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
+	log.Info("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
 	cmd := exec.CommandContext(ctx, command.Arguments[0], command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 	cmd.SysProcAttr = sysProcAttr()
@@ -486,6 +487,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		cmd.Env[i] = v.Name + "=" + v.Value
 	}
 	err := cmd.Run()
+	log.Notice("Completed execution for %s", w.actionDigest.Hash)
 	execEnd := time.Now()
 	w.metadata.ExecutionCompletedTimestamp = toTimestamp(execEnd)
 	w.metadata.OutputUploadStartTimestamp = w.metadata.ExecutionCompletedTimestamp
@@ -502,12 +504,11 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		StderrDigest:      stderrDigest.ToProto(),
 		ExecutionMetadata: w.metadata,
 	}
-	log.Notice("Completed execution for %s", w.actionDigest.Hash)
+	log.Info("Uploading outputs for %s", w.actionDigest.Hash)
 	w.observeSysUsage(cmd, execDuration)
 	if err != nil {
 		msg := "Execution failed: " + err.Error()
 		msg += w.writeUncachedResult(ar, msg)
-		log.Warning("%s", appendStd(appendStd(msg, "Stdout", stdout.String()), "Stderr", stderr.String()))
 		return &pb.ExecuteResponse{
 			Status:  &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
 			Result:  ar,
@@ -541,6 +542,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			Result: ar,
 		}
 	}
+	log.Info("Uploaded action for %s", w.actionDigest.Hash)
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
