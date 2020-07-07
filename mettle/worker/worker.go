@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -311,6 +312,7 @@ type worker struct {
 	dirCreation     time.Duration
 	fileDownload    time.Duration
 	lastURL         string // This is reset somewhat lazily.
+	stdout, stderr  bytes.Buffer
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
@@ -467,10 +469,6 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 	cmd.SysProcAttr = sysProcAttr()
 	cmd.Dir = path.Join(w.dir, command.WorkingDirectory)
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
 	cmd.Env = make([]string, len(command.EnvironmentVariables))
 	for i, v := range command.EnvironmentVariables {
 		// This is a crappy little hack; tool paths that are made relative don't always work
@@ -495,8 +493,8 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	// Regardless of the result, upload stdout / stderr.
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	stdoutDigest, _ := w.client.WriteBlob(ctx, stdout.Bytes())
-	stderrDigest, _ := w.client.WriteBlob(ctx, stderr.Bytes())
+	stdoutDigest, _ := w.client.WriteBlob(ctx, w.stdout.Bytes())
+	stderrDigest, _ := w.client.WriteBlob(ctx, w.stderr.Bytes())
 	ar := &pb.ActionResult{
 		ExitCode:          int32(cmd.ProcessState.ExitCode()),
 		StdoutDigest:      stdoutDigest.ToProto(),
@@ -552,6 +550,24 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 // Some care is needed here due to horrible interactions between process termination and
 // having an in-process stdout / stderr.
 func (w *worker) runCommand(cmd *exec.Cmd, timeout time.Duration) error {
+	w.stdout.Reset()
+	w.stderr.Reset()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	defer stdout.Close()
+	go func() {
+		io.Copy(&w.stdout, stdout)
+	}()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	defer stderr.Close()
+	go func() {
+		io.Copy(&w.stderr, stderr)
+	}()
 	if err := cmd.Start(); err != nil {
 		return err
 	}
