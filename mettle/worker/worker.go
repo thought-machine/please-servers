@@ -461,10 +461,9 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	start := time.Now()
 	w.metadata.ExecutionStartTimestamp = toTimestamp(start)
 	duration, _ := ptypes.Duration(action.Timeout)
-	ctx, cancel := context.WithTimeout(context.Background(), duration)
-	defer cancel()
+	duration = 10 * time.Second
 	log.Info("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
-	cmd := exec.CommandContext(ctx, command.Arguments[0], command.Arguments[1:]...)
+	cmd := exec.Command(command.Arguments[0], command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 	cmd.SysProcAttr = sysProcAttr()
 	cmd.Dir = path.Join(w.dir, command.WorkingDirectory)
@@ -486,7 +485,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		}
 		cmd.Env[i] = v.Name + "=" + v.Value
 	}
-	err := cmd.Run()
+	err := w.runCommand(cmd, duration)
 	log.Notice("Completed execution for %s", w.actionDigest.Hash)
 	execEnd := time.Now()
 	w.metadata.ExecutionCompletedTimestamp = toTimestamp(execEnd)
@@ -494,7 +493,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	execDuration := execEnd.Sub(start).Seconds()
 	executeDurations.Observe(execDuration)
 	// Regardless of the result, upload stdout / stderr.
-	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	stdoutDigest, _ := w.client.WriteBlob(ctx, stdout.Bytes())
 	stderrDigest, _ := w.client.WriteBlob(ctx, stderr.Bytes())
@@ -546,6 +545,34 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
+	}
+}
+
+// runCommand runs a command with a timeout, terminating it in a sensible manner.
+// Some care is needed here due to horrible interactions between process termination and
+// having an in-process stdout / stderr.
+func (w *worker) runCommand(cmd *exec.Cmd, timeout time.Duration) error {
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	ch := make(chan error)
+	go func() {
+		ch <- cmd.Wait()
+	}()
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(timeout):
+		log.Warning("Terminating process for %s due to timeout", w.actionDigest.Hash)
+		cmd.Process.Signal(os.Signal(syscall.SIGTERM))
+	}
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(5 * time.Second):
+		log.Warning("Killing process for %s", w.actionDigest.Hash)
+		cmd.Process.Kill()
+		return fmt.Errorf("Process timed out")
 	}
 }
 
