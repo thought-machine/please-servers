@@ -652,8 +652,36 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 	}
 }
 
+func (w *worker) markOutputsAsBinary(cmd *pb.Command) error {
+	for _, f := range cmd.OutputFiles {
+		filePath := filepath.Join(w.dir, f)
+		if err := os.Chmod(filePath, 0555); err != nil {
+			return err
+		}
+	}
+
+	for _, d := range cmd.OutputDirectories {
+		err := filepath.Walk(filepath.Join(w.dir, d), func(path string, info os.FileInfo, err error) error {
+			if !info.Mode().IsRegular() || info.Mode() == 0555 {
+				return nil
+			}
+			return os.Chmod(path, 0555)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // collectOutputs collects all the outputs of a command and adds them to the given ActionResult.
 func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
+	if containsEnvVar(cmd, "_BINARY", "true") {
+		if err := w.markOutputsAsBinary(cmd); err != nil {
+			return err
+		}
+	}
+
 	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), filemetadata.NewNoopCache())
 	if err != nil {
 		return err
@@ -666,13 +694,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	defer cancel()
 	ctx = context.WithValue(ctx, compressionKey{}, shouldCompressAll(cmd.OutputPaths))
 	err = w.client.UploadIfMissing(ctx, chomks...)
-	// This is not strictly required but makes things slightly nicer for plz; it won't need
-	// to do this itself and re-update the actionresult.
-	if containsEnvVar(cmd, "_BINARY", "true") {
-		for _, f := range ar2.OutputFiles {
-			f.IsExecutable = true
-		}
-	}
+
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories
 	ar.OutputFileSymlinks = ar2.OutputFileSymlinks
