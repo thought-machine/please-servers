@@ -112,8 +112,11 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	// blocks are of a consistent size). This currently fits our setup.
 	blobs := map[*trie.Server][]*pb.Digest{}
 	for _, d := range req.BlobDigests {
-		s := s.replicator.Trie.Get(d.Hash)
-		blobs[s] = append(blobs[s], d)
+		// Empty directories have empty hashes. We don't need to check for them.
+		if d.Hash != "" {
+			s := s.replicator.Trie.Get(d.Hash)
+			blobs[s] = append(blobs[s], d)
+		}
 	}
 	resp := &pb.FindMissingBlobsResponse{}
 	var g errgroup.Group
