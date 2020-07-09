@@ -19,14 +19,7 @@ var opts = struct {
 	GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
 	Storage     string        `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
 	Parallelism int           `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer"`
-	Cache       struct {
-		Port        int          `long:"port" default:"8080" description:"Port to communicate cache data over"`
-		MaxSize     cli.ByteSize `long:"max_size" default:"10M" description:"Max size of in-memory cache"`
-		MaxItemSize cli.ByteSize `long:"max_item_size" default:"100K" description:"Max size of any single item in the cache"`
-		Peers       []string     `long:"peer" description:"URLs of cache peers to connect to. Will be monitored via DNS."`
-		SelfIP      string       `long:"self_ip" env:"CACHE_SELF_IP" description:"IP address of the current peer."`
-	} `group:"Options controlling in-memory caching of blobs" namespace:"cache"`
-	FileCache struct {
+	FileCache   struct {
 		MaxSize cli.ByteSize `long:"max_size" description:"Max size of the cache. If 0 or not specified it is disabled."`
 		Path    string       `long:"path" description:"Path to the root of the cache"`
 	} `group:"Options controlling filesystem-based caching of blobs" namespace:"file_cache"`
@@ -50,5 +43,5 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	rpc.ServeForever(opts.GRPC, opts.Cache.Port, opts.Storage, opts.Cache.SelfIP, opts.Cache.Peers, int64(opts.Cache.MaxSize), int64(opts.Cache.MaxItemSize), opts.FileCache.Path, int64(opts.FileCache.MaxSize), opts.Parallelism)
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.FileCache.Path, int64(opts.FileCache.MaxSize), opts.Parallelism)
 }

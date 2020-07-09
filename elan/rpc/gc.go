@@ -79,9 +79,6 @@ func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob
 		if s.fileCache != nil {
 			s.fileCache.Remove(key)
 		}
-		if s.cache != nil {
-			s.cache.Remove(key)
-		}
 	}
 	return me.ErrorOrNil()
 }

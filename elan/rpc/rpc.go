@@ -75,16 +75,6 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 })
 
 func init() {
-	prometheus.MustRegister(mainBytesTotal)
-	prometheus.MustRegister(mainItemsTotal)
-	prometheus.MustRegister(mainGetsTotal)
-	prometheus.MustRegister(mainHitsTotal)
-	prometheus.MustRegister(mainEvictionsTotal)
-	prometheus.MustRegister(hotBytesTotal)
-	prometheus.MustRegister(hotItemsTotal)
-	prometheus.MustRegister(hotGetsTotal)
-	prometheus.MustRegister(hotHitsTotal)
-	prometheus.MustRegister(hotEvictionsTotal)
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(bytesServed)
 	prometheus.MustRegister(readLatencies)
@@ -94,20 +84,18 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, cachePort int, storage, self string, peers []string, maxCacheSize, maxCacheItemSize int64, fileCachePath string, maxFileCacheSize int64, parallelism int) {
+func ServeForever(opts grpcutil.Opts, storage string, fileCachePath string, maxFileCacheSize int64, parallelism int) {
 	bucket, err := blob.OpenBucket(context.Background(), storage)
 	if err != nil {
 		log.Fatalf("Failed to open storage %s: %v", storage, err)
 	}
 	srv := &server{
-		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:      strings.TrimPrefix(storage, "file://"),
-		isFileStorage:    strings.HasPrefix(storage, "file://"),
-		bucket:           bucket,
-		maxCacheItemSize: maxCacheItemSize,
-		limiter:          make(chan struct{}, parallelism),
+		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		storageRoot:   strings.TrimPrefix(storage, "file://"),
+		isFileStorage: strings.HasPrefix(storage, "file://"),
+		bucket:        bucket,
+		limiter:       make(chan struct{}, parallelism),
 	}
-	srv.cache = newCache(srv, opts.Host, cachePort, self, peers, maxCacheSize, maxCacheItemSize)
 	if fileCachePath != "" && maxFileCacheSize > 0 {
 		c, err := newFileCache(fileCachePath, maxFileCacheSize)
 		if err != nil {
@@ -130,7 +118,6 @@ type server struct {
 	bucket           *blob.Bucket
 	bytestreamRe     *regexp.Regexp
 	limiter          chan struct{}
-	cache            *cache
 	maxCacheItemSize int64
 	fileCache        *fileCache
 }
@@ -213,16 +200,8 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	return resp, nil
 }
 
-// blobExists returns true if this blob has been previously uploaded.
+// blobExists returns true if this blob exists in the underlying storage.
 func (s *server) blobExists(ctx context.Context, key string) bool {
-	if s.cache.Has(key) {
-		return true
-	}
-	return s.blobExistsUncached(ctx, key)
-}
-
-// blobExistsUncached returns true if this blob exists in the underlying storage (but not the cache)
-func (s *server) blobExistsUncached(ctx context.Context, key string) bool {
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	exists, _ := s.bucket.Exists(ctx, key)
@@ -247,7 +226,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			if len(r.Data) != int(r.Digest.SizeBytes) {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
-			} else if s.blobExistsUncached(ctx, s.key("cas", r.Digest)) {
+			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data)); err != nil {
 				rr.Status.Code = int32(status.Code(err))
@@ -302,11 +281,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	} else if req.RootDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "missing root_digest field")
 	}
-	key := s.key("tree", req.RootDigest)
 	resp := &pb.GetTreeResponse{}
-	if s.cache.GetProto(key, resp) {
-		return srv.Send(resp)
-	}
 	resp, err := s.getWholeTree(req.RootDigest)
 	if err != nil {
 		return err
@@ -345,7 +320,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, err := s.readBlob(ctx, "cas", digest, req.ReadOffset, req.ReadLimit)
+	r, err := s.readBlob(ctx, s.key("cas", digest), req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
@@ -401,35 +376,22 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 	return nil, status.Errorf(codes.NotFound, "write %s not found", req.ResourceName)
 }
 
-func (s *server) readBlob(ctx context.Context, prefix string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
+func (s *server) readBlob(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
 	if length == 0 {
 		// Special case any empty read request
 		return ioutil.NopCloser(bytes.NewReader(nil)), nil
 	}
-	key := s.key(prefix, digest)
 	if s.fileCache != nil {
 		if r := s.fileCache.Get(key); r != nil {
 			return r, nil
 		}
 	}
-	if blob, present := s.cachedBlob(key, digest); present {
-		if length > 0 {
-			blob = blob[offset : offset+length]
-		} else {
-			blob = blob[offset:]
-		}
-		return &countingReader{r: ioutil.NopCloser(bytes.NewReader(blob))}, nil
-	}
-	return s.readBlobUncached(ctx, key, digest, offset, length)
-}
-
-func (s *server) readBlobUncached(ctx context.Context, key string, digest *pb.Digest, offset, length int64) (io.ReadCloser, error) {
 	start := time.Now()
 	defer func() { readLatencies.Observe(time.Since(start).Seconds()) }()
 	r, err := s.bucket.NewRangeReader(ctx, key, offset, length, nil)
 	if err != nil {
 		if gcerrors.Code(err) == gcerrors.NotFound {
-			return nil, status.Errorf(codes.NotFound, "Blob %s not found", digest.Hash)
+			return nil, status.Errorf(codes.NotFound, "Blob %s not found", key)
 		}
 		return nil, err
 	}
@@ -448,12 +410,9 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 			return b, nil
 		}
 	}
-	if blob, present := s.cachedBlob(key, digest); present {
-		return blob, nil
-	}
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	r, err := s.readBlobUncached(ctx, key, digest, 0, -1)
+	r, err := s.readBlob(ctx, key, 0, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -478,18 +437,9 @@ func (s *server) labelKey(label string) string {
 	return path.Join("rec", strings.Replace(strings.TrimLeft(label, "/"), ":", "/", -1))
 }
 
-func (s *server) cachedBlob(key string, digest *pb.Digest) ([]byte, bool) {
-	if digest.SizeBytes < s.maxCacheItemSize {
-		if blob := s.cache.Get(key); blob != nil {
-			return blob, true
-		}
-	}
-	return nil, false
-}
-
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
-	if prefix == "cas" && s.blobExistsUncached(ctx, key) {
+	if prefix == "cas" && s.blobExists(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
 		// this seems like the most compatible way.
@@ -538,9 +488,6 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	}
 	if err := wc.Close(); err != nil {
 		return err
-	}
-	if digest.SizeBytes < s.maxCacheItemSize {
-		s.cache.Set(key, buf.Bytes())
 	}
 	return nil
 }
