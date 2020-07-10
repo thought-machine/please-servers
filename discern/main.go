@@ -25,7 +25,7 @@ var opts = struct {
 	Usage     string
 	Verbosity cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
 	Storage   struct {
-		InstanceName string `long:"instance" default:"mettle" description:"Instance name"`
+		InstanceName string `short:"i" long:"instance" default:"mettle" description:"Instance name"`
 		Storage      string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS          bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling connection to the CAS server"`
