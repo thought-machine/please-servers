@@ -382,7 +382,7 @@ go_get(
 go_get(
     name = "sri",
     get = "github.com/peterebden/go-sri",
-    revision = "v1.1.0",
+    revision = "v1.1.1",
 )
 
 go_get(
