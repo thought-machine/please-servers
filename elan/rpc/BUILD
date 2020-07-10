@@ -10,7 +10,6 @@ go_library(
         "//third_party/go:cli-init",
         "//third_party/go:go-multierror",
         "//third_party/go:grpc",
-        "//third_party/go:groupcache",
         "//third_party/go:longrunning",
         "//third_party/go/prometheus",
         "//third_party/go:protobuf",
