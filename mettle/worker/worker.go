@@ -653,22 +653,27 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 }
 
 func (w *worker) markOutputsAsBinary(cmd *pb.Command) error {
-	for _, f := range cmd.OutputFiles {
-		filePath := filepath.Join(w.dir, f)
-		if err := os.Chmod(filePath, 0555); err != nil {
-			return err
-		}
-	}
-
-	for _, d := range cmd.OutputDirectories {
-		err := filepath.Walk(filepath.Join(w.dir, d), func(path string, info os.FileInfo, err error) error {
-			if !info.Mode().IsRegular() || info.Mode() == 0555 {
-				return nil
-			}
-			return os.Chmod(path, 0555)
-		})
+	for _, o := range cmd.OutputPaths {
+		filePath := filepath.Join(w.dir, o)
+		info, err := os.Lstat(filePath)
 		if err != nil {
 			return err
+		}
+
+		if info.IsDir() {
+			err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+				if !info.Mode().IsRegular() || info.Mode() == 0555 {
+					return nil
+				}
+				return os.Chmod(path, 0555)
+			})
+			if err != nil {
+				return err
+			}
+		} else {
+			if err := os.Chmod(filePath, 0555); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
