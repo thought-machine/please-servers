@@ -434,15 +434,6 @@ go_get(
 )
 
 go_get(
-    name = "groupcache",
-    get = "github.com/peterebden/groupcache/...",
-    revision = "a163c23558ba1c8b92b96fb16558550b6e803948",
-    deps = [
-        ":protobuf",
-    ],
-)
-
-go_get(
     name = "copyfile",
     get = "github.com/peterebden/go-copyfile",
     revision = "bc0baf74909cb55565cf9536cb003f04da55372d",
