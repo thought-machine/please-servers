@@ -682,12 +682,9 @@ func (w *worker) markOutputsAsBinary(cmd *pb.Command) error {
 // collectOutputs collects all the outputs of a command and adds them to the given ActionResult.
 func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	if containsEnvVar(cmd, "_BINARY", "true") {
-		log.Warningf("output is binary ")
 		if err := w.markOutputsAsBinary(cmd); err != nil {
 			return err
 		}
-	} else {
-		log.Warningf("output is not binary ")
 	}
 
 	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), filemetadata.NewNoopCache())
