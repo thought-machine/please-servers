@@ -299,5 +299,5 @@ func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) (contex
 	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
 		return ctx, append(opts, grpc.UseCompressor(gzip.Name))
 	}
-	return metadata.AppendToOutgoingContext(ctx, grpcutil.SkipCompressionKey, "true"), opts
+	return grpcutil.SkipCompression(ctx), opts
 }

@@ -1,15 +1,14 @@
 package gzfile
 
 import (
-	"bytes"
 	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"os"
 )
 
-// level is the compression level we use.
-const level = gzip.DefaultCompression
+// compressionLevel is the compression level we use.
+const compressionLevel = gzip.DefaultCompression
 
 // A ReadSeekCloser combines the three standard io interfaces.
 type ReadSeekCloser interface {

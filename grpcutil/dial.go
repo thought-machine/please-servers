@@ -88,23 +88,35 @@ func (cred tokenCredProvider) RequireTransportSecurity() bool {
 	return false // Allow these to be provided over an insecure channel; this facilitates e.g. service meshes like Istio.
 }
 
-// unaryCompressionInterceptor compresses all outgoing RPCs unless SkipCompressionKey is set.
+// unaryCompressionInterceptor compresses all outgoing RPCs unless it's been skipped via SkipCompression.
 func unaryCompressionInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	return invoker(ctx, method, req, reply, cc, compressionInterceptor(ctx, opts)...)
 }
 
-// unaryCompressionInterceptor compresses all outgoing RPCs unless SkipCompressionKey is set.
+// unaryCompressionInterceptor compresses all outgoing RPCs unless it's been skipped via SkipCompression.
 func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	return streamer(ctx, desc, cc, method, compressionInterceptor(ctx, opts)...)
 }
 
 func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) []grpc.CallOption {
-	if md, ok := metadata.FromIncomingContext(ctx); !ok || len(md.Get(SkipCompressionKey)) == 0 {
+	if ShouldCompress(ctx) {
 		return append(opts, grpc.UseCompressor(gzip.Name))
 	}
 	return opts
 }
 
-// SkipCompressionKey is a metadata key that can be set by the client indicating that the server-side
+// skipCompressionKey is a metadata key that can be set by the client indicating that the server-side
 // should skip compression of further RPCs because it believes the contents are incompressible.
-const SkipCompressionKey = "mettle-skip-compression"
+const skipCompressionKey = "mettle-skip-compression"
+
+// ShouldCompress returns true if an incoming context does not indicate that we shouldn't
+// compress the stream (i.e. the default is to compress it)
+func ShouldCompress(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	return !ok || len(md.Get(skipCompressionKey)) == 0
+}
+
+// SkipCompression returns a context that indicates that we should not compress this request.
+func SkipCompression(ctx context.Context) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, skipCompressionKey, "true")
+}

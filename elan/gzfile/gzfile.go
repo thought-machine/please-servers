@@ -6,30 +6,25 @@
 package gzfile
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pkg/xattr"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
 	"gocloud.dev/gcerrors"
-	"gocloud.dev/internal/escape"
-)
 
-const defaultPageSize = 1000
+	"github.com/thought-machine/please-servers/grpcutil"
+)
 
 func init() {
 	blob.DefaultURLMux().RegisterBucket(Scheme, &URLOpener{})
@@ -45,13 +40,11 @@ const xattrName = "user.elan_gz"
 var gzipTag = []byte("gzip")
 
 // URLOpener opens file bucket URLs like "gzfile:///foo/bar/baz".
-//
-// The URL's host is ignored.
 type URLOpener struct{}
 
 // OpenBucketURL opens a blob.Bucket based on u.
 func (o *URLOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket, error) {
-	return OpenBucket(filepath.FromSlash(u.Path))
+	return OpenBucket(u.Path)
 }
 
 type bucket struct {
@@ -126,12 +119,6 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 			if len(key) > len(opts.Prefix) && !strings.HasPrefix(key, opts.Prefix) {
 				return filepath.SkipDir
 			}
-			// Similarly, avoid recursing into subdirectories if we're making
-			// "directories" and all of the files in this subdirectory are guaranteed
-			// to collapse to a "directory" that we've already added.
-			if lastPrefix != "" && strings.HasPrefix(key, lastPrefix) {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 		// Skip files/directories that don't match the Prefix.
@@ -145,7 +132,7 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 		})
 		return nil
 	})
-	return &result, err
+	return result, err
 }
 
 // As implements driver.As.
@@ -258,6 +245,16 @@ func (b *bucket) NewTypedWriter(ctx context.Context, key string, contentType str
 		f:    f,
 		path: path,
 		temp: f.Name(),
+	}
+	if grpcutil.ShouldCompress(ctx) {
+		if err := xattr.FSet(f, xattrName, gzipTag); err != nil {
+			return nil, err
+		}
+		gzw, err := gzip.NewWriterLevel(f, compressionLevel)
+		if err != nil {
+			return nil, err
+		}
+		f.w = gzw
 	}
 	return w, nil
 }
