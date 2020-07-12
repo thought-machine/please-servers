@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/peterebden/go-cli-init"
 	"github.com/pkg/xattr"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
@@ -25,6 +26,8 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 )
+
+var log = cli.MustGetLogger()
 
 func init() {
 	blob.DefaultURLMux().RegisterBucket(Scheme, &URLOpener{})
@@ -44,7 +47,7 @@ type URLOpener struct{}
 
 // OpenBucketURL opens a blob.Bucket based on u.
 func (o *URLOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket, error) {
-	return OpenBucket(u.Path)
+	return OpenBucket(path.Join(u.Host, u.Path))
 }
 
 type bucket struct {
@@ -254,7 +257,7 @@ func (b *bucket) NewTypedWriter(ctx context.Context, key string, contentType str
 		if err != nil {
 			return nil, err
 		}
-		w.f = gzw
+		w.f = &gzwriter{f: f, w: gzw}
 	}
 	return w, nil
 }

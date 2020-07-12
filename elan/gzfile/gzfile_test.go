@@ -16,35 +16,15 @@ import (
 )
 
 func TestWriteAndReadUncompressed(t *testing.T) {
-	testWriteAndRead(grpcutil.SkipCompression(context.Background()), t)
+	testWriteAndRead(grpcutil.SkipCompression(context.Background()), t, "test-bucket-1")
 }
 
 func TestWriteAndReadCompressed(t *testing.T) {
-	testWriteAndRead(context.Background(), t)
-}
-
-func testWriteAndRead(ctx context.Context, t *testing.T) {
-	bucket, err := blob.OpenBucket(ctx, "gzfile://test-bucket")
-	require.NoError(t, err)
-	defer bucket.Close()
-
-	key := "test/file/cthulhu.txt"
-	err = bucket.WriteAll(ctx, key, []byte(testContents), nil)
-	require.NoError(t, err)
-
-	b, err := bucket.ReadAll(context.Background(), key)
-	require.NoError(t, err)
-	assert.Equal(t, testContents, string(b))
+	testWriteAndRead(context.Background(), t, "test-bucket-2")
 }
 
 func TestIsReallyCompressed(t *testing.T) {
-	bucket, err := blob.OpenBucket(context.Background(), "gzfile://test-bucket-2")
-	require.NoError(t, err)
-	defer bucket.Close()
-
-	key := "test/file/cthulhu.txt"
-	err = bucket.WriteAll(context.Background(), key, []byte(testContents), nil)
-	require.NoError(t, err)
+	testWrite(context.Background(), t, "test-bucket-3")
 
 	// This sucks a bit because we're assuming the bucket's internal file layout.
 	// However without this test you could implement gzfile with fileblob and they'd still all pass.
@@ -58,6 +38,37 @@ func TestIsReallyCompressed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, testContents, string(b))
 }
+
+func TestPartialRead(t *testing.T) {
+	bucket := testWrite(context.Background(), t, "test-bucket-4")
+
+	r, err := bucket.NewRangeReader(context.Background(), key, 500, 500, nil)
+	require.NoError(t, err)
+	defer r.Close()
+	b, err := ioutil.ReadAll(r)
+	assert.NoError(t, err)
+	// N.B. The arguments to NewRangeReader are offset/length, whereas this is offset:offset+length
+	assert.Equal(t, string(b), testContents[500:1000])
+}
+
+func testWriteAndRead(ctx context.Context, t *testing.T, root string) {
+	bucket := testWrite(ctx, t, root)
+	defer bucket.Close()
+	b, err := bucket.ReadAll(context.Background(), key)
+	require.NoError(t, err)
+	assert.Equal(t, testContents, string(b))
+}
+
+func testWrite(ctx context.Context, t *testing.T, root string) *blob.Bucket {
+	bucket, err := blob.OpenBucket(ctx, "gzfile://"+root)
+	require.NoError(t, err)
+
+	err = bucket.WriteAll(ctx, key, []byte(testContents), nil)
+	require.NoError(t, err)
+	return bucket
+}
+
+const key = "test/file/cthulhu.txt"
 
 const testContents = `
 The most merciful thing in the world, I think, is the inability of the human mind to correlate all its contents. We live on a placid island of ignorance in the midst of black seas of infinity, and it was not meant that we should voyage far. The sciences, each straining in its own direction, have hitherto harmed us little; but some day the piecing together of dissociated knowledge will open up such terrifying vistas of reality, and of our frightful position therein, that we shall either go mad from the revelation or flee from the deadly light into the peace and safety of a new dark age.

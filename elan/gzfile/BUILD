@@ -3,6 +3,7 @@ go_library(
     srcs = glob(["*.go"], exclude=["*_test.go"]),
     deps = [
         "//grpcutil",
+        "//third_party/go:cli-init",
         "//third_party/go:xattr",
         "//third_party/go/gocloud",
     ],
