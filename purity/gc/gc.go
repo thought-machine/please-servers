@@ -74,7 +74,7 @@ func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
 
 // Sizes returns the sizes of the top N actions.
 func Sizes(url, instanceName, tokenFile string, tls bool, n int) ([]Action, error) {
-	gc, err := newCollector(url, instanceName, tokenFile, tls, false, 1000000*time.Hour)
+	gc, err := newCollector(url, instanceName, tokenFile, tls, true, 1000000*time.Hour)
 	if err != nil {
 		return nil, err
 	} else if err := gc.LoadAllBlobs(); err != nil {
@@ -444,12 +444,16 @@ func (c *collector) RemoveBrokenBlobs() error {
 
 // Sizes returns the sizes of the top n biggest actions.
 func (c *collector) Sizes(n int) []Action {
+	blobs := make(map[string]int64, len(c.allBlobs))
+	for _, b := range c.allBlobs {
+		blobs[b.Hash] = b.SizeBytes
+	}
 	ret := make([]Action, len(c.actionResults))
 	for i, ar := range c.actionResults {
 		ret[i] = Action{
 			Digest: pb.Digest{
 				Hash:      ar.Hash,
-				SizeBytes: ar.SizeBytes,
+				SizeBytes: blobs[ar.Hash],
 			},
 			InputSize:  c.inputSizes[ar.Hash],
 			OutputSize: c.outputSizes[ar.Hash],
