@@ -1,7 +1,11 @@
 package gzfile
 
 import (
+	"compress/gzip"
 	"context"
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +34,28 @@ func testWriteAndRead(ctx context.Context, t *testing.T) {
 
 	b, err := bucket.ReadAll(context.Background(), key)
 	require.NoError(t, err)
+	assert.Equal(t, testContents, string(b))
+}
+
+func TestIsReallyCompressed(t *testing.T) {
+	bucket, err := blob.OpenBucket(context.Background(), "gzfile://test-bucket-2")
+	require.NoError(t, err)
+	defer bucket.Close()
+
+	key := "test/file/cthulhu.txt"
+	err = bucket.WriteAll(context.Background(), key, []byte(testContents), nil)
+	require.NoError(t, err)
+
+	// This sucks a bit because we're assuming the bucket's internal file layout.
+	// However without this test you could implement gzfile with fileblob and they'd still all pass.
+	f, err := os.Open(path.Join("test-bucket-2", key))
+	require.NoError(t, err)
+	defer f.Close()
+	gzr, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	defer gzr.Close()
+	b, err := ioutil.ReadAll(gzr)
+	assert.NoError(t, err)
 	assert.Equal(t, testContents, string(b))
 }
 
