@@ -151,7 +151,7 @@ func (b *bucket) ErrorAs(err error, i interface{}) bool {
 
 // Attributes implements driver.Attributes.
 func (b *bucket) Attributes(ctx context.Context, key string) (*driver.Attributes, error) {
-	return nil, gcerrors.Unimplemented
+	return nil, fmt.Errorf("Attributes is unimplemented")
 }
 
 // NewRangeReader implements driver.NewRangeReader.
@@ -254,7 +254,7 @@ func (b *bucket) NewTypedWriter(ctx context.Context, key string, contentType str
 		if err != nil {
 			return nil, err
 		}
-		f.w = gzw
+		w.f = gzw
 	}
 	return w, nil
 }
@@ -288,7 +288,7 @@ func (w *writer) Close() error {
 
 // Copy is not implemented for gzfile.
 func (b *bucket) Copy(ctx context.Context, dstKey, srcKey string, opts *driver.CopyOptions) error {
-	return gcerrors.Unimplemented
+	return fmt.Errorf("Copy is unimplemented")
 }
 
 // Delete implements driver.Delete.
@@ -298,5 +298,5 @@ func (b *bucket) Delete(ctx context.Context, key string) error {
 
 // SignedURL is not implemented for gzfile.
 func (b *bucket) SignedURL(ctx context.Context, key string, opts *driver.SignedURLOptions) (string, error) {
-	return gcerrors.Unimplemented
+	return "", fmt.Errorf("SignedURL is unimplemented")
 }
