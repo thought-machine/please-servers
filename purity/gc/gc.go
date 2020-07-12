@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,6 +72,25 @@ func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
 	return gc.RemoveBrokenBlobs()
 }
 
+// Sizes returns the sizes of the top N actions.
+func Sizes(url, instanceName, tokenFile string, tls bool, n int) ([]Action, error) {
+	gc, err := newCollector(url, instanceName, tokenFile, tls, false, 1000000*time.Hour)
+	if err != nil {
+		return nil, err
+	} else if err := gc.LoadAllBlobs(); err != nil {
+		return nil, err
+	} else if err := gc.MarkReferencedBlobs(); err != nil {
+		return nil, err
+	}
+	return gc.Sizes(n), nil
+}
+
+// An Action is a convenience type returned from Sizes.
+type Action struct {
+	pb.Digest
+	InputSize, OutputSize int
+}
+
 type collector struct {
 	client          *client.Client
 	gcclient        ppb.GCClient
@@ -78,6 +98,8 @@ type collector struct {
 	allBlobs        []*ppb.Blob
 	referencedBlobs map[string]struct{}
 	brokenResults   map[string]struct{}
+	inputSizes      map[string]int
+	outputSizes     map[string]int
 	mutex           sync.Mutex
 	ageThreshold    int64
 	missingInputs   int64
@@ -101,6 +123,8 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		dryRun:          dryRun,
 		referencedBlobs: map[string]struct{}{},
 		brokenResults:   map[string]struct{}{},
+		inputSizes:      map[string]int{},
+		outputSizes:     map[string]int{},
 		ageThreshold:    time.Now().Add(-minAge).Unix(),
 	}, nil
 }
@@ -187,19 +211,23 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
 	}
+	size := ar.SizeBytes
 	for _, d := range result.OutputDirectories {
-		if err := c.markTree(d); err != nil {
-			return fmt.Errorf("Couldn't download output tree for %s: %s", ar.Hash, err)
+		sz, err := c.markTree(d)
+		if err != nil {
+			log.Warning("Couldn't download output tree for %s: %s", ar.Hash, err)
 		}
+		size += sz
 	}
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
-	dirs := c.inputDirs(dg)
+	inputSize, dirs := c.inputDirs(dg)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[ar.Hash] = struct{}{}
 	for _, f := range result.OutputFiles {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
+		size += f.Digest.SizeBytes
 	}
 	for _, d := range dirs {
 		c.markDirectory(d)
@@ -210,6 +238,8 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	if result.StderrDigest != nil {
 		c.referencedBlobs[result.StderrDigest.Hash] = struct{}{}
 	}
+	c.inputSizes[ar.Hash] = int(inputSize)
+	c.outputSizes[ar.Hash] = int(size)
 	// N.B. we do not mark the original action or its sources, those are irrelevant to us
 	//      (unless they are also referenced as the output of something else).
 	return nil
@@ -217,32 +247,43 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 
 // inputDirs returns all the inputs for an action. It doesn't return any errors because we don't
 // want it to be fatal on failure; otherwise anything missing breaks the whole process.
-func (c *collector) inputDirs(dg *pb.Digest) []*pb.Directory {
+func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	action := &pb.Action{}
+	var size int64
 	if err := c.client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), action); err != nil {
 		log.Debug("Failed to read action %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return nil
+		return size, nil
 	}
+	size += dg.SizeBytes
 	if action.InputRootDigest == nil {
 		log.Debug("nil input root for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return nil
+		return size, nil
 	}
+	size += action.InputRootDigest.SizeBytes
 	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
 	if err != nil {
 		log.Debug("Failed to read directory tree for %s (input root %s)", dg.Hash, action.InputRootDigest)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return nil
+		return size, nil
+	}
+	for _, dir := range dirs {
+		for _, d := range dir.Directories {
+			size += d.Digest.SizeBytes
+		}
+		for _, f := range dir.Files {
+			size += f.Digest.SizeBytes
+		}
 	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[action.CommandDigest.Hash] = struct{}{}
 	c.referencedBlobs[dg.Hash] = struct{}{}
 	c.referencedBlobs[action.InputRootDigest.Hash] = struct{}{}
-	return dirs
+	return size, dirs
 }
 
 // markBroken marks an action result as missing some relevant files.
@@ -252,10 +293,10 @@ func (c *collector) markBroken(hash string) {
 	c.brokenResults[hash] = struct{}{}
 }
 
-func (c *collector) markTree(d *pb.OutputDirectory) error {
+func (c *collector) markTree(d *pb.OutputDirectory) (int64, error) {
 	tree := &pb.Tree{}
 	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
-		return err
+		return 0, err
 	}
 	// Here we attempt to fix up any outputs that don't also have the input facet.
 	// This is an incredibly sucky part of the API; the output doesn't contain some of the blobs
@@ -265,20 +306,24 @@ func (c *collector) markTree(d *pb.OutputDirectory) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[d.TreeDigest.Hash] = struct{}{}
-	c.markDirectory(tree.Root)
+	size := c.markDirectory(tree.Root)
 	for _, child := range tree.Children {
-		c.markDirectory(child)
+		size += c.markDirectory(child)
 	}
-	return nil
+	return size, nil
 }
 
-func (c *collector) markDirectory(d *pb.Directory) {
+func (c *collector) markDirectory(d *pb.Directory) int64 {
+	var size int64
 	for _, f := range d.Files {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
+		size += f.Digest.SizeBytes
 	}
 	for _, d := range d.Directories {
 		c.referencedBlobs[d.Digest.Hash] = struct{}{}
+		size += d.Digest.SizeBytes
 	}
+	return size
 }
 
 // checkDirectory checks that the directory protos from a Tree still exist in the CAS and uploads it if not.
@@ -395,4 +440,26 @@ func (c *collector) RemoveBrokenBlobs() error {
 		hashes = append(hashes, h)
 	}
 	return c.RemoveSpecificBlobs(hashes)
+}
+
+// Sizes returns the sizes of the top n biggest actions.
+func (c *collector) Sizes(n int) []Action {
+	ret := make([]Action, len(c.actionResults))
+	for i, ar := range c.actionResults {
+		ret[i] = Action{
+			Digest: pb.Digest{
+				Hash:      ar.Hash,
+				SizeBytes: ar.SizeBytes,
+			},
+			InputSize:  c.inputSizes[ar.Hash],
+			OutputSize: c.outputSizes[ar.Hash],
+		}
+	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].InputSize+ret[i].OutputSize > ret[j].InputSize+ret[j].OutputSize
+	})
+	if len(ret) > n {
+		return ret[:n]
+	}
+	return ret
 }

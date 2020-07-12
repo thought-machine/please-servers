@@ -12,5 +12,8 @@ go_library(
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:terminal",
     ],
-    visibility = ["//purity/..."],
+    visibility = [
+        "//purity/...",
+        "//discern/...",
+    ],
 )
