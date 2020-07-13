@@ -212,12 +212,26 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
 	}
 	size := ar.SizeBytes
+	digests := []*pb.Digest{}
 	for _, d := range result.OutputDirectories {
-		sz, err := c.markTree(d)
+		sz, dgs, err := c.markTree(d)
 		if err != nil {
 			log.Warning("Couldn't download output tree for %s: %s", ar.Hash, err)
 		}
 		size += sz
+		digests = append(digests, dgs...)
+	}
+	for _, f := range result.OutputFiles {
+		digests = append(digests, f.Digest)
+	}
+	// Check whether all these outputs exist.
+	if resp, err := c.client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
+		InstanceName: c.client.InstanceName,
+		BlobDigests:  digests,
+	}); err != nil {
+		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
+	} else if len(resp.MissingBlobDigests) > 0 {
+		log.Warning("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
 	}
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
@@ -293,10 +307,10 @@ func (c *collector) markBroken(hash string) {
 	c.brokenResults[hash] = struct{}{}
 }
 
-func (c *collector) markTree(d *pb.OutputDirectory) (int64, error) {
+func (c *collector) markTree(d *pb.OutputDirectory) (int64, []*pb.Digest, error) {
 	tree := &pb.Tree{}
 	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	// Here we attempt to fix up any outputs that don't also have the input facet.
 	// This is an incredibly sucky part of the API; the output doesn't contain some of the blobs
@@ -306,24 +320,29 @@ func (c *collector) markTree(d *pb.OutputDirectory) (int64, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[d.TreeDigest.Hash] = struct{}{}
-	size := c.markDirectory(tree.Root)
+	size, digests := c.markDirectory(tree.Root)
 	for _, child := range tree.Children {
-		size += c.markDirectory(child)
+		s2, d2 := c.markDirectory(child)
+		size += s2
+		digests = append(digests, d2...)
 	}
-	return size, nil
+	return size, digests, nil
 }
 
-func (c *collector) markDirectory(d *pb.Directory) int64 {
+func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
 	var size int64
+	digests := []*pb.Digest{}
 	for _, f := range d.Files {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 		size += f.Digest.SizeBytes
+		digests = append(digests, f.Digest)
 	}
 	for _, d := range d.Directories {
 		c.referencedBlobs[d.Digest.Hash] = struct{}{}
 		size += d.Digest.SizeBytes
+		digests = append(digests, d.Digest)
 	}
-	return size
+	return size, digests
 }
 
 // checkDirectory checks that the directory protos from a Tree still exist in the CAS and uploads it if not.
