@@ -111,11 +111,15 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	// the primary (basically that the replication offset is an integer multiple of the size of each hash block, and those
 	// blocks are of a consistent size). This currently fits our setup.
 	blobs := map[*trie.Server][]*pb.Digest{}
+	seen := map[string]struct{}{}
 	for _, d := range req.BlobDigests {
 		// Empty directories have empty hashes. We don't need to check for them.
 		if d.Hash != "" {
-			s := s.replicator.Trie.Get(d.Hash)
-			blobs[s] = append(blobs[s], d)
+			if _, present := seen[d.Hash]; !present {
+				s := s.replicator.Trie.Get(d.Hash)
+				blobs[s] = append(blobs[s], d)
+				seen[d.Hash] = struct{}{}
+			}
 		}
 	}
 	resp := &pb.FindMissingBlobsResponse{}
