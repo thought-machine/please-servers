@@ -127,12 +127,8 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 			return nil
 		}
 		size := info.Size()
-		if attr, err := xattr.Get(path, xattrName); err == nil {
-			if i, err := strconv.Atoi(string(attr)); err != nil {
-				log.Warning("Invalid xattr on file: %s", err)
-			} else {
-				size = int64(i)
-			}
+		if sz, err := b.Size(key); err == nil {
+			size = sz
 		}
 		result.Objects = append(result.Objects, &driver.ListObject{
 			Key:     key,
@@ -141,7 +137,22 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 		})
 		return nil
 	})
+	if os.IsNotExist(err) {
+		return result, nil
+	}
 	return result, err
+}
+
+func (b *bucket) Size(key string) (int64, error) {
+	attr, err := xattr.Get(path.Join(b.dir, key), xattrName)
+	if err != nil {
+		return 0, err
+	}
+	i, err := strconv.Atoi(string(attr))
+	if err != nil {
+		return 0, fmt.Errorf("Invalid xattr on file: %s", err)
+	}
+	return int64(i), nil
 }
 
 // As implements driver.As.
@@ -160,7 +171,18 @@ func (b *bucket) ErrorAs(err error, i interface{}) bool {
 
 // Attributes implements driver.Attributes.
 func (b *bucket) Attributes(ctx context.Context, key string) (*driver.Attributes, error) {
-	return nil, fmt.Errorf("Attributes is unimplemented")
+	size, err := b.Size(key)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path.Join(b.dir, key))
+	if err != nil {
+		return nil, err
+	}
+	return &driver.Attributes{
+		Size:    size,
+		ModTime: info.ModTime(),
+	}, nil
 }
 
 // NewRangeReader implements driver.NewRangeReader.
