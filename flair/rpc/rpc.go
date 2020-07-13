@@ -119,25 +119,45 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 		}
 	}
 	resp := &pb.FindMissingBlobsResponse{}
+	type countedDigest struct {
+		Digest *pb.Digest
+		Count  int
+	}
 	var g errgroup.Group
 	var mutex sync.Mutex
 	for srv, b := range blobs {
 		srv := srv
 		b := b
 		g.Go(func() error {
-			return s.replicator.Sequential(srv.Start, func(srv *trie.Server) error {
+			missing := make(map[string]countedDigest, len(b))
+			if err := s.replicator.SequentialAck(srv.Start, func(srv *trie.Server) (bool, error) {
 				r, err := srv.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
 					InstanceName: req.InstanceName,
 					BlobDigests:  b,
 				})
 				if err != nil {
-					return err
+					return true, err
 				}
 				mutex.Lock()
 				defer mutex.Unlock()
-				resp.MissingBlobDigests = append(resp.MissingBlobDigests, r.MissingBlobDigests...)
-				return nil
-			})
+				for _, d := range r.MissingBlobDigests {
+					missing[d.Hash] = countedDigest{
+						Digest: d,
+						Count:  missing[d.Hash].Count + 1,
+					}
+				}
+				return len(r.MissingBlobDigests) > 0, nil
+			}); err != nil {
+				return err
+			}
+			mutex.Lock()
+			defer mutex.Unlock()
+			for _, dg := range missing {
+				if dg.Count == s.replicator.Replicas {
+					resp.MissingBlobDigests = append(resp.MissingBlobDigests, dg.Digest)
+				}
+			}
+			return nil
 		})
 	}
 	return resp, g.Wait()
