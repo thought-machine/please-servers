@@ -225,13 +225,12 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 		digests = append(digests, f.Digest)
 	}
 	// Check whether all these outputs exist.
-	if resp, err := c.client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
+	resp, err := c.client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
 		InstanceName: c.client.InstanceName,
 		BlobDigests:  digests,
-	}); err != nil {
+	})
+	if err != nil {
 		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
-	} else if len(resp.MissingBlobDigests) > 0 {
-		log.Warning("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
 	}
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
@@ -254,8 +253,9 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	}
 	c.inputSizes[ar.Hash] = int(inputSize)
 	c.outputSizes[ar.Hash] = int(size)
-	// N.B. we do not mark the original action or its sources, those are irrelevant to us
-	//      (unless they are also referenced as the output of something else).
+	if len(resp.MissingBlobDigests) > 0 {
+		return fmt.Errorf("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
+	}
 	return nil
 }
 
