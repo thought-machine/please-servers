@@ -488,7 +488,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	}
 	var mutex sync.Mutex
 	resp := &ppb.ListResponse{}
-	ars := map[string]struct{}{}
+	ars := map[string]*ppb.ActionResult{}
 	blobs := map[string]struct{}{}
 	err := s.replicator.All(req.Prefix, func(srv *trie.Server) error {
 		r, err := srv.GC.List(ctx, req)
@@ -498,9 +498,11 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 		mutex.Lock()
 		defer mutex.Unlock()
 		for _, ar := range r.ActionResults {
-			if _, present := ars[ar.Hash]; !present {
+			if existing, present := ars[ar.Hash]; !present {
 				resp.ActionResults = append(resp.ActionResults, ar)
-				ars[ar.Hash] = struct{}{}
+				ars[ar.Hash] = ar
+			} else if existing.LastAccessed < ar.LastAccessed {
+				existing.LastAccessed = ar.LastAccessed
 			}
 		}
 		for _, blob := range r.Blobs {
