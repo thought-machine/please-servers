@@ -95,7 +95,7 @@ type collector struct {
 	client          *client.Client
 	gcclient        ppb.GCClient
 	actionResults   []*ppb.ActionResult
-	allBlobs        []*ppb.Blob
+	allBlobs        map[string]int64
 	referencedBlobs map[string]struct{}
 	brokenResults   map[string]struct{}
 	inputSizes      map[string]int
@@ -121,6 +121,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		client:          client,
 		gcclient:        ppb.NewGCClient(client.Connection),
 		dryRun:          dryRun,
+		allBlobs:        map[string]int64{},
 		referencedBlobs: map[string]struct{}{},
 		brokenResults:   map[string]struct{}{},
 		inputSizes:      map[string]int{},
@@ -153,7 +154,9 @@ func (c *collector) LoadAllBlobs() error {
 				}
 				mutex.Lock()
 				c.actionResults = append(c.actionResults, resp.ActionResults...)
-				c.allBlobs = append(c.allBlobs, resp.Blobs...)
+				for _, b := range resp.Blobs {
+					c.allBlobs[b.Hash] = b.SizeBytes
+				}
 				mutex.Unlock()
 				ch <- 1
 			}
@@ -266,8 +269,17 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 	defer cancel()
 	action := &pb.Action{}
 	var size int64
-	if err := c.client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), action); err != nil {
-		log.Debug("Failed to read action %s", dg.Hash)
+	digestSize, present := c.allBlobs[dg.Hash]
+	if !present {
+		log.Debug("missing action for %s", dg.Hash)
+		atomic.AddInt64(&c.missingInputs, 1)
+		return size, nil
+	}
+	if err := c.client.ReadProto(ctx, digest.Digest{
+		Hash: dg.Hash,
+		Size: digestSize,
+	}, action); err != nil {
+		log.Debug("Failed to read action %s: %s", dg.Hash, err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil
 	}
@@ -280,7 +292,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 	size += action.InputRootDigest.SizeBytes
 	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
 	if err != nil {
-		log.Debug("Failed to read directory tree for %s (input root %s)", dg.Hash, action.InputRootDigest)
+		log.Debug("Failed to read directory tree for %s (input root %s): %s", dg.Hash, action.InputRootDigest, err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil
 	}
@@ -378,12 +390,12 @@ func (c *collector) RemoveBlobs() error {
 			size += ar.SizeBytes
 		}
 	}
-	for _, blob := range c.allBlobs {
-		if _, present := c.referencedBlobs[blob.Hash]; !present {
-			key := blob.Hash[:2]
-			blobs[key] = append(blobs[key], blob)
-			size += blob.SizeBytes
-			log.Debug("delete %s / %d", blob.Hash, blob.SizeBytes)
+	for hash, size := range c.allBlobs {
+		if _, present := c.referencedBlobs[hash]; !present {
+			key := hash[:2]
+			blobs[key] = append(blobs[key], &ppb.Blob{Hash: hash, SizeBytes: size})
+			size += size
+			log.Debug("delete %s / %d", hash, size)
 		}
 	}
 	if c.dryRun {
@@ -463,16 +475,12 @@ func (c *collector) RemoveBrokenBlobs() error {
 
 // Sizes returns the sizes of the top n biggest actions.
 func (c *collector) Sizes(n int) []Action {
-	blobs := make(map[string]int64, len(c.allBlobs))
-	for _, b := range c.allBlobs {
-		blobs[b.Hash] = b.SizeBytes
-	}
 	ret := make([]Action, len(c.actionResults))
 	for i, ar := range c.actionResults {
 		ret[i] = Action{
 			Digest: pb.Digest{
 				Hash:      ar.Hash,
-				SizeBytes: blobs[ar.Hash],
+				SizeBytes: c.allBlobs[ar.Hash],
 			},
 			InputSize:  c.inputSizes[ar.Hash],
 			OutputSize: c.outputSizes[ar.Hash],
