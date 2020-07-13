@@ -20,6 +20,7 @@ import (
 	"time"
 
 	// Necessary to register providers that we'll use.
+	_ "github.com/thought-machine/please-servers/elan/gzfile"
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
@@ -91,8 +92,8 @@ func ServeForever(opts grpcutil.Opts, storage string, fileCachePath string, maxF
 	}
 	srv := &server{
 		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:   strings.TrimPrefix(storage, "file://"),
-		isFileStorage: strings.HasPrefix(storage, "file://"),
+		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
+		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
 		bucket:        bucket,
 		limiter:       make(chan struct{}, parallelism),
 	}
