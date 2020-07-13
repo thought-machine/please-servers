@@ -6,7 +6,6 @@
 package gzfile
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/peterebden/go-cli-init"
@@ -37,10 +37,8 @@ func init() {
 const Scheme = "gzfile"
 
 // xattrName is the xattr name we use to identify whether a file is stored compressed.
+// It contains the original size of the file which we need for some codepaths.
 const xattrName = "user.elan_gz"
-
-// gzipTag is the attr tag we apply to gzip-compressed files.
-var gzipTag = []byte("gzip")
 
 // URLOpener opens file bucket URLs like "gzfile:///foo/bar/baz".
 type URLOpener struct{}
@@ -128,10 +126,18 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 		if !strings.HasPrefix(key, opts.Prefix) {
 			return nil
 		}
+		size := info.Size()
+		if attr, err := xattr.Get(path, xattrName); err == nil {
+			if i, err := strconv.Atoi(string(attr)); err != nil {
+				log.Warning("Invalid xattr on file: %s", err)
+			} else {
+				size = int64(i)
+			}
+		}
 		result.Objects = append(result.Objects, &driver.ListObject{
 			Key:     key,
 			ModTime: info.ModTime(),
-			Size:    info.Size(),
+			Size:    size,
 		})
 		return nil
 	})
@@ -197,7 +203,7 @@ func (b *bucket) newReader(key string) (ReadSeekCloser, os.FileInfo, error) {
 		f.Close()
 		return nil, nil, err
 	}
-	if tag, err := xattr.FGet(f, xattrName); err == nil && bytes.Equal(tag, gzipTag) {
+	if tag, err := xattr.FGet(f, xattrName); err == nil && len(tag) > 0 {
 		r, err := gzip.NewReader(f)
 		if err != nil {
 			f.Close()
@@ -246,35 +252,46 @@ func (b *bucket) NewTypedWriter(ctx context.Context, key string, contentType str
 	w := &writer{
 		ctx:  ctx,
 		f:    f,
+		w:    f,
 		path: path,
 		temp: f.Name(),
 	}
 	if grpcutil.ShouldCompress(ctx) {
-		if err := xattr.FSet(f, xattrName, gzipTag); err != nil {
-			return nil, err
-		}
 		gzw, err := gzip.NewWriterLevel(f, compressionLevel)
 		if err != nil {
 			return nil, err
 		}
-		w.f = &gzwriter{f: f, w: gzw}
+		w.w = &gzwriter{f: f, w: gzw}
+		w.gz = true
 	}
 	return w, nil
 }
 
 type writer struct {
 	ctx  context.Context
-	f    io.WriteCloser
+	w    io.WriteCloser
+	f    *os.File
 	path string
 	temp string
+	size int
+	gz   bool
 }
 
 func (w *writer) Write(p []byte) (n int, err error) {
-	return w.f.Write(p)
+	w.size += n
+	return w.w.Write(p)
 }
 
 func (w *writer) Close() error {
-	if err := w.f.Close(); err != nil {
+	// If this is compressed, mark it as such with the size so we can read that back later.
+	if w.gz {
+		if err := xattr.FSet(w.f, xattrName, []byte(strconv.Itoa(w.size))); err != nil {
+			os.Remove(w.temp)
+			return err
+		}
+	}
+	if err := w.w.Close(); err != nil {
+		os.Remove(w.temp)
 		return err
 	}
 	// Check if the write was cancelled.
