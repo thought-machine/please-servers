@@ -111,33 +111,57 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	// the primary (basically that the replication offset is an integer multiple of the size of each hash block, and those
 	// blocks are of a consistent size). This currently fits our setup.
 	blobs := map[*trie.Server][]*pb.Digest{}
+	seen := map[string]struct{}{}
 	for _, d := range req.BlobDigests {
 		// Empty directories have empty hashes. We don't need to check for them.
 		if d.Hash != "" {
-			s := s.replicator.Trie.Get(d.Hash)
-			blobs[s] = append(blobs[s], d)
+			if _, present := seen[d.Hash]; !present {
+				s := s.replicator.Trie.Get(d.Hash)
+				blobs[s] = append(blobs[s], d)
+				seen[d.Hash] = struct{}{}
+			}
 		}
 	}
 	resp := &pb.FindMissingBlobsResponse{}
+	type countedDigest struct {
+		Digest *pb.Digest
+		Count  int
+	}
 	var g errgroup.Group
 	var mutex sync.Mutex
 	for srv, b := range blobs {
 		srv := srv
 		b := b
 		g.Go(func() error {
-			return s.replicator.Sequential(srv.Start, func(srv *trie.Server) error {
+			missing := make(map[string]countedDigest, len(b))
+			if err := s.replicator.SequentialAck(srv.Start, func(srv *trie.Server) (bool, error) {
 				r, err := srv.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
 					InstanceName: req.InstanceName,
 					BlobDigests:  b,
 				})
 				if err != nil {
-					return err
+					return true, err
 				}
 				mutex.Lock()
 				defer mutex.Unlock()
-				resp.MissingBlobDigests = append(resp.MissingBlobDigests, r.MissingBlobDigests...)
-				return nil
-			})
+				for _, d := range r.MissingBlobDigests {
+					missing[d.Hash] = countedDigest{
+						Digest: d,
+						Count:  missing[d.Hash].Count + 1,
+					}
+				}
+				return len(r.MissingBlobDigests) > 0, nil
+			}); err != nil {
+				return err
+			}
+			mutex.Lock()
+			defer mutex.Unlock()
+			for _, dg := range missing {
+				if dg.Count == s.replicator.Replicas {
+					resp.MissingBlobDigests = append(resp.MissingBlobDigests, dg.Digest)
+				}
+			}
+			return nil
 		})
 	}
 	return resp, g.Wait()
