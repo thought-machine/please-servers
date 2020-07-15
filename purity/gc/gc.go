@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
@@ -206,6 +207,7 @@ func (c *collector) MarkReferencedBlobs() error {
 func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, grpcutil.GCKey, "true")
 	dg := &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes}
 	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
 		InstanceName: c.client.InstanceName,
