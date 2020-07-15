@@ -2,6 +2,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/peterebden/go-cli-init"
 	"github.com/thought-machine/http-admin"
 	"google.golang.org/grpc"
@@ -26,6 +28,7 @@ var opts = struct {
 	ExecutorGeometry map[string]string `short:"e" long:"executor_geometry" description:"Executor server geometry to forward request to. If not given then the executor API will be unavailable."`
 	Replicas         int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
 	ConnTLS          bool              `long:"tls" description:"Use TLS for connecting to other servers"`
+	Timeout          cli.Duration      `long:"timeout" default:"20s" description:"Default timeout for all RPCs"`
 	CA               string            `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
 	Admin            admin.Opts        `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
@@ -53,7 +56,7 @@ func main() {
 	cr := newReplicator(opts.Geometry, opts.Replicas)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
 	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)
-	rpc.ServeForever(opts.GRPC, cr, ar, er)
+	rpc.ServeForever(opts.GRPC, cr, ar, er, time.Duration(opts.Timeout))
 }
 
 func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {

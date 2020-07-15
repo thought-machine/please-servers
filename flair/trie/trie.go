@@ -11,6 +11,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
@@ -25,14 +26,16 @@ type Trie struct {
 
 // A Server holds several gRPC connections to the same server.
 type Server struct {
-	CAS   pb.ContentAddressableStorageClient
-	AC    pb.ActionCacheClient
-	BS    bs.ByteStreamClient
-	Exe   pb.ExecutionClient
-	Fetch apb.FetchClient
-	GC    ppb.GCClient
-	Start string
-	End   string
+	CAS    pb.ContentAddressableStorageClient
+	AC     pb.ActionCacheClient
+	BS     bs.ByteStreamClient
+	Exe    pb.ExecutionClient
+	Fetch  apb.FetchClient
+	GC     ppb.GCClient
+	Health grpc_health_v1.HealthClient
+	Start  string
+	End    string
+	Failed int64
 }
 
 // A node represents a single node within the trie.
@@ -106,14 +109,15 @@ func (t *Trie) AddRange(start, end, address string) error {
 	}
 	// We always set up all clients here, even if they won't all be used for this connection.
 	s := Server{
-		CAS:   pb.NewContentAddressableStorageClient(conn),
-		AC:    pb.NewActionCacheClient(conn),
-		BS:    bs.NewByteStreamClient(conn),
-		Exe:   pb.NewExecutionClient(conn),
-		Fetch: apb.NewFetchClient(conn),
-		GC:    ppb.NewGCClient(conn),
-		Start: start,
-		End:   end,
+		CAS:    pb.NewContentAddressableStorageClient(conn),
+		AC:     pb.NewActionCacheClient(conn),
+		BS:     bs.NewByteStreamClient(conn),
+		Exe:    pb.NewExecutionClient(conn),
+		Fetch:  apb.NewFetchClient(conn),
+		GC:     ppb.NewGCClient(conn),
+		Health: grpc_health_v1.NewHealthClient(conn),
+		Start:  start,
+		End:    end,
 	}
 	t.servers = append(t.servers, s)
 	return t.add(&t.root, start, end, &s)
