@@ -66,26 +66,29 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 // because they're all inline.
 func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	var e error
+	success := false
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
 		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
 		if !r.shouldRetry(err) && !shouldContinue {
 			return err
 		}
-		if e == nil {
+		if e == nil || (err != nil && e == serverDead) {
 			e = err
 		}
 		if err == nil {
 			log.Debug("Caller requested to continue on next replica for %s", key)
+			success = true // we're always successful from here on
 		} else if i < r.Replicas-1 {
 			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
-			e = nil
 		} else {
 			log.Debug("Error reading from replica for %s: %s.", key, err)
 		}
 		offset += r.increment
 	}
-	if e != nil {
+	if success {
+		return nil
+	} else if e != nil {
 		log.Info("Reads from all replicas failed: %s", e)
 	}
 	return e
