@@ -195,7 +195,7 @@ func (r *Replicator) recheckOnce(s *Server) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err := s.Health.Check(ctx, &grpc_health_v1.HealthCheckRequest{}); err != nil {
-		log.Debug("Server %s-%s is still unhealthy", s.Start, s.End)
+		log.Warning("Server %s-%s is still unhealthy: %s", s.Start, s.End, err)
 		return false
 	}
 	log.Notice("Server %s-%s is now healthy again", s.Start, s.End)
