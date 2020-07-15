@@ -465,8 +465,6 @@ func (s *server) FetchDirectory(ctx context.Context, req *apb.FetchDirectoryRequ
 
 func (s *server) FetchBlob(ctx context.Context, req *apb.FetchBlobRequest) (resp *apb.FetchBlobResponse, err error) {
 	err = s.assetReplicator.Sequential(s.assetHash(req.Qualifiers), func(srv *trie.Server) error {
-		ctx, cancel := context.WithTimeout(ctx, s.timeout)
-		defer cancel()
 		resp, err = srv.Fetch.FetchBlob(ctx, req)
 		return err
 	})
