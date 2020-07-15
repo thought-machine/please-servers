@@ -120,3 +120,7 @@ func ShouldCompress(ctx context.Context) bool {
 func SkipCompression(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, skipCompressionKey, "true")
 }
+
+// GCKey is a metadata key that we use to identify GC requests which don't extend the
+// lifetime of an action result.
+const GCKey = "purity-gc"
