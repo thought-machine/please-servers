@@ -70,7 +70,7 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
 		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
-		if !r.shouldRetry(err) && !shouldContinue {
+		if !r.isContinuable(err) && !shouldContinue {
 			return err
 		}
 		if e == nil || (err != nil && e == serverDead) {
@@ -203,8 +203,8 @@ func (r *Replicator) recheckOnce(s *Server) bool {
 	return true
 }
 
-// shouldRetry returns true if the given error is retryable.
-func (r *Replicator) shouldRetry(err error) bool {
+// isContinuable returns true if the given error is retryable.
+func (r *Replicator) isContinuable(err error) bool {
 	switch status.Code(err) {
 	case codes.Unknown:
 		return true // Unclear, might as well try again
