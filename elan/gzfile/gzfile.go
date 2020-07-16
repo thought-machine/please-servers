@@ -144,8 +144,19 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 }
 
 func (b *bucket) Size(key string) (int64, error) {
-	attr, err := xattr.Get(path.Join(b.dir, key), xattrName)
+	filename := path.Join(b.dir, key)
+	attr, err := xattr.Get(filename, xattrName)
 	if err != nil {
+		if xerr, ok := err.(*xattr.Error); ok {
+			if xerr.Err == xattr.ENOATTR {
+				// xattr didn't exist - that implies it's not compressed and we can just stat it.
+				info, err := os.Stat(filename)
+				if err != nil {
+					return 0, err
+				}
+				return info.Size(), nil
+			}
+		}
 		return 0, err
 	}
 	i, err := strconv.Atoi(string(attr))
