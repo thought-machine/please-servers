@@ -17,7 +17,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/hashicorp/go-multierror"
-	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-cli-init/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 

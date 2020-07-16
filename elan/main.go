@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-cli-init/v2"
 	admin "github.com/thought-machine/http-admin"
 
 	"github.com/thought-machine/please-servers/elan/rpc"

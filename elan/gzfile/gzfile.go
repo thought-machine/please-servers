@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-cli-init/v2"
 	"github.com/pkg/xattr"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
