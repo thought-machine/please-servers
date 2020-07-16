@@ -8,10 +8,12 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
 	"github.com/peterebden/go-cli-init/v2"
 
 	"github.com/thought-machine/please-servers/grpcutil"
+	"github.com/thought-machine/please-servers/purity/gc"
 )
 
 var log = cli.MustGetLogger()
@@ -34,6 +36,10 @@ var opts = struct {
 		After  Action `group:"Options identifying the 'after' build action" namespace:"after"`
 	} `command:"diff" description:"Show differences between two actions"`
 	Show Action `command:"show" description:"Show detail about a single action"`
+	TopN struct {
+		N          int    `short:"n" long:"number" default:"100" description:"Number of actions to display"`
+		BrowserURL string `long:"browser_url" description:"Browser base URL to display links to"`
+	} `command:"topn" description:"Display information on the top N actions with biggest inputs / outputs"`
 }{
 	Usage: `
 Discern is a simple binary for visualising build actions; either showing differences
@@ -51,6 +57,12 @@ also isn't a server so #dealwithit
 func main() {
 	cmd := cli.ParseFlagsOrDie("Discern", &opts)
 	cli.InitLogging(opts.Verbosity)
+	if cmd == "topn" {
+		if err := topn(); err != nil {
+			log.Fatalf("Failed to find action results: %s", err)
+		}
+		return
+	}
 	client, err := client.NewClient(context.Background(), opts.Storage.InstanceName, client.DialParams{
 		Service:            opts.Storage.Storage,
 		NoSecurity:         !opts.Storage.TLS,
@@ -219,4 +231,22 @@ func showDir(client *client.Client, dg *pb.Digest, indent string) {
 	for _, s := range dir.Symlinks {
 		log.Notice("[%s/%08d]%s%-50s -> %s", strings.Repeat(" ", 64), 0, indent, s.Name, s.Target)
 	}
+}
+
+func topn() error {
+	actions, err := gc.Sizes(opts.Storage.Storage, opts.Storage.InstanceName, "", opts.Storage.TLS, opts.TopN.N)
+	if err != nil {
+		return err
+	}
+	log.Notice("Top %d actions:", opts.TopN.N)
+	for i, a := range actions {
+		in := humanize.Bytes(uint64(a.InputSize))
+		out := humanize.Bytes(uint64(a.OutputSize))
+		if opts.TopN.BrowserURL != "" {
+			log.Notice("%d: %s (in) %s (out): %s/action/%s/%s/%d/", i, in, out, opts.TopN.BrowserURL, opts.Storage.InstanceName, a.Hash, a.SizeBytes)
+		} else {
+			log.Notice("%d: %s (in) %s (out): %s/%d", i, in, out, a.Hash, a.SizeBytes)
+		}
+	}
+	return nil
 }

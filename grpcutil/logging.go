@@ -84,7 +84,11 @@ func LogStreamRequests(srv interface{}, ss grpc.ServerStream, info *grpc.StreamS
 	start := time.Now()
 	err := handler(srv, ss)
 	if err != nil {
-		log.Error("Error handling %s: %s", info.FullMethod, err)
+		if status.Code(err) != codes.NotFound {
+			log.Error("Error handling %s: %s", info.FullMethod, err)
+		} else {
+			log.Debug("Not found on %s: %s", info.FullMethod, err)
+		}
 	} else {
 		log.Debug("Handled %s successfully in %s", info.FullMethod, time.Since(start))
 	}

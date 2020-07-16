@@ -10,6 +10,7 @@ import (
 	"io"
 	"regexp"
 	"sync"
+	"time"
 
 	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -30,12 +31,13 @@ import (
 var log = cli.MustGetLogger()
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator) {
+func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator, timeout time.Duration) {
 	srv := &server{
 		replicator:      casReplicator,
 		assetReplicator: assetReplicator,
 		exeReplicator:   executorReplicator,
 		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		timeout:         timeout,
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -55,6 +57,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 type server struct {
 	replicator, assetReplicator, exeReplicator *trie.Replicator
 	bytestreamRe                               *regexp.Regexp
+	timeout                                    time.Duration
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -85,8 +88,10 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 }
 
 func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (ar *pb.ActionResult, err error) {
-	err = s.replicator.SequentialDigest(req.ActionDigest, func(s *trie.Server) error {
-		a, e := s.AC.GetActionResult(ctx, req)
+	err = s.replicator.SequentialDigest(req.ActionDigest, func(srv *trie.Server) error {
+		ctx, cancel := context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+		a, e := srv.AC.GetActionResult(ctx, req)
 		if e == nil {
 			ar = a
 		}
@@ -96,8 +101,10 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 }
 
 func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (ar *pb.ActionResult, err error) {
-	err = s.replicator.ParallelDigest(req.ActionDigest, func(s *trie.Server) error {
-		a, e := s.AC.UpdateActionResult(ctx, req)
+	err = s.replicator.ParallelDigest(req.ActionDigest, func(srv *trie.Server) error {
+		ctx, cancel := context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+		a, e := srv.AC.UpdateActionResult(ctx, req)
 		if e == nil {
 			ar = a
 		}
@@ -111,33 +118,59 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	// the primary (basically that the replication offset is an integer multiple of the size of each hash block, and those
 	// blocks are of a consistent size). This currently fits our setup.
 	blobs := map[*trie.Server][]*pb.Digest{}
+	seen := map[string]struct{}{}
 	for _, d := range req.BlobDigests {
 		// Empty directories have empty hashes. We don't need to check for them.
 		if d.Hash != "" {
-			s := s.replicator.Trie.Get(d.Hash)
-			blobs[s] = append(blobs[s], d)
+			if _, present := seen[d.Hash]; !present {
+				s := s.replicator.Trie.Get(d.Hash)
+				blobs[s] = append(blobs[s], d)
+				seen[d.Hash] = struct{}{}
+			}
 		}
 	}
 	resp := &pb.FindMissingBlobsResponse{}
+	type countedDigest struct {
+		Digest *pb.Digest
+		Count  int
+	}
 	var g errgroup.Group
 	var mutex sync.Mutex
 	for srv, b := range blobs {
 		srv := srv
 		b := b
 		g.Go(func() error {
-			return s.replicator.Sequential(srv.Start, func(srv *trie.Server) error {
+			missing := make(map[string]countedDigest, len(b))
+			if err := s.replicator.SequentialAck(srv.Start, func(srv *trie.Server) (bool, error) {
+				ctx, cancel := context.WithTimeout(ctx, s.timeout)
+				defer cancel()
 				r, err := srv.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
 					InstanceName: req.InstanceName,
 					BlobDigests:  b,
 				})
 				if err != nil {
-					return err
+					return true, err
 				}
 				mutex.Lock()
 				defer mutex.Unlock()
-				resp.MissingBlobDigests = append(resp.MissingBlobDigests, r.MissingBlobDigests...)
-				return nil
-			})
+				for _, d := range r.MissingBlobDigests {
+					missing[d.Hash] = countedDigest{
+						Digest: d,
+						Count:  missing[d.Hash].Count + 1,
+					}
+				}
+				return len(r.MissingBlobDigests) > 0, nil
+			}); err != nil {
+				return err
+			}
+			mutex.Lock()
+			defer mutex.Unlock()
+			for _, dg := range missing {
+				if dg.Count == s.replicator.Replicas {
+					resp.MissingBlobDigests = append(resp.MissingBlobDigests, dg.Digest)
+				}
+			}
+			return nil
 		})
 	}
 	return resp, g.Wait()
@@ -157,6 +190,8 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 		rs := rs
 		g.Go(func() error {
 			return s.replicator.Parallel(srv.Start, func(srv *trie.Server) error {
+				ctx, cancel := context.WithTimeout(ctx, s.timeout)
+				defer cancel()
 				r, err := srv.CAS.BatchUpdateBlobs(ctx, &pb.BatchUpdateBlobsRequest{
 					InstanceName: req.InstanceName,
 					Requests:     rs,
@@ -200,8 +235,10 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 		srv := srv
 		d := d
 		g.Go(func() error {
-			return s.replicator.SequentialAck(srv.Start, func(s *trie.Server) (bool, error) {
-				r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
+			return s.replicator.SequentialAck(srv.Start, func(s2 *trie.Server) (bool, error) {
+				ctx, cancel := context.WithTimeout(ctx, s.timeout)
+				defer cancel()
+				r, err := s2.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 					InstanceName: req.InstanceName,
 					Digests:      d,
 				})
@@ -249,8 +286,10 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	var fetchDir func(digest *pb.Digest) error
 	fetchDir = func(digest *pb.Digest) error {
 		var resp *pb.BatchReadBlobsResponse
-		if err := s.replicator.SequentialDigest(digest, func(s *trie.Server) error {
-			r, err := s.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
+		if err := s.replicator.SequentialDigest(digest, func(s2 *trie.Server) error {
+			ctx, cancel := context.WithTimeout(ctx, s.timeout)
+			defer cancel()
+			r, err := s2.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 				InstanceName: req.InstanceName,
 				Digests:      []*pb.Digest{digest},
 			})
@@ -298,12 +337,14 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	// This needs a little bookkeeping since we can fail partway and restart on another server.
 	// That's actually OK as long as we jiggle the ReadOffset appropriately.
-	return s.replicator.Sequential(hash, func(s *trie.Server) error {
-		client, err := s.BS.Read(srv.Context(), req)
+	return s.replicator.Sequential(hash, func(s2 *trie.Server) error {
+		ctx, update := withRollingTimeout(srv.Context(), s.timeout)
+		client, err := s2.BS.Read(ctx, req)
 		if err != nil {
 			return err
 		}
 		for {
+			update()
 			resp, err := client.Recv()
 			if err != nil {
 				if err == io.EOF {
@@ -356,17 +397,19 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 		}
 	})
 	var resp *bs.WriteResponse
-	if err := s.replicator.Parallel(hash, func(s *trie.Server) error {
+	if err := s.replicator.Parallel(hash, func(s2 *trie.Server) error {
+		ctx, update := withRollingTimeout(srv.Context(), s.timeout)
 		ch := <-chch
 		defer func() {
 			for range ch {
 			}
 		}() // Ensure we exhaust this channel if anything goes wrong
-		client, err := s.BS.Write(srv.Context())
+		client, err := s2.BS.Write(ctx)
 		if err != nil {
 			return err
 		}
 		for req := range ch {
+			update()
 			if err := client.Send(req); err != nil {
 				return err
 			}
@@ -391,8 +434,10 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 	if err != nil {
 		return nil, err
 	}
-	err = s.replicator.Sequential(hash, func(s *trie.Server) error {
-		r, e := s.BS.QueryWriteStatus(ctx, req)
+	err = s.replicator.Sequential(hash, func(srv *trie.Server) error {
+		ctx, cancel := context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+		r, e := srv.BS.QueryWriteStatus(ctx, req)
 		if e == nil {
 			resp = r
 		}
@@ -419,8 +464,8 @@ func (s *server) FetchDirectory(ctx context.Context, req *apb.FetchDirectoryRequ
 }
 
 func (s *server) FetchBlob(ctx context.Context, req *apb.FetchBlobRequest) (resp *apb.FetchBlobResponse, err error) {
-	err = s.assetReplicator.Sequential(s.assetHash(req.Qualifiers), func(s *trie.Server) error {
-		resp, err = s.Fetch.FetchBlob(ctx, req)
+	err = s.assetReplicator.Sequential(s.assetHash(req.Qualifiers), func(srv *trie.Server) error {
+		resp, err = srv.Fetch.FetchBlob(ctx, req)
 		return err
 	})
 	return resp, err
@@ -488,9 +533,11 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	}
 	var mutex sync.Mutex
 	resp := &ppb.ListResponse{}
-	ars := map[string]struct{}{}
+	ars := map[string]*ppb.ActionResult{}
 	blobs := map[string]struct{}{}
 	err := s.replicator.All(req.Prefix, func(srv *trie.Server) error {
+		ctx, cancel := context.WithTimeout(ctx, 100*s.timeout) // Multiply up timeout since this operation can be expensive.
+		defer cancel()
 		r, err := srv.GC.List(ctx, req)
 		if err != nil {
 			return err
@@ -498,9 +545,11 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 		mutex.Lock()
 		defer mutex.Unlock()
 		for _, ar := range r.ActionResults {
-			if _, present := ars[ar.Hash]; !present {
+			if existing, present := ars[ar.Hash]; !present {
 				resp.ActionResults = append(resp.ActionResults, ar)
-				ars[ar.Hash] = struct{}{}
+				ars[ar.Hash] = ar
+			} else if existing.LastAccessed < ar.LastAccessed {
+				existing.LastAccessed = ar.LastAccessed
 			}
 		}
 		for _, blob := range r.Blobs {
@@ -519,7 +568,33 @@ func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.Delet
 		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
 	}
 	return &ppb.DeleteResponse{}, s.replicator.All(req.Prefix, func(srv *trie.Server) error {
+		ctx, cancel := context.WithTimeout(ctx, 10*s.timeout) // Multiply up timeout since this operation can be expensive.
+		defer cancel()
 		_, err := srv.GC.Delete(ctx, req)
 		return err
 	})
+}
+
+// withRollingTimeout implements a timeout between each step of a streamed RPC.
+// Essentially we want to fail if it takes > 5s (for example) to get a chunk, but we don't
+// want to put an upper limit on the total time the RPC can run for (it might be long
+// if it's a big file and things are moving kinda slowly).
+// It returns a new context which will be cancelled when the rolling timeout expired and
+// a callback to update its timeout.
+func withRollingTimeout(ctx context.Context, timeout time.Duration) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	ch := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ch:
+			case <-time.After(timeout):
+				cancel()
+				return
+			}
+		}
+	}()
+	return ctx, func() {
+		ch <- struct{}{}
+	}
 }

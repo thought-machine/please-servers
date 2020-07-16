@@ -1,16 +1,29 @@
 package trie
 
 import (
+	"context"
 	"fmt"
+	"sync/atomic"
+	"time"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v2"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 )
 
 var log = cli.MustGetLogger()
+
+var serverDead = status.Errorf(codes.DeadlineExceeded, "Server is down")
+
+// failureThreshold is the number of timeouts we tolerate on a server before marking it
+// out of service.
+const failureThreshold = 5
+
+// recheckFrequency is the rate at which we re-check dead servers to see if they become alive again.
+const recheckFrequency = 1 * time.Minute
 
 // A Replicator implements replication for our RPCs.
 type Replicator struct {
@@ -53,25 +66,29 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 // because they're all inline.
 func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	var e error
+	success := false
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
-		shouldContinue, err := f(r.Trie.GetOffset(key, offset))
-		if !r.shouldRetry(err) && !shouldContinue {
+		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
+		if !r.isContinuable(err) && !shouldContinue {
 			return err
+		}
+		if e == nil || (err != nil && e == serverDead) {
+			e = err
 		}
 		if err == nil {
 			log.Debug("Caller requested to continue on next replica for %s", key)
+			success = true // we're always successful from here on
 		} else if i < r.Replicas-1 {
 			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
 			log.Debug("Error reading from replica for %s: %s.", key, err)
 		}
-		if e == nil {
-			e = err
-		}
 		offset += r.increment
 	}
-	if e != nil {
+	if success {
+		return nil
+	} else if e != nil {
 		log.Info("Reads from all replicas failed: %s", e)
 	}
 	return e
@@ -95,7 +112,7 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 	for i := 0; i < r.Replicas; i++ {
 		o := offset
 		g.Go(func() error {
-			return f(r.Trie.GetOffset(key, o))
+			return r.call(f, r.Trie.GetOffset(key, o))
 		})
 		offset += r.increment
 	}
@@ -135,8 +152,59 @@ func (r *Replicator) All(key string, f ReplicatedFunc) error {
 	return g.Wait().ErrorOrNil()
 }
 
-// shouldRetry returns true if the given error is retryable.
-func (r *Replicator) shouldRetry(err error) bool {
+// callAck calls a replicated function on a single replica, handling liveness on the server.
+func (r *Replicator) callAck(f ReplicatedAckFunc, s *Server) (bool, error) {
+	if s.Failed >= failureThreshold {
+		log.Debug("Skipping replica %s-%s, it is marked down", s.Start, s.End)
+		return true, serverDead
+	}
+	shouldContinue, err := f(s)
+	if status.Code(err) == codes.DeadlineExceeded {
+		if failed := atomic.AddInt64(&s.Failed, 1); failed == failureThreshold {
+			log.Error("Deadline exceeded on server %s-%s, taking it out of service", s.Start, s.End)
+			go r.recheck(s)
+		} else {
+			log.Warning("Deadline exceeded on server %s-%s, failures: %d", s.Start, s.End, failed)
+		}
+	} else if err == nil {
+		s.Failed = 0 // Must be OK since it responded to this RPC successfully
+	}
+	return shouldContinue, err
+}
+
+// call is like callAck but doesn't offer the option of acknowledgement.
+func (r *Replicator) call(f ReplicatedFunc, s *Server) error {
+	_, err := r.callAck(func(s *Server) (bool, error) {
+		return false, f(s)
+	}, s)
+	return err
+}
+
+// recheck continually rechecks a server to see if it's become alive again.
+func (r *Replicator) recheck(s *Server) {
+	t := time.NewTicker(recheckFrequency)
+	defer t.Stop()
+	for range t.C {
+		if r.recheckOnce(s) {
+			break
+		}
+	}
+}
+
+func (r *Replicator) recheckOnce(s *Server) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := s.Health.Check(ctx, &grpc_health_v1.HealthCheckRequest{}); err != nil {
+		log.Warning("Server %s-%s is still unhealthy: %s", s.Start, s.End, err)
+		return false
+	}
+	log.Notice("Server %s-%s is now healthy again", s.Start, s.End)
+	s.Failed = 0
+	return true
+}
+
+// isContinuable returns true if the given error is retryable.
+func (r *Replicator) isContinuable(err error) bool {
 	switch status.Code(err) {
 	case codes.Unknown:
 		return true // Unclear, might as well try again

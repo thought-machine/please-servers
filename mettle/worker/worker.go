@@ -505,6 +505,8 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	if err != nil {
 		msg := "Execution failed: " + err.Error()
 		msg += w.writeUncachedResult(ar, msg)
+		// Attempt to collect outputs. They may exist and contain useful information such as a test.results file
+		_ = w.collectOutputs(ar, command)
 		return &pb.ExecuteResponse{
 			Status:  &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
 			Result:  ar,

@@ -183,8 +183,12 @@ go_get(
 
 go_get(
     name = "unix",
-    get = "golang.org/x/sys/unix",
-    revision = "1b2967e3c290b7c545b3db0deeda16e9be4f98a2",
+    get = "golang.org/x/sys",
+    install = [
+        "internal/unsafeheader",
+        "unix",
+    ],
+    revision = "ddb9806d33aed8dbaac1cd6f1cba58952e87f933",
 )
 
 go_get(
@@ -468,4 +472,11 @@ go_get(
     name = "mux",
     get = "github.com/gorilla/mux",
     revision = "v1.7.4",
+)
+
+go_get(
+    name = "xattr",
+    get = "github.com/pkg/xattr",
+    revision = "v0.4.1",
+    deps = [":unix"],
 )

@@ -18,7 +18,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding/gzip"
-	"google.golang.org/grpc/metadata"
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -299,5 +298,5 @@ func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) (contex
 	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
 		return ctx, append(opts, grpc.UseCompressor(gzip.Name))
 	}
-	return metadata.AppendToOutgoingContext(ctx, grpcutil.SkipCompressionKey, "true"), opts
+	return grpcutil.SkipCompression(ctx), opts
 }

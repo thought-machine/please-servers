@@ -12,6 +12,8 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
@@ -54,6 +56,7 @@ func NewServer(opts Opts) (net.Listener, *grpc.Server) {
 	)...)
 	grpc_prometheus.Register(s)
 	reflection.Register(s)
+	grpc_health_v1.RegisterHealthServer(s, health.NewServer())
 	return lis, s
 }
 

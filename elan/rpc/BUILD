@@ -2,6 +2,7 @@ go_library(
     name = "rpc",
     srcs = glob(["*.go"]),
     deps = [
+        "//elan/gzfile",
         "//grpcutil",
         "//proto:purity",
         "//third_party/go/gocloud",

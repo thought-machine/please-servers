@@ -20,6 +20,7 @@ import (
 	"time"
 
 	// Necessary to register providers that we'll use.
+	_ "github.com/thought-machine/please-servers/elan/gzfile"
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
@@ -35,6 +36,7 @@ import (
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -91,8 +93,8 @@ func ServeForever(opts grpcutil.Opts, storage string, fileCachePath string, maxF
 	}
 	srv := &server{
 		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:   strings.TrimPrefix(storage, "file://"),
-		isFileStorage: strings.HasPrefix(storage, "file://"),
+		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
+		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
 		bucket:        bucket,
 		limiter:       make(chan struct{}, parallelism),
 	}
@@ -155,6 +157,10 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		}
 	}
 	if s.isFileStorage {
+		// If the caller indicated this was a GC action then don't extend the life of the result.
+		if md, ok := metadata.FromIncomingContext(ctx); ok && len(md.Get(grpcutil.GCKey)) > 0 {
+			return ar, nil
+		}
 		now := time.Now()
 		if err := os.Chtimes(path.Join(s.storageRoot, s.key("ac", req.ActionDigest)), now, now); err != nil {
 			log.Warning("Failed to change times on file: %s", err)
