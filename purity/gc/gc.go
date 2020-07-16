@@ -14,6 +14,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/dustin/go-humanize"
 	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init"
@@ -384,27 +385,30 @@ func (c *collector) RemoveBlobs() error {
 	log.Notice("Determining blobs to remove...")
 	blobs := map[string][]*ppb.Blob{}
 	ars := map[string][]*ppb.Blob{}
-	var size int64
+	numArs := 0
+	numBlobs := 0
+	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
 			key := ar.Hash[:2]
 			ars[key] = append(ars[key], &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
-			size += ar.SizeBytes
+			totalSize += ar.SizeBytes
+			numArs++
 		}
 	}
 	for hash, size := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
 			key := hash[:2]
 			blobs[key] = append(blobs[key], &ppb.Blob{Hash: hash, SizeBytes: size})
-			size += size
-			log.Debug("delete %s / %d", hash, size)
+			totalSize += size
+			numBlobs++
 		}
 	}
 	if c.dryRun {
-		log.Notice("Would delete %d action results and %d blobs, total size %d bytes", len(ars), len(blobs), size)
+		log.Notice("Would delete %d action results and %d blobs, total size %s", numArs, numBlobs, humanize.Bytes(uint64(totalSize)))
 		return nil
 	}
-	log.Notice("Deleting %d action results and %d blobs, total size %d bytes", len(ars), len(blobs), size)
+	log.Notice("Deleting %d action results and %d blobs, total size %s", numArs, numBlobs, humanize.Bytes(uint64(totalSize)))
 	ch := newProgressBar("Deleting blobs", 256)
 	defer func() {
 		close(ch)
