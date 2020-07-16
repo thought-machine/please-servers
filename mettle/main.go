@@ -11,6 +11,7 @@ import (
 	"github.com/peterebden/go-cli-init/v2"
 	"github.com/thought-machine/http-admin"
 
+	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -66,7 +67,7 @@ var opts = struct {
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
 		GRPC         grpcutil.Opts `group:"Options controlling the gRPC server"`
-		Dir          string        `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		Dir          string        `short:"d" long:"dir" default:"plz-out/mettle" description:"Directory to run actions in"`
 		NoClean      bool          `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
 		NumWorkers   int           `short:"n" long:"num_workers" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
 		Browser      string        `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
@@ -81,8 +82,9 @@ var opts = struct {
 		}
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	One struct {
-		Hash        string       `long:"hash" required:"true" description:"Hash of the action digest to run"`
-		Size        int64        `long:"size" required:"true" description:"Size of the action digest to run"`
+		Args struct {
+			Actions []flags.Action `positional-arg-name:"action" required:"true" description:"The action digest to run"`
+		} `positional-args:"true"`
 		Dir         string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		Sandbox     string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout     cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
@@ -172,5 +174,10 @@ func one() error {
 		defer f.Close()
 		defer pprof.StopCPUProfile()
 	}
-	return worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), opts.One.Hash, opts.One.Size)
+	for _, action := range opts.One.Args.Actions {
+		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), action.ToProto()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
