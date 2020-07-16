@@ -1,5 +1,4 @@
 [please]
-location = ~/.please
 version = >=15.0.0-beta9
 
 [go]
