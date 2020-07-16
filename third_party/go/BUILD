@@ -221,8 +221,9 @@ go_get(
 
 go_get(
     name = "cli-init",
-    get = "github.com/peterebden/go-cli-init",
-    revision = "v2.0.0",
+    get = "github.com/peterebden/go-cli-init/v2",
+    revision = "v2.0.1",
+    module_major_version = "v2",
     deps = [
         ":go-flags",
         ":humanize",

@@ -1,10 +1,10 @@
-// Package main implements a CAS storage server for the Remote Execution API.
+// Package main implements a service to provide GC for Elan.
 package main
 
 import (
 	"time"
 
-	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-cli-init/v2"
 	admin "github.com/thought-machine/http-admin"
 
 	"github.com/thought-machine/please-servers/purity/gc"

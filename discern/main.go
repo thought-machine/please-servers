@@ -9,7 +9,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
-	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-cli-init/v2"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 )

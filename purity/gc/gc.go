@@ -15,7 +15,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/hashicorp/go-multierror"
-	"github.com/peterebden/go-cli-init"
+	"github.com/peterebden/go-cli-init/v2"
 	"google.golang.org/grpc"
 
 	"github.com/thought-machine/please-servers/grpcutil"
