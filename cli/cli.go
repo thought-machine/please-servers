@@ -15,7 +15,7 @@ var log = cli.MustGetLogger()
 var actionRe = regexp.MustCompile("([0-9a-fA-F]+)/([0-9]+)/?")
 var shortActionRe = regexp.MustCompile("([0-9a-fA-F]+)")
 
-// A Action represents a combined hash / size pair written like
+// An Action represents a combined hash / size pair written like
 // ff17a4efe382e245491d6a9f1ac6bf3adce454f7e4a5559a3579c3856edf1381/122
 // This is a bit more concise than passing them with flags.
 type Action struct {
