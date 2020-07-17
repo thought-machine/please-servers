@@ -107,7 +107,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 }
 
 // RunOne runs one single request, returning any error received.
-func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, hash string, size int64) error {
+func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
 	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, timeout, 0, math.MaxInt64)
@@ -116,21 +116,18 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 	}
 	// Have to do this async since mempubsub doesn't seem to store messages?
 	go func() {
-		time.Sleep(500 * time.Millisecond) // this is dodgy obvs
+		time.Sleep(50 * time.Millisecond) // this is dodgy obvs
 		b, _ := proto.Marshal(&pb.ExecuteRequest{
 			InstanceName: instanceName,
-			ActionDigest: &pb.Digest{
-				Hash:      hash,
-				SizeBytes: size,
-			},
+			ActionDigest: digest,
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		log.Notice("Sending request to build %s...", hash)
+		log.Notice("Sending request to build %s...", digest.Hash)
 		if err := topic.Send(ctx, &pubsub.Message{Body: b}); err != nil {
 			log.Fatalf("Failed to submit job to internal queue: %s", err)
 		}
-		log.Notice("Sent request to build %s", hash)
+		log.Notice("Sent request to build %s", digest.Hash)
 	}()
 	response, err := w.RunTask(context.Background())
 	if err != nil {
@@ -138,7 +135,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 	} else if response.Result.ExitCode != 0 {
 		return fmt.Errorf("Execution failed: %s", response.Message)
 	}
-	log.Notice("Completed execution successfully for %s", hash)
+	log.Notice("Completed execution successfully for %s", digest.Hash)
 	return nil
 }
 

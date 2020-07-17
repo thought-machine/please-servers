@@ -2,6 +2,7 @@ go_binary(
     name = "purity",
     srcs = ["main.go"],
     deps = [
+        "//cli",
         "//purity/gc",
         "//grpcutil",
         "//third_party/go:cli-init",

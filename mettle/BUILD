@@ -2,6 +2,7 @@ go_binary(
     name = "mettle",
     srcs = ["main.go"],
     deps = [
+        "//cli",
         "//grpcutil",
         "//mettle/worker",
         "//mettle/api",
