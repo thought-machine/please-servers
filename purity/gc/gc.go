@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -222,7 +224,10 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	for _, d := range result.OutputDirectories {
 		sz, dgs, err := c.markTree(d)
 		if err != nil {
-			log.Warning("Couldn't download output tree for %s: %s", ar.Hash, err)
+			if status.Code(err) == codes.NotFound {
+				return err
+			}
+			log.Warning("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
 		}
 		size += sz
 		digests = append(digests, dgs...)
@@ -444,7 +449,10 @@ func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 
 func (c *collector) RemoveSpecificBlobs(hashes []string) error {
 	if c.dryRun {
-		log.Notice("Would remove %d actions", len(hashes))
+		log.Notice("Would remove %d actions:", len(hashes))
+		for _, h := range hashes {
+			log.Notice("    %s", h)
+		}
 		return nil
 	} else if len(hashes) == 0 {
 		log.Notice("Nothing to do")
