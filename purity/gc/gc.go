@@ -19,7 +19,9 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
@@ -222,7 +224,10 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	for _, d := range result.OutputDirectories {
 		sz, dgs, err := c.markTree(d)
 		if err != nil {
-			log.Warning("Couldn't download output tree for %s: %s", ar.Hash, err)
+			if status.Code(err) == codes.NotFound {
+				return err
+			}
+			log.Warning("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
 		}
 		size += sz
 		digests = append(digests, dgs...)
@@ -444,7 +449,10 @@ func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 
 func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	if c.dryRun {
-		log.Notice("Would remove %d actions", len(digests))
+		log.Notice("Would remove %d actions:", len(digests))
+		for _, h := range digests {
+			log.Debug("Would remove action %s", h)
+		}
 		return nil
 	} else if len(digests) == 0 {
 		log.Notice("Nothing to do")
