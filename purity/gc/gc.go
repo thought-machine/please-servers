@@ -191,7 +191,7 @@ func (c *collector) MarkReferencedBlobs() error {
 				if !c.shouldDelete(ar) {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
-						log.Warning("Failed to find referenced blobs for %s: %s", ar.Hash, err)
+						log.Debug("Failed to find referenced blobs for %s: %s", ar.Hash, err)
 						c.markBroken(ar.Hash)
 					}
 					atomic.AddInt64(&live, 1)
