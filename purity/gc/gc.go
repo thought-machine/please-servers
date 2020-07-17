@@ -53,12 +53,12 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dr
 }
 
 // Delete deletes a series of build actions from the remote server.
-func Delete(url, instanceName, tokenFile string, tls bool, hashes []string) error {
+func Delete(url, instanceName, tokenFile string, tls bool, actions []*pb.Digest) error {
 	gc, err := newCollector(url, instanceName, tokenFile, tls, false, 0)
 	if err != nil {
 		return err
 	}
-	return gc.RemoveSpecificBlobs(hashes)
+	return gc.RemoveSpecificBlobs(actions)
 }
 
 // Clean cleans any build actions referencing missing blobs from the server.
@@ -99,7 +99,7 @@ type collector struct {
 	actionResults   []*ppb.ActionResult
 	allBlobs        map[string]int64
 	referencedBlobs map[string]struct{}
-	brokenResults   map[string]struct{}
+	brokenResults   map[string]int64
 	inputSizes      map[string]int
 	outputSizes     map[string]int
 	mutex           sync.Mutex
@@ -125,7 +125,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		dryRun:          dryRun,
 		allBlobs:        map[string]int64{},
 		referencedBlobs: map[string]struct{}{},
-		brokenResults:   map[string]struct{}{},
+		brokenResults:   map[string]int64{},
 		inputSizes:      map[string]int{},
 		outputSizes:     map[string]int{},
 		ageThreshold:    time.Now().Add(-minAge).Unix(),
@@ -192,7 +192,7 @@ func (c *collector) MarkReferencedBlobs() error {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Debug("Failed to find referenced blobs for %s: %s", ar.Hash, err)
-						c.markBroken(ar.Hash)
+						c.markBroken(ar.Hash, ar.SizeBytes)
 					}
 					atomic.AddInt64(&live, 1)
 				}
@@ -316,10 +316,10 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 }
 
 // markBroken marks an action result as missing some relevant files.
-func (c *collector) markBroken(hash string) {
+func (c *collector) markBroken(hash string, size int64) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.brokenResults[hash] = struct{}{}
+	c.brokenResults[hash] = size
 }
 
 func (c *collector) markTree(d *pb.OutputDirectory) (int64, []*pb.Digest, error) {
@@ -442,26 +442,26 @@ func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
 }
 
-func (c *collector) RemoveSpecificBlobs(hashes []string) error {
+func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	if c.dryRun {
-		log.Notice("Would remove %d actions", len(hashes))
+		log.Notice("Would remove %d actions", len(digests))
 		return nil
-	} else if len(hashes) == 0 {
+	} else if len(digests) == 0 {
 		log.Notice("Nothing to do")
 		return nil
 	}
-	ch := newProgressBar("Deleting actions", len(hashes))
+	ch := newProgressBar("Deleting actions", len(digests))
 	defer func() {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
-		log.Notice("Deleted %d action results", len(hashes))
+		log.Notice("Deleted %d action results", len(digests))
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	for _, hash := range hashes {
+	for _, digest := range digests {
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-			Prefix:        hash[:2],
-			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: hash}},
+			Prefix:        digest.Hash[:2],
+			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
 		}); err != nil {
 			return err
 		}
@@ -472,11 +472,11 @@ func (c *collector) RemoveSpecificBlobs(hashes []string) error {
 
 // RemoveBrokenBlobs removes any blobs previously marked as broken.
 func (c *collector) RemoveBrokenBlobs() error {
-	hashes := make([]string, 0, len(c.brokenResults))
-	for h := range c.brokenResults {
-		hashes = append(hashes, h)
+	digests := make([]*pb.Digest, 0, len(c.brokenResults))
+	for h, s := range c.brokenResults {
+		digests = append(digests, &pb.Digest{Hash: h, SizeBytes: s})
 	}
-	return c.RemoveSpecificBlobs(hashes)
+	return c.RemoveSpecificBlobs(digests)
 }
 
 // Sizes returns the sizes of the top n biggest actions.

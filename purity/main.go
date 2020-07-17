@@ -7,6 +7,7 @@ import (
 	"github.com/peterebden/go-cli-init/v2"
 	admin "github.com/thought-machine/http-admin"
 
+	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
 )
 
@@ -35,7 +36,7 @@ var opts = struct {
 	} `command:"periodic" description:"Run continually, triggering GCs at a regular interval"`
 	Delete struct {
 		Args struct {
-			Hashes []string `positional-arg-name:"hashes" required:"true" description:"Hashes to delete"`
+			Actions []flags.Action `positional-arg-name:"actions" required:"true" description:"Actions to delete"`
 		} `positional-args:"true" required:"true"`
 	} `command:"delete" description:"Deletes one or more build actions from the server."`
 	Clean struct {
@@ -68,7 +69,7 @@ func main() {
 		go admin.Serve(opts.Admin)
 		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.Periodic.MinAge), time.Duration(opts.Periodic.Frequency))
 	} else if cmd == "delete" {
-		if err := gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Delete.Args.Hashes); err != nil {
+		if err := gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, flags.AllToProto(opts.Delete.Args.Actions)); err != nil {
 			log.Fatalf("Failed to delete: %s", err)
 		}
 	} else if cmd == "clean" {

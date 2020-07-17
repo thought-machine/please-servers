@@ -58,3 +58,12 @@ func (a *Action) ToProto() *pb.Digest {
 		SizeBytes: int64(a.Size),
 	}
 }
+
+// AllToProto converts a slice of actions to protos.
+func AllToProto(actions []Action) []*pb.Digest {
+	ret := make([]*pb.Digest, len(actions))
+	for i, a := range actions {
+		ret[i] = a.ToProto()
+	}
+	return ret
+}
