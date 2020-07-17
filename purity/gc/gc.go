@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -21,7 +19,9 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
