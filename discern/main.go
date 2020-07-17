@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
@@ -12,16 +13,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/peterebden/go-cli-init/v2"
 
+	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/purity/gc"
 )
 
 var log = cli.MustGetLogger()
-
-type Action struct {
-	Hash string `long:"hash" required:"true" description:"Hash of the build action"`
-	Size int    `long:"size" required:"true" description:"Size in bytes of the build action"`
-}
 
 var opts = struct {
 	Usage     string
@@ -32,10 +29,14 @@ var opts = struct {
 		TLS          bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling connection to the CAS server"`
 	Diff struct {
-		Before Action `group:"Options identifying the 'before' build action" namespace:"before"`
-		After  Action `group:"Options identifying the 'after' build action" namespace:"after"`
+		Before flags.Action `short:"b" long:"before" required:"true" description:"'Before' action hash"`
+		After  flags.Action `short:"a" long:"after" required:"true" description:"'After' action hash"`
 	} `command:"diff" description:"Show differences between two actions"`
-	Show Action `command:"show" description:"Show detail about a single action"`
+	Show struct {
+		Args struct {
+			Actions []flags.Action `positional-arg-name:"action" required:"true" description:"Hashes of actions to display"`
+		} `positional-args:"true"`
+	} `command:"show" description:"Show detail about an action or series of them"`
 	TopN struct {
 		N          int    `short:"n" long:"number" default:"100" description:"Number of actions to display"`
 		BrowserURL string `long:"browser_url" description:"Browser base URL to display links to"`
@@ -82,16 +83,16 @@ func main() {
 func diff(client *client.Client) {
 	before := &pb.Action{}
 	after := &pb.Action{}
-	mustGetProto(client, opts.Diff.Before.Hash, opts.Diff.Before.Size, before)
-	mustGetProto(client, opts.Diff.After.Hash, opts.Diff.After.Size, after)
+	mustGetProto(client, opts.Diff.Before.ToProto(), before)
+	mustGetProto(client, opts.Diff.After.ToProto(), after)
 	if before.CommandDigest.Hash == after.CommandDigest.Hash {
 		log.Notice("Commands are identical")
 	} else {
 		log.Warning("Commands differ: %s vs. %s", before.CommandDigest.Hash, after.CommandDigest.Hash)
 		beforeCmd := &pb.Command{}
 		afterCmd := &pb.Command{}
-		mustGetProtoDigest(client, before.CommandDigest, beforeCmd)
-		mustGetProtoDigest(client, after.CommandDigest, afterCmd)
+		mustGetProto(client, before.CommandDigest, beforeCmd)
+		mustGetProto(client, after.CommandDigest, afterCmd)
 		compareCommands(beforeCmd, afterCmd)
 	}
 	if before.InputRootDigest.Hash == after.InputRootDigest.Hash {
@@ -108,17 +109,10 @@ func diff(client *client.Client) {
 	}
 }
 
-func mustGetProto(client *client.Client, hash string, size int, msg proto.Message) {
-	if err := client.ReadProto(context.Background(), digest.Digest{
-		Hash: hash,
-		Size: int64(size),
-	}, msg); err != nil {
-		log.Fatalf("Failed to fetch digest %s: %s", hash, err)
+func mustGetProto(client *client.Client, dg *pb.Digest, msg proto.Message) {
+	if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(dg), msg); err != nil {
+		log.Fatalf("Failed to fetch digest %s: %s", dg.Hash, err)
 	}
-}
-
-func mustGetProtoDigest(client *client.Client, digest *pb.Digest, msg proto.Message) {
-	mustGetProto(client, digest.Hash, int(digest.SizeBytes), msg)
 }
 
 func compareCommands(b, a *pb.Command) {
@@ -156,8 +150,8 @@ func compareRepeatedString(name string, b, a []string) bool {
 func compareDirectories(client *client.Client, before, after *pb.Digest, indent string) {
 	b := &pb.Directory{}
 	a := &pb.Directory{}
-	mustGetProtoDigest(client, before, b)
-	mustGetProtoDigest(client, after, a)
+	mustGetProto(client, before, b)
+	mustGetProto(client, after, a)
 	for i, f1 := range b.Files {
 		if i >= len(a.Files) {
 			log.Warning("%s%s %s%s / <missing>", indent, f1.Name, f1.Digest.Hash, exe(f1.IsExecutable))
@@ -190,12 +184,18 @@ func exe(is bool) string {
 }
 
 func show(client *client.Client) {
-	action := &pb.Action{}
-	command := &pb.Command{}
-	mustGetProto(client, opts.Show.Hash, opts.Show.Size, action)
-	mustGetProtoDigest(client, action.CommandDigest, command)
-	log.Notice("Inputs:")
-	showDir(client, action.InputRootDigest, "")
+	for i, a := range opts.Show.Args.Actions {
+		if i > 0 {
+			fmt.Print("\n\n")
+		}
+		log.Notice("Action %s/%d:", a.Hash, a.Size)
+		action := &pb.Action{}
+		command := &pb.Command{}
+		mustGetProto(client, a.ToProto(), action)
+		mustGetProto(client, action.CommandDigest, command)
+		log.Notice("Inputs:")
+		showDir(client, action.InputRootDigest, "")
+	}
 }
 
 func showDir(client *client.Client, dg *pb.Digest, indent string) {
