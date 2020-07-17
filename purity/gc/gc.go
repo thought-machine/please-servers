@@ -451,7 +451,7 @@ func (c *collector) RemoveSpecificBlobs(hashes []string) error {
 	if c.dryRun {
 		log.Notice("Would remove %d actions:", len(hashes))
 		for _, h := range hashes {
-			log.Notice("    %s", h)
+			log.Debug("Would remove action %s", h)
 		}
 		return nil
 	} else if len(hashes) == 0 {
