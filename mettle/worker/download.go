@@ -15,9 +15,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/encoding/gzip"
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -36,9 +34,6 @@ const ioParallelism = 10
 // Technically checking the size is sufficient but we add this as well for general sanity in case something
 // else lost the size for some reason (it will be more obvious to debug that mismatch than mysteriously empty files).
 const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
-// compressionKey is the context key we use to indicate whether we'll apply compression to an RPC.
-type compressionKey struct{}
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(digest *pb.Digest) error {
@@ -207,7 +202,9 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	ctx = context.WithValue(ctx, compressionKey{}, shouldCompress(filename))
+	if !shouldCompress(filename) {
+		ctx = grpcutil.SkipCompression(ctx)
+	}
 	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
@@ -280,23 +277,4 @@ func shouldCompressAll(filenames []string) bool {
 		}
 	}
 	return false
-}
-
-// unaryCompressionInterceptor applies compression to unary RPCs based on the context.
-func unaryCompressionInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ctx, opts = compressionInterceptor(ctx, opts)
-	return invoker(ctx, method, req, reply, cc, opts...)
-}
-
-// streamCompressionInterceptor applies compression to streaming RPCs based on the given context.
-func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ctx, opts = compressionInterceptor(ctx, opts)
-	return streamer(ctx, desc, cc, method, opts...)
-}
-
-func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) (context.Context, []grpc.CallOption) {
-	if v := ctx.Value(compressionKey{}); v == nil || v.(bool) {
-		return ctx, append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	return grpcutil.SkipCompression(ctx), opts
 }
