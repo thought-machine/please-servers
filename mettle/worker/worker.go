@@ -33,7 +33,6 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -220,10 +219,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		Service:            storage,
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
-		DialOpts: append(grpcutil.DialOptions(tokenFile),
-			grpc.WithChainUnaryInterceptor(unaryCompressionInterceptor),
-			grpc.WithChainStreamInterceptor(streamCompressionInterceptor),
-		),
+		DialOpts:           grpcutil.DialOptions(tokenFile),
 	}, client.UseBatchOps(true), client.RetryTransient())
 	if err != nil {
 		return nil, err
@@ -696,7 +692,9 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	ctx = context.WithValue(ctx, compressionKey{}, shouldCompressAll(cmd.OutputPaths))
+	if !shouldCompressAll(cmd.OutputPaths) {
+		ctx = grpcutil.SkipCompression(ctx)
+	}
 	err = w.client.UploadIfMissing(ctx, chomks...)
 
 	ar.OutputFiles = ar2.OutputFiles
