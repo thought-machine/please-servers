@@ -13,6 +13,12 @@ go_binary(
 
 sh_cmd(
     name = "run_local",
-    cmd = "exec $(out_location :purity) one --url 127.0.0.1:7777 --log_file plz-out/log/purity.log --admin_disabled --token_file grpcutil/token.txt --min_age 15m",
+    cmd = "exec $(out_location :purity) one --url 127.0.0.1:7772 --log_file plz-out/log/purity.log --admin_disabled --token_file grpcutil/token.txt --min_age 15m",
+    srcs = [":purity"],
+)
+
+sh_cmd(
+    name = "dry_run_local",
+    cmd = "exec $(out_location :purity) one --url 127.0.0.1:7772 --log_file plz-out/log/purity.log --admin_disabled --token_file grpcutil/token.txt --min_age 15m --dry_run",
     srcs = [":purity"],
 )
