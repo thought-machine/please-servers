@@ -36,7 +36,6 @@ import (
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -156,11 +155,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 			ar.StdoutRaw = b
 		}
 	}
-	if s.isFileStorage {
-		// If the caller indicated this was a GC action then don't extend the life of the result.
-		if md, ok := metadata.FromIncomingContext(ctx); ok && len(md.Get(grpcutil.GCKey)) > 0 {
-			return ar, nil
-		}
+	if s.isFileStorage && req.InstanceName != "purity-gc" {
 		now := time.Now()
 		if err := os.Chtimes(path.Join(s.storageRoot, s.key("ac", req.ActionDigest)), now, now); err != nil {
 			log.Warning("Failed to change times on file: %s", err)

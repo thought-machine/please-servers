@@ -20,7 +20,6 @@ import (
 	"github.com/peterebden/go-cli-init/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -210,7 +209,6 @@ func (c *collector) MarkReferencedBlobs() error {
 func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, grpcutil.GCKey, "true")
 	dg := &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes}
 	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
 		InstanceName: c.client.InstanceName,
