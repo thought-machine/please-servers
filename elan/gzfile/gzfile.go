@@ -311,7 +311,7 @@ type writer struct {
 }
 
 func (w *writer) Write(p []byte) (n int, err error) {
-	w.size += n
+	w.size += len(p)
 	return w.w.Write(p)
 }
 
