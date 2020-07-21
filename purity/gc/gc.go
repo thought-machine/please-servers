@@ -39,6 +39,7 @@ func RunForever(url, instanceName, tokenFile string, tls bool, minAge, frequency
 
 // Run runs once against the remote servers and triggers a GC if needed.
 func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dryRun bool) error {
+	start := time.Now()
 	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, minAge)
 	if err != nil {
 		return err
@@ -49,7 +50,7 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dr
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
 	}
-	log.Notice("Complete!")
+	log.Notice("Complete in %s!", time.Since(start).Truncate(time.Second))
 	return nil
 }
 
