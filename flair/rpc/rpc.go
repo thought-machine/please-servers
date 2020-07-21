@@ -124,7 +124,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	seen := map[string]struct{}{}
 	for _, d := range req.BlobDigests {
 		// Empty directories have empty hashes. We don't need to check for them.
-		if d.Hash != "" {
+		if d.Hash != "" && d.Hash != emptyHash {
 			if _, present := seen[d.Hash]; !present {
 				s := s.replicator.Trie.Get(d.Hash)
 				blobs[s] = append(blobs[s], d)
