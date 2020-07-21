@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
@@ -31,7 +32,7 @@ import (
 var log = cli.MustGetLogger()
 
 // emptyHash is the sha256 hash of the empty file.
-const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+var emptyHash = digest.Empty.Hash
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator, timeout time.Duration) {

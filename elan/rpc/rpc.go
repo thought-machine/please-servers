@@ -25,6 +25,7 @@ import (
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
@@ -47,7 +48,7 @@ const timeout = 2 * time.Minute
 var log = cli.MustGetLogger()
 
 // emptyHash is the sha256 hash of the empty file.
-const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+var emptyHash = digest.Empty.Hash
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
