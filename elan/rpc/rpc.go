@@ -25,6 +25,7 @@ import (
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
@@ -45,6 +46,9 @@ import (
 const timeout = 2 * time.Minute
 
 var log = cli.MustGetLogger()
+
+// emptyHash is the sha256 hash of the empty file.
+var emptyHash = digest.Empty.Hash
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
@@ -185,6 +189,8 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	for _, d := range req.BlobDigests {
 		if len(d.Hash) != 64 {
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid hash '%s'", d.Hash)
+		} else if s.isEmpty(d) {
+			continue // Ignore the empty blob.
 		}
 		go func(d *pb.Digest) {
 			key := s.key("cas", d)
@@ -209,6 +215,11 @@ func (s *server) blobExists(ctx context.Context, key string) bool {
 	return exists
 }
 
+// isEmpty returns true if this digest is for the empty blob.
+func (s *server) isEmpty(digest *pb.Digest) bool {
+	return digest.SizeBytes == 0 && digest.Hash == emptyHash
+}
+
 func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsRequest) (*pb.BatchUpdateBlobsResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -224,7 +235,9 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				Status: &rpcstatus.Status{},
 			}
 			resp.Responses[i] = rr
-			if len(r.Data) != int(r.Digest.SizeBytes) {
+			if s.isEmpty(r.Digest) {
+				log.Debug("Ignoring empty blob in BatchUpdateBlobs")
+			} else if len(r.Data) != int(r.Digest.SizeBytes) {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
@@ -294,6 +307,9 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 // It's also called from the cache.
 func (s *server) getWholeTree(digest *pb.Digest) (*pb.GetTreeResponse, error) {
 	resp := &pb.GetTreeResponse{}
+	if s.isEmpty(digest) {
+		return resp, nil // don't need to do anything for the empty blob.
+	}
 	for r := range s.getTree(digest) {
 		if r.Err != nil {
 			return nil, r.Err
@@ -402,6 +418,8 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
 	if len(digest.Hash) < 2 {
 		return nil, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
+	} else if s.isEmpty(digest) {
+		return nil, nil
 	}
 	key := s.key(prefix, digest)
 	s.limiter <- struct{}{}
@@ -440,7 +458,7 @@ func (s *server) labelKey(label string) string {
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
 	key := s.key(prefix, digest)
-	if prefix == "cas" && s.blobExists(ctx, key) {
+	if s.isEmpty(digest) || (prefix == "cas" && s.blobExists(ctx, key)) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
 		// this seems like the most compatible way.
