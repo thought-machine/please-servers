@@ -30,6 +30,9 @@ import (
 
 var log = cli.MustGetLogger()
 
+// emptyHash is the sha256 hash of the empty file.
+const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator, timeout time.Duration) {
 	srv := &server{
@@ -121,7 +124,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	seen := map[string]struct{}{}
 	for _, d := range req.BlobDigests {
 		// Empty directories have empty hashes. We don't need to check for them.
-		if d.Hash != "" {
+		if d.Hash != "" && d.Hash != emptyHash {
 			if _, present := seen[d.Hash]; !present {
 				s := s.replicator.Trie.Get(d.Hash)
 				blobs[s] = append(blobs[s], d)
@@ -276,6 +279,9 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 		return status.Errorf(codes.Unimplemented, "page tokens not implemented for GetTree")
 	} else if req.RootDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "missing root_digest field")
+	} else if req.RootDigest.SizeBytes == 0 && req.RootDigest.Hash == emptyHash {
+		// Optimised case for empty inputs
+		return srv.Send(&pb.GetTreeResponse{})
 	}
 	// The individual directories need to be split up too...
 	var g errgroup.Group

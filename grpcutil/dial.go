@@ -90,19 +90,21 @@ func (cred tokenCredProvider) RequireTransportSecurity() bool {
 
 // unaryCompressionInterceptor compresses all outgoing RPCs unless it's been skipped via SkipCompression.
 func unaryCompressionInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	return invoker(ctx, method, req, reply, cc, compressionInterceptor(ctx, opts)...)
+	ctx, opts = compressionInterceptor(ctx, method, opts)
+	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
 // unaryCompressionInterceptor compresses all outgoing RPCs unless it's been skipped via SkipCompression.
 func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	return streamer(ctx, desc, cc, method, compressionInterceptor(ctx, opts)...)
+	ctx, opts = compressionInterceptor(ctx, method, opts)
+	return streamer(ctx, desc, cc, method, opts...)
 }
 
-func compressionInterceptor(ctx context.Context, opts []grpc.CallOption) []grpc.CallOption {
-	if ShouldCompress(ctx) {
-		return append(opts, grpc.UseCompressor(gzip.Name))
+func compressionInterceptor(ctx context.Context, method string, opts []grpc.CallOption) (context.Context, []grpc.CallOption) {
+	if ShouldCompress(ctx) && (strings.HasSuffix(method, "BatchReadBlobs") || strings.HasSuffix(method, "BatchUpdateBlobs") || strings.HasPrefix(method, "/google.bytestream.ByteStream/")) {
+		return ctx, append(opts, grpc.UseCompressor(gzip.Name))
 	}
-	return opts
+	return SkipCompression(ctx), opts
 }
 
 // skipCompressionKey is a metadata key that can be set by the client indicating that the server-side

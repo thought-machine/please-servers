@@ -2,6 +2,8 @@
 package main
 
 import (
+	"os"
+	"runtime/pprof"
 	"time"
 
 	"github.com/peterebden/go-cli-init/v2"
@@ -42,7 +44,8 @@ var opts = struct {
 	Clean struct {
 		DryRun bool `long:"dry_run" description:"Don't actually clean anything, just log what we'd do"`
 	} `command:"clean" description:"Cleans out any build actions with missing inputs or outputs"`
-	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin       admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	ProfileFile string     `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 }{
 	Usage: `
 Purity is a service to implement GC logic for Elan.
@@ -59,22 +62,40 @@ retains the "personal characteristics" theme.
 func main() {
 	cmd := cli.ParseFlagsOrDie("Purity", &opts)
 	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
+	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	opts.Admin.LogInfo = info
+	if err := run(cmd); err != nil {
+		log.Fatalf("Failed: %s", err)
+	}
+}
+
+func run(cmd string) error {
+	if opts.ProfileFile != "" {
+		f, err := os.Create(opts.ProfileFile)
+		if err != nil {
+			log.Fatalf("Failed to open profile file: %s", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatalf("could not start profiler: %s", err)
+		}
+		defer f.Close()
+		defer pprof.StopCPUProfile()
+	}
 	if cmd == "one" {
 		if err := gc.Run(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.One.MinAge), opts.One.DryRun); err != nil {
-			log.Fatalf("Failed to GC: %s", err)
+			return err
 		}
 	} else if cmd == "periodic" {
-		opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-		opts.Admin.LogInfo = info
 		go admin.Serve(opts.Admin)
 		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.Periodic.MinAge), time.Duration(opts.Periodic.Frequency))
 	} else if cmd == "delete" {
 		if err := gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, flags.AllToProto(opts.Delete.Args.Actions)); err != nil {
-			log.Fatalf("Failed to delete: %s", err)
+			return err
 		}
 	} else if cmd == "clean" {
 		if err := gc.Clean(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Clean.DryRun); err != nil {
-			log.Fatalf("Failed to clean: %s", err)
+			return err
 		}
 	}
+	return nil
 }
