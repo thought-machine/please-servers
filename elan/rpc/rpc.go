@@ -190,6 +190,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 		if len(d.Hash) != 64 {
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid hash '%s'", d.Hash)
 		} else if s.isEmpty(d) {
+			wg.Done()
 			continue // Ignore the empty blob.
 		}
 		go func(d *pb.Digest) {
