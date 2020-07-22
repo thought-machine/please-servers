@@ -63,12 +63,15 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 
 // createDirectory creates a directory & all its children
 func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string]*pb.FileNode, root string, digest *pb.Digest) error {
+	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
+		return err
+	}
+	if digest.Hash == emptyHash {
+		return nil // Nothing to be done.
+	}
 	dir, present := dirs[digest.Hash]
 	if !present {
 		return fmt.Errorf("Missing directory %s", digest.Hash)
-	}
-	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
-		return err
 	}
 	for _, file := range dir.Files {
 		if err := makeDirIfNeeded(root, file.Name); err != nil {
