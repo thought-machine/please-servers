@@ -122,15 +122,17 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		return nil, err
 	}
 	return &collector{
-		client:          client,
-		gcclient:        ppb.NewGCClient(client.Connection),
-		dryRun:          dryRun,
-		allBlobs:        map[string]int64{},
-		referencedBlobs: map[string]struct{}{},
-		brokenResults:   map[string]int64{},
-		inputSizes:      map[string]int{},
-		outputSizes:     map[string]int{},
-		ageThreshold:    time.Now().Add(-minAge).Unix(),
+		client:   client,
+		gcclient: ppb.NewGCClient(client.Connection),
+		dryRun:   dryRun,
+		allBlobs: map[string]int64{},
+		referencedBlobs: map[string]struct{}{
+			digest.Empty.Hash: struct{}{}, // The empty blob always counts as referenced.
+		},
+		brokenResults: map[string]int64{},
+		inputSizes:    map[string]int{},
+		outputSizes:   map[string]int{},
+		ageThreshold:  time.Now().Add(-minAge).Unix(),
 	}, nil
 }
 
