@@ -263,7 +263,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	}
 	c.inputSizes[ar.Hash] = int(inputSize)
 	c.outputSizes[ar.Hash] = int(size)
-	if len(resp.MissingBlobDigests) > 0 {
+	if resp != nil && len(resp.MissingBlobDigests) > 0 {
 		return fmt.Errorf("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
 	}
 	return nil
