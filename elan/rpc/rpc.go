@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/elan/mux"
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
@@ -91,15 +90,11 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage, secondaryStorage string, fileCachePath string, maxFileCacheSize int64, parallelism int) {
-	bucket := mustOpenStorage(storage)
-	if secondaryStorage != "" {
-		bucket = mux.New(bucket, mustOpenStorage(secondaryStorage))
-	}
 	srv := &server{
 		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
 		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
-		bucket:        bucket,
+		bucket:        mustOpenStorages(storage, secondaryStorage),
 		limiter:       make(chan struct{}, parallelism),
 	}
 	if fileCachePath != "" && maxFileCacheSize > 0 {
@@ -118,18 +113,10 @@ func ServeForever(opts grpcutil.Opts, storage, secondaryStorage string, fileCach
 	grpcutil.ServeForever(lis, s)
 }
 
-func mustOpenStorage(url string) *blob.Bucket {
-	bucket, err := blob.OpenBucket(context.Background(), url)
-	if err != nil {
-		log.Fatalf("Failed to open storage %s: %v", storage, err)
-	}
-	return bucket
-}
-
 type server struct {
 	storageRoot      string
 	isFileStorage    bool
-	bucket           *blob.Bucket
+	bucket           bucket
 	bytestreamRe     *regexp.Regexp
 	limiter          chan struct{}
 	maxCacheItemSize int64
