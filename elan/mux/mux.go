@@ -24,8 +24,8 @@ type Mux struct {
 }
 
 func (m *Mux) Exists(ctx context.Context, key string) (bool, error) {
-	if exists, err := m.primary.Exists(ctx, key); exists && err == nil {
-		return true, nil
+	if exists, err := m.primary.Exists(ctx, key); exists || err != nil {
+		return exists, err
 	}
 	return m.secondary.Exists(ctx, key)
 }
