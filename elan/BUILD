@@ -12,6 +12,6 @@ go_binary(
 
 sh_cmd(
     name = "run_local",
-    cmd = "exec $(out_location :elan) --host 127.0.0.1 --port 7777 -s gzfile://plz-out/elan --log_file plz-out/log/elan.log --admin_disabled --file_cache_path plz-out/elan_cache --file_cache_max_size 100M --token_file grpcutil/token.txt",
+    cmd = "exec $(out_location :elan) --host 127.0.0.1 --port 7777 -s gzfile://plz-out/elan --secondary_storage gzfile://plz-out/elan2 --log_file plz-out/log/elan.log --admin_disabled --token_file grpcutil/token.txt",
     srcs = [":elan"],
 )

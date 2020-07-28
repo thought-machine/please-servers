@@ -3,6 +3,7 @@ go_library(
     srcs = glob(["*.go"]),
     deps = [
         "//elan/gzfile",
+        "//elan/mux",
         "//grpcutil",
         "//proto:purity",
         "//third_party/go/gocloud",
