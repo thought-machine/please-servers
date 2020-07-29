@@ -323,6 +323,9 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	defer func() { <-s.limiter }()
 	r, err := s.readBlob(ctx, s.key("cas", digest), req.ReadOffset, req.ReadLimit)
 	if err != nil {
+		if gcerrors.Code(err) == gcerrors.NotFound {
+			return status.Errorf(codes.NotFound, "Blob cas/%s/%d not found", digest.Hash, digest.SizeBytes)
+		}
 		return err
 	}
 	defer r.Close()
@@ -391,9 +394,6 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 	defer func() { readLatencies.Observe(time.Since(start).Seconds()) }()
 	r, err := s.bucket.NewRangeReader(ctx, key, offset, length, nil)
 	if err != nil {
-		if gcerrors.Code(err) == gcerrors.NotFound {
-			return nil, status.Errorf(codes.NotFound, "Blob %s not found", key)
-		}
 		return nil, err
 	}
 	return &countingReader{r: r}, nil
@@ -415,6 +415,9 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	r, err := s.readBlob(ctx, key, 0, -1)
 	if err != nil {
+		if gcerrors.Code(err) == gcerrors.NotFound {
+			return nil, status.Errorf(codes.NotFound, "Blob cas/%s/%d not found", digest.Hash, digest.SizeBytes)
+		}
 		return nil, err
 	}
 	defer r.Close()
