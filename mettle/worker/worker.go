@@ -651,8 +651,8 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 		return
 	}
 	rusage := cmd.ProcessState.SysUsage().(*syscall.Rusage)
-	peakMemory.Observe(float64(rusage.Maxrss) / 1024.0)                         // maxrss is in kb, we use mb for convenience
-	cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec) / execDuration) // just drop usec, can't be bothered
+	peakMemory.Observe(float64(rusage.Maxrss) / 1024.0) // maxrss is in kb, we use mb for convenience
+	cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec+1000000*(rusage.Utime.Usec+rusage.Stime.Usec)) / execDuration)
 	// Add this to the metadata.
 	any, err := ptypes.MarshalAny(&bbru.POSIXResourceUsage{
 		UserTime:                   toDuration(rusage.Utime),
