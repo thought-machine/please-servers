@@ -21,6 +21,7 @@ go_library(
         "//third_party/go:ristretto",
         "//third_party/go:rpcstatus",
         "//third_party/proto:cas",
+        "//third_party/proto:resourceusage",
         "//mettle/common",
     ],
     visibility = ["//mettle/..."],

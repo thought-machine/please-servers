@@ -1,3 +1,5 @@
+package(default_visibility = ["PUBLIC"])
+
 # This is a vendorised copy of Buildbarn's uncached action result extension.
 go_library(
     name = "cas",
@@ -6,11 +8,15 @@ go_library(
         "//third_party/go:protobuf",
         "//third_party/go:remote-apis",
     ],
-    visibility = ["PUBLIC"],
+)
+
+# Similarly this is of Buildbarn's resource usage proto for display in the browser.
+proto_library(
+    name = "resourceusage",
+    srcs = ["resourceusage.proto"],
 )
 
 protoc_binary(
     name = "protoc",
     version = "3.11.4",
-    visibility = ["PUBLIC"],
 )

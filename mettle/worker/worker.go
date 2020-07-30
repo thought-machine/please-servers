@@ -40,7 +40,14 @@ import (
 	"github.com/thought-machine/please-servers/mettle/common"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
+	bbru "github.com/thought-machine/please-servers/third_party/proto/resourceusage"
 )
+
+// On Linux and FreeBSD, the getrusage(2) man pages document
+// that the resident set size is returned in kilobytes, though
+// kernel sources indicate kibibytes are used.
+// On Darwin it's in bytes so if this is run there this stat will be incorrect #dealwithit
+const maximumResidentSetSizeUnit = 1024
 
 var log = cli.MustGetLogger()
 
@@ -640,10 +647,39 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 			log.Warning("Failed to observe process sys usage: %s", r)
 		}
 	}()
-	if cmd.ProcessState != nil {
-		rusage := cmd.ProcessState.SysUsage().(*syscall.Rusage)
-		peakMemory.Observe(float64(rusage.Maxrss) / 1024.0)                         // maxrss is in kb, we use mb for convenience
-		cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec) / execDuration) // just drop usec, can't be bothered
+	if cmd.ProcessState == nil {
+		return
+	}
+	rusage := cmd.ProcessState.SysUsage().(*syscall.Rusage)
+	peakMemory.Observe(float64(rusage.Maxrss) / 1024.0)                         // maxrss is in kb, we use mb for convenience
+	cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec) / execDuration) // just drop usec, can't be bothered
+	// Add this to the metadata.
+	any, err := ptypes.MarshalAny(&bbru.POSIXResourceUsage{
+		UserTime:                   toDuration(rusage.Utime),
+		SystemTime:                 toDuration(rusage.Stime),
+		MaximumResidentSetSize:     rusage.Maxrss * maximumResidentSetSizeUnit,
+		PageReclaims:               rusage.Minflt,
+		PageFaults:                 rusage.Majflt,
+		Swaps:                      rusage.Nswap,
+		BlockInputOperations:       rusage.Inblock,
+		BlockOutputOperations:      rusage.Oublock,
+		MessagesSent:               rusage.Msgsnd,
+		MessagesReceived:           rusage.Msgrcv,
+		SignalsReceived:            rusage.Nsignals,
+		VoluntaryContextSwitches:   rusage.Nvcsw,
+		InvoluntaryContextSwitches: rusage.Nivcsw,
+	})
+	if err != nil {
+		log.Warning("Failed to serialise resource usage: %s", err)
+		return
+	}
+	w.metadata.AuxiliaryMetadata = append(w.metadata.AuxiliaryMetadata, any)
+}
+
+func toDuration(tv syscall.Timeval) *bbru.Duration {
+	return &bbru.Duration{
+		Seconds: tv.Sec,
+		Nanos:   int32(tv.Usec) * 1000,
 	}
 }
 
