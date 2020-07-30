@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
@@ -110,7 +111,9 @@ func diff(client *client.Client) {
 }
 
 func mustGetProto(client *client.Client, dg *pb.Digest, msg proto.Message) {
-	if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(dg), msg); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), msg); err != nil {
 		log.Fatalf("Failed to fetch digest %s: %s", dg.Hash, err)
 	}
 }
