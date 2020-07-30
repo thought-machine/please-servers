@@ -11,20 +11,6 @@ remote_file(
     binary = True,
 )
 
-remote_file(
-    name = "templates",
-    url = "https://get.please.build/third_party/binary/bb-browser-templates-20200730.tar.gz",
-    hashes = ["6de808dfb93fbf25c5761062caf484ca845f59921d3258eb92f0eed7681883d8"],
-)
-
-genrule(
-    name = "extract_templates",
-    srcs = [":templates"],
-    outs = ["templates"],
-    cmd = "tar -xzf $SRCS",
-    binary = True,  # Not really but bb-browser doesn't allow their location to be configured.
-)
-
 filegroup(
     name = "config",
     srcs = ["config.jsonnet"],
@@ -36,7 +22,6 @@ sh_cmd(
     cmd = "cd plz-out/bin/browser && exec ./bb-browser config.jsonnet",
     srcs = [":bb_browser"],
     deps = [
-        ":extract_templates",
         ":config",
     ],
 )
