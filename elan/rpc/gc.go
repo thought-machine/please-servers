@@ -62,17 +62,17 @@ func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.Actio
 func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.DeleteResponse, error) {
 	log.Notice("Delete request for %d action results, %d blobs", len(req.ActionResults), len(req.Blobs))
 	var g multierror.Group
-	g.Go(func() error { return s.deleteAll(ctx, "ac", req.ActionResults) })
-	g.Go(func() error { return s.deleteAll(ctx, "cas", req.Blobs) })
+	g.Go(func() error { return s.deleteAll(ctx, "ac", req.ActionResults, req.Hard) })
+	g.Go(func() error { return s.deleteAll(ctx, "cas", req.Blobs, req.Hard) })
 	return &ppb.DeleteResponse{}, g.Wait().ErrorOrNil()
 }
 
-func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob) error {
+func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob, hard bool) error {
 	var me *multierror.Error
 	for _, blob := range blobs {
 		key := s.key(prefix, &pb.Digest{Hash: blob.Hash, SizeBytes: blob.SizeBytes})
 		if exists, _ := s.bucket.Exists(ctx, key); exists {
-			if err := s.bucket.Delete(ctx, key); err != nil {
+			if err := s.bucket.Delete(ctx, key, hard); err != nil {
 				me = multierror.Append(me, err)
 			}
 		}

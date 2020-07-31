@@ -43,6 +43,10 @@ message DeleteRequest {
   repeated Blob action_results = 1;
   // CAS blobs to delete.
   repeated Blob blobs = 2;
+  // True to force a 'hard' delete.
+  // False gives the server an option to 'soft' delete them (however it may
+  // interpret that).
+  bool hard = 4;
 }
 
 message DeleteResponse {}
