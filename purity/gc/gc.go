@@ -172,6 +172,13 @@ func (c *collector) LoadAllBlobs() error {
 	return g.Wait().ErrorOrNil()
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func (c *collector) MarkReferencedBlobs() error {
 	// Get a little bit of parallelism here, but not too much.
 	const parallelism = 16
@@ -187,9 +194,10 @@ func (c *collector) MarkReferencedBlobs() error {
 		}
 	}()
 	var wg sync.WaitGroup
-	wg.Add(parallelism)
+	// Loop one extra time to catch the remaining ars as the step size is rounded down
+	wg.Add(parallelism+1)
 	step := len(c.actionResults) / parallelism
-	for i := 0; i < parallelism; i++ {
+	for i := 0; i < (parallelism+1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				if !c.shouldDelete(ar) {
@@ -203,7 +211,7 @@ func (c *collector) MarkReferencedBlobs() error {
 				ch <- 1
 			}
 			wg.Done()
-		}(c.actionResults[step*i : step*(i+1)])
+		}(c.actionResults[step*i : min(step*(i+1), len(c.actionResults))])
 	}
 	wg.Wait()
 	return nil
