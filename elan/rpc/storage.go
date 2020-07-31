@@ -17,7 +17,7 @@ type bucket interface {
 	NewWriter(ctx context.Context, key string, opts *blob.WriterOptions) (io.WriteCloser, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	List(opts *blob.ListOptions) *blob.ListIterator
-	Delete(ctx context.Context, key string) error
+	Delete(ctx context.Context, key string, hard bool) error
 }
 
 func mustOpenStorage(url string) *blob.Bucket {
@@ -55,6 +55,6 @@ func (a *adapter) List(opts *blob.ListOptions) *blob.ListIterator {
 	return a.bucket.List(opts)
 }
 
-func (a *adapter) Delete(ctx context.Context, key string) error {
-	return a.bucket.Delete(ctx, key)
+func (a *adapter) Delete(ctx context.Context, key string, hard bool) error {
+	return a.bucket.Delete(ctx, key) // this is always a 'hard' delete
 }
