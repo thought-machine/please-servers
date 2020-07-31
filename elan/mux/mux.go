@@ -7,6 +7,7 @@ import (
 
 	"github.com/peterebden/go-cli-init/v2"
 	"gocloud.dev/blob"
+	"gocloud.dev/gcerrors"
 )
 
 var log = cli.MustGetLogger()
@@ -59,8 +60,18 @@ func (m *Mux) List(opts *blob.ListOptions) *blob.ListIterator {
 	return m.primary.List(opts)
 }
 
-func (m *Mux) Delete(ctx context.Context, key string) error {
-	// We interpret a delete as a move to the secondary.
+func (m *Mux) Delete(ctx context.Context, key string, hard bool) error {
+	if hard {
+		err1 := m.primary.Delete(ctx, key)
+		err2 := m.secondary.Delete(ctx, key)
+		if err1 != nil && gcerrors.Code(err1) != gcerrors.NotFound {
+			return err1
+		} else if err2 != nil && gcerrors.Code(err2) != gcerrors.NotFound {
+			return err2
+		}
+		return nil
+	}
+	// We interpret a soft delete as a move to the secondary.
 	if err := m.copyBlob(ctx, key); err != nil {
 		return err
 	}

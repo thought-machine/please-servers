@@ -479,6 +479,7 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
 			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
+			Hard:          true,
 		}); err != nil {
 			return err
 		}
