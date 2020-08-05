@@ -260,8 +260,11 @@ func (s *server) process(msg *pubsub.Message) {
 		// This is legit, we are getting an update about a job someone else started.
 		log.Debug("Update for %s is for a previously unknown job", metadata.ActionDigest.Hash)
 		s.jobs[metadata.ActionDigest.Hash] = &job{Current: op}
-	} else {
+	} else if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
+		// Only send QUEUED messages if they're the first one. This prevents us from
+		// re-broadcasting a QUEUED message after something's already started executing.
 		j.Current = op
+		j.SentFirst = true
 		for _, stream := range j.Streams {
 			// Invoke this in a goroutine so we do not block.
 			go func(ch chan<- *longrunning.Operation) {
@@ -294,6 +297,7 @@ func (s *server) deleteJob(hash string) {
 
 // A job represents a single execution request.
 type job struct {
-	Streams []chan *longrunning.Operation
-	Current *longrunning.Operation
+	Streams   []chan *longrunning.Operation
+	Current   *longrunning.Operation
+	SentFirst bool
 }
