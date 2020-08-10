@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/shirou/gopsutil/mem"
 
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
 )
@@ -57,16 +58,21 @@ func (w *worker) sendReport(report *lpb.UpdateRequest) {
 	}
 }
 
-// waitForFreeSpace checks the currently available disk space and reports unhealthy until it is under a threshold.
-func (w *worker) waitForFreeSpace() {
-	if w.checkFreeSpace() {
+// waitForFreeResources checks the currently available disk space and reports unhealthy until it is under a threshold.
+func (w *worker) waitForFreeResources() {
+	if w.checkFreeResources() {
 		return
 	}
 	for range time.NewTicker(1 * time.Minute).C {
-		if w.checkFreeSpace() {
+		if w.checkFreeResources() {
 			return
 		}
 	}
+}
+
+// checkFreeResources returns true if the worker currently has sufficient free disk space and memory.
+func (w *worker) checkFreeResources() bool {
+	return w.checkFreeSpace() && w.checkFreeMemory()
 }
 
 // checkFreeSpace returns true if the worker currently has sufficient free space.
@@ -90,6 +96,26 @@ func (w *worker) checkFreeSpace() bool {
 		log.Debug("Disk free space %d is over healthy threshold %d", avail, w.diskSpace)
 		return true
 	}
+}
+
+// checkFreeMemory returns true if we consider we have enough memory available
+func (w *worker) checkFreeMemory() bool {
+	if w.memoryThreshold >= 100.0 {
+		log.Debug("Skipping memory check, threshold is set to %0.1f%%", w.memoryThreshold)
+		return true // must always be enabled
+	}
+	vm, err := mem.VirtualMemory()
+	if err != nil {
+		log.Error("Error getting memory usage: %s", err)
+		w.Report(false, false, true, "Filesystem has gone read-only")
+		return false
+	} else if vm.UsedPercent > w.memoryThreshold {
+		log.Warning("Memory usage %0.1f%% is over healthy threshold %0.1f%%, will not accept new jobs until it decreases", vm.UsedPercent, w.memoryThreshold)
+		w.Report(false, false, true, "Low disk space: %0.1f%% free", vm.UsedPercent)
+		return false
+	}
+	log.Debug("Memory usage %0.1f%% is under healthy threshold %0.1f%%", vm.UsedPercent, w.memoryThreshold)
+	return true
 }
 
 // waitIfDisabled waits until the server marks this worker as enabled again.

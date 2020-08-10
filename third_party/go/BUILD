@@ -481,3 +481,14 @@ go_get(
     revision = "v0.4.1",
     deps = [":unix"],
 )
+
+go_get(
+    name = "psutil",
+    get = "github.com/shirou/gopsutil",
+    install = [
+        "internal/common",
+        "mem",
+    ],
+    revision = "v2.17.09",
+    deps = [":unix"],
+)
