@@ -106,8 +106,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, timeout, maxCacheSize, minDiskSpace); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64, memoryThreshold float64) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, timeout, maxCacheSize, minDiskSpace, memoryThreshold); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -116,7 +116,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, timeout, 0, math.MaxInt64)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, timeout, 0, math.MaxInt64, 100.0)
 	if err != nil {
 		return err
 	}
@@ -145,8 +145,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, timeout, maxCacheSize, minDiskSpace)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64, memoryThreshold float64) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, timeout, maxCacheSize, minDiskSpace, memoryThreshold)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
 	}()
 	for {
-		w.waitForFreeSpace()
+		w.waitForFreeResources()
 		w.waitIfDisabled()
 		w.Report(true, false, true, "Awaiting next task...")
 		if _, err := w.RunTask(ctx); err != nil {
@@ -182,7 +182,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64, memoryThreshold float64) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -241,20 +241,21 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	}
 
 	w := &worker{
-		requests:   common.MustOpenSubscription(requestQueue),
-		responses:  common.MustOpenTopic(responseQueue),
-		client:     client,
-		rootDir:    abspath,
-		clean:      clean,
-		home:       home,
-		name:       name,
-		sandbox:    sandbox,
-		limiter:    make(chan struct{}, downloadParallelism),
-		iolimiter:  make(chan struct{}, ioParallelism),
-		browserURL: browserURL,
-		timeout:    timeout,
-		startTime:  time.Now(),
-		diskSpace:  minDiskSpace,
+		requests:        common.MustOpenSubscription(requestQueue),
+		responses:       common.MustOpenTopic(responseQueue),
+		client:          client,
+		rootDir:         abspath,
+		clean:           clean,
+		home:            home,
+		name:            name,
+		sandbox:         sandbox,
+		limiter:         make(chan struct{}, downloadParallelism),
+		iolimiter:       make(chan struct{}, ioParallelism),
+		browserURL:      browserURL,
+		timeout:         timeout,
+		startTime:       time.Now(),
+		diskSpace:       minDiskSpace,
+		memoryThreshold: memoryThreshold,
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix)
@@ -285,23 +286,24 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 }
 
 type worker struct {
-	requests     *pubsub.Subscription
-	responses    *pubsub.Topic
-	client       *client.Client
-	lucidity     lpb.LucidityClient
-	lucidChan    chan *lpb.UpdateRequest
-	cache        *ristretto.Cache
-	dir, rootDir string
-	home         string
-	name         string
-	browserURL   string
-	sandbox      string
-	clean        bool
-	disabled     bool
-	timeout      time.Duration
-	fileCache    *cache
-	startTime    time.Time
-	diskSpace    int64
+	requests        *pubsub.Subscription
+	responses       *pubsub.Topic
+	client          *client.Client
+	lucidity        lpb.LucidityClient
+	lucidChan       chan *lpb.UpdateRequest
+	cache           *ristretto.Cache
+	dir, rootDir    string
+	home            string
+	name            string
+	browserURL      string
+	sandbox         string
+	clean           bool
+	disabled        bool
+	timeout         time.Duration
+	fileCache       *cache
+	startTime       time.Time
+	diskSpace       int64
+	memoryThreshold float64
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest
@@ -341,7 +343,7 @@ func (w *worker) receiveTask(ctx context.Context) (*pubsub.Message, error) {
 		msg, err := w.receiveOne(ctx)
 		if err == context.DeadlineExceeded {
 			log.Debug("Task receive timed out, retrying...")
-			w.waitForFreeSpace()
+			w.waitForFreeResources()
 			w.waitIfDisabled()
 			continue
 		}

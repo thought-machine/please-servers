@@ -50,33 +50,35 @@ var opts = struct {
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
-		Dir          string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		NoClean      bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
-		Name         string       `short:"n" long:"name" description:"Name of this worker"`
-		Browser      string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Lucidity     string       `long:"lucidity" description:"URL of Lucidity server to report to"`
-		Sandbox      string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout      cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		MinDiskSpace cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
-		Cache        CacheOpts    `group:"Options controlling caching"`
-		Storage      StorageOpts  `group:"Options controlling communication with the CAS server"`
-		Queues       struct {
+		Dir             string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		NoClean         bool         `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Name            string       `short:"n" long:"name" description:"Name of this worker"`
+		Browser         string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Lucidity        string       `long:"lucidity" description:"URL of Lucidity server to report to"`
+		Sandbox         string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout         cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		MinDiskSpace    cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		MemoryThreshold float64      `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		Cache           CacheOpts    `group:"Options controlling caching"`
+		Storage         StorageOpts  `group:"Options controlling communication with the CAS server"`
+		Queues          struct {
 			RequestQueue  string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
-		GRPC         grpcutil.Opts `group:"Options controlling the gRPC server"`
-		Dir          string        `short:"d" long:"dir" default:"plz-out/mettle" description:"Directory to run actions in"`
-		NoClean      bool          `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
-		NumWorkers   int           `short:"n" long:"num_workers" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
-		Browser      string        `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Lucidity     string        `long:"lucidity" description:"URL of Lucidity server to report to"`
-		Sandbox      string        `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout      cli.Duration  `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
-		MinDiskSpace cli.ByteSize  `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
-		Cache        CacheOpts     `group:"Options controlling caching"`
-		Storage      struct {
+		GRPC            grpcutil.Opts `group:"Options controlling the gRPC server"`
+		Dir             string        `short:"d" long:"dir" default:"plz-out/mettle" description:"Directory to run actions in"`
+		NoClean         bool          `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
+		NumWorkers      int           `short:"n" long:"num_workers" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
+		Browser         string        `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Lucidity        string        `long:"lucidity" description:"URL of Lucidity server to report to"`
+		Sandbox         string        `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		Timeout         cli.Duration  `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		MinDiskSpace    cli.ByteSize  `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		MemoryThreshold float64       `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		Cache           CacheOpts     `group:"Options controlling caching"`
+		Storage         struct {
 			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
@@ -148,11 +150,11 @@ func main() {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace))
+			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold)
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else {
