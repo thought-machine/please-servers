@@ -244,6 +244,13 @@ func (s *server) process(msg *pubsub.Message) {
 		log.Error("ActionDigest in received message is nil: %s", op)
 		return
 	}
+	if op.Done {
+		switch result := op.Result.(type) {
+		case *longrunning.Operation_Response, *longrunning.Operation_Error:
+		default:
+			log.Error("Received a done response with neither response nor error field set: %#v", result)
+		}
+	}
 	if log.IsEnabledFor(logging.DEBUG) {
 		switch result := op.Result.(type) {
 		case *longrunning.Operation_Response:

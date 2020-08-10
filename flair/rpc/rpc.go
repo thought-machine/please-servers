@@ -21,6 +21,7 @@ import (
 	"github.com/peterebden/go-sri"
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
+	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -530,6 +531,13 @@ func (s *server) streamExecution(client pb.Execution_ExecuteClient, server pb.Ex
 			return err
 		} else if err := server.Send(resp); err != nil {
 			return err
+		}
+		if resp.Done {
+			switch result := resp.Result.(type) {
+			case *longrunning.Operation_Response, *longrunning.Operation_Error:
+			default:
+				log.Error("Received a done response with neither response nor error field set: %#v", result)
+			}
 		}
 	}
 }
