@@ -150,7 +150,7 @@ func (c *collector) LoadAllBlobs() error {
 		i := i
 		g.Go(func() error {
 			for j := 0; j < 16; j++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 				defer cancel()
 				resp, err := c.gcclient.List(ctx, &ppb.ListRequest{
 					Prefix: hex.EncodeToString([]byte{byte(i*16 + j)}),
@@ -195,9 +195,9 @@ func (c *collector) MarkReferencedBlobs() error {
 	}()
 	var wg sync.WaitGroup
 	// Loop one extra time to catch the remaining ars as the step size is rounded down
-	wg.Add(parallelism+1)
+	wg.Add(parallelism + 1)
 	step := len(c.actionResults) / parallelism
-	for i := 0; i < (parallelism+1); i++ {
+	for i := 0; i < (parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				if !c.shouldDelete(ar) {
@@ -432,9 +432,10 @@ func (c *collector) RemoveBlobs() error {
 	for i := 0; i < 16; i++ {
 		i := i
 		g.Go(func() error {
+			var me *multierror.Error
 			for j := 0; j < 16; j++ {
 				key := hex.EncodeToString([]byte{byte(i*16 + j)})
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 				defer cancel()
 				_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 					Prefix:        key,
@@ -442,11 +443,11 @@ func (c *collector) RemoveBlobs() error {
 					ActionResults: ars[key],
 				})
 				if err != nil {
-					return err
+					me = multierror.Append(me, err)
 				}
 				ch <- 1
 			}
-			return nil
+			return me.ErrorOrNil()
 		})
 	}
 	return g.Wait().ErrorOrNil()
