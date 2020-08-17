@@ -3,8 +3,8 @@ package trie
 import (
 	"testing"
 
-	"google.golang.org/grpc"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 )
 
 func TestEmptyTrie(t *testing.T) {
@@ -57,6 +57,29 @@ func TestOffset(t *testing.T) {
 	// But 4 is
 	assert.NotEqual(t, trie.Get("0000"), trie.GetOffset("0000", 4))
 	assert.Equal(t, trie.Get("4000"), trie.GetOffset("0000", 4))
+}
+
+func TestNonDuplicatedServers(t *testing.T) {
+	trie := New(callback)
+	assert.NoError(t, trie.AddAll(map[string]string{
+		"00-0f": "127.0.0.1:443",
+		"10-1f": "127.0.0.1:443",
+		"20-2f": "127.0.0.1:443",
+		"30-3f": "127.0.0.1:443",
+		"40-4f": "127.0.0.1:443",
+		"50-5f": "127.0.0.1:443",
+		"60-6f": "127.0.0.1:443",
+		"70-7f": "127.0.0.1:443",
+		"80-8f": "127.0.0.1:443",
+		"90-8f": "127.0.0.1:443",
+		"a0-af": "127.0.0.1:443",
+		"b0-bf": "127.0.0.1:443",
+		"c0-cf": "127.0.0.1:443",
+		"d0-df": "127.0.0.1:443",
+		"e0-ef": "127.0.0.1:443",
+		"f0-ff": "127.0.0.1:443",
+	}))
+	assert.NotEqual(t, trie.Get("fa"), trie.Get("7a"))
 }
 
 func callback(address string) (*grpc.ClientConn, error) {
