@@ -55,7 +55,13 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, audience string, allowedUsers []string) {
-	srv := &server{}
+	srv := &server{
+		liveWorkers:      map[string]struct{}{},
+		deadWorkers:      map[string]struct{}{},
+		healthyWorkers:   map[string]struct{}{},
+		unhealthyWorkers: map[string]struct{}{},
+		busyWorkers:      map[string]struct{}{},
+	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterLucidityServer(s, srv)
 
@@ -71,27 +77,33 @@ func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, audien
 }
 
 type server struct {
-	workers sync.Map
+	workers                                                                 sync.Map
+	mutex                                                                   sync.Mutex
+	liveWorkers, deadWorkers, healthyWorkers, unhealthyWorkers, busyWorkers map[string]struct{}
 }
 
 func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	f := func(b bool) float64 {
-		if b {
-			return 1.0
-		} else {
-			return 0.0
-		}
-	}
 	req.UpdateTime = time.Now().Unix()
 	v, ok := s.workers.Load(req.Name)
 	req.Disabled = ok && v.(*pb.UpdateRequest).Disabled
 	s.workers.Store(req.Name, req)
-	liveWorkers.Add(f(req.Alive))
-	deadWorkers.Add(f(!req.Alive))
-	healthyWorkers.Add(f(req.Healthy))
-	unhealthyWorkers.Add(f(!req.Healthy))
-	busyWorkers.Add(f(req.Busy))
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	liveWorkers.Set(s.updateMap(s.liveWorkers, req.Name, req.Alive))
+	deadWorkers.Set(s.updateMap(s.deadWorkers, req.Name, !req.Alive))
+	healthyWorkers.Set(s.updateMap(s.healthyWorkers, req.Name, req.Healthy))
+	unhealthyWorkers.Set(s.updateMap(s.unhealthyWorkers, req.Name, !req.Healthy))
+	busyWorkers.Set(s.updateMap(s.busyWorkers, req.Name, req.Busy))
 	return &pb.UpdateResponse{ShouldDisable: req.Disabled}, nil
+}
+
+func (s *server) updateMap(m map[string]struct{}, key string, in bool) float64 {
+	if in {
+		m[key] = struct{}{}
+	} else {
+		delete(m, key)
+	}
+	return float64(len(m))
 }
 
 func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
