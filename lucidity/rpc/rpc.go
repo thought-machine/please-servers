@@ -20,30 +20,30 @@ import (
 
 var log = cli.MustGetLogger()
 
-var liveWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var liveWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",
 	Name:      "live_workers_total",
-}, []string{"worker"})
+})
 
-var deadWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var deadWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",
 	Name:      "dead_workers_total",
-}, []string{"worker"})
+})
 
-var healthyWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var healthyWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",
 	Name:      "healthy_workers_total",
-}, []string{"worker"})
+})
 
-var unhealthyWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var unhealthyWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",
 	Name:      "unhealthy_workers_total",
-}, []string{"worker"})
+})
 
-var busyWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var busyWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",
 	Name:      "busy_workers_total",
-}, []string{"worker"})
+})
 
 func init() {
 	prometheus.MustRegister(liveWorkers)
@@ -86,11 +86,11 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 	v, ok := s.workers.Load(req.Name)
 	req.Disabled = ok && v.(*pb.UpdateRequest).Disabled
 	s.workers.Store(req.Name, req)
-	liveWorkers.WithLabelValues(req.Name).Set(f(req.Alive))
-	deadWorkers.WithLabelValues(req.Name).Set(f(!req.Alive))
-	healthyWorkers.WithLabelValues(req.Name).Set(f(req.Healthy))
-	unhealthyWorkers.WithLabelValues(req.Name).Set(f(!req.Healthy))
-	busyWorkers.WithLabelValues(req.Name).Set(f(req.Busy))
+	liveWorkers.Add(f(req.Alive))
+	deadWorkers.Add(f(!req.Alive))
+	healthyWorkers.Add(f(req.Healthy))
+	unhealthyWorkers.Add(f(!req.Healthy))
+	busyWorkers.Add(f(req.Busy))
 	return &pb.UpdateResponse{ShouldDisable: req.Disabled}, nil
 }
 
