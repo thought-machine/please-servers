@@ -58,6 +58,22 @@ var bytesServed = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "bytes_served_total",
 })
+var streamBytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "stream_bytes_received_total",
+})
+var streamBytesServed = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "stream_bytes_served_total",
+})
+var batchBytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "batch_bytes_received_total",
+})
+var batchBytesServed = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "batch_bytes_served_total",
+})
 var readLatencies = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "elan",
 	Name:      "read_latency_seconds",
@@ -246,6 +262,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				log.Debug("Stored blob with digest %s", r.Digest.Hash)
 			}
 			wg.Done()
+			batchBytesReceived.Add(float64(r.Digest.SizeBytes))
 		}(i, r)
 	}
 	wg.Wait()
@@ -277,6 +294,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 				rr.Data = data
 			}
 			wg.Done()
+			batchBytesServed.Add(float64(d.SizeBytes))
 		}(i, d)
 	}
 	wg.Wait()
@@ -329,8 +347,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
 	} else if req.ReadLimit == 0 {
 		req.ReadLimit = -1
+		streamBytesServed.Add(float64(digest.SizeBytes - req.ReadOffset))
 	} else if req.ReadOffset+req.ReadLimit > digest.SizeBytes {
 		req.ReadLimit = digest.SizeBytes - req.ReadOffset
+		streamBytesServed.Add(float64(req.ReadLimit))
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
@@ -378,6 +398,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	} else if r.TotalSize != digest.SizeBytes {
 		return status.Errorf(codes.InvalidArgument, "invalid digest size (digest: %d, wrote: %d)", digest.SizeBytes, r.TotalSize)
 	}
+	streamBytesReceived.Add(float64(r.TotalSize))
 	log.Debug("Stored blob with hash %s", digest.Hash)
 	return srv.SendAndClose(&bs.WriteResponse{
 		CommittedSize: r.TotalSize,
