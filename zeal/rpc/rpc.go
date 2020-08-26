@@ -48,7 +48,7 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool) {
+func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parallelism int) {
 	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
 		Service:            storage,
 		NoSecurity:         !secureStorage,
@@ -61,6 +61,7 @@ func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool) {
 	srv := &server{
 		client:        retryablehttp.NewClient(),
 		storageClient: client,
+		limiter:       make(chan struct{}, parallelism),
 	}
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
 	srv.client.RequestLogHook = srv.logHTTPRequests
@@ -73,6 +74,7 @@ func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool) {
 type server struct {
 	client        *retryablehttp.Client
 	storageClient *client.Client
+	limiter       chan struct{}
 }
 
 func (s *server) FetchDirectory(ctx context.Context, req *pb.FetchDirectoryRequest) (*pb.FetchDirectoryResponse, error) {
@@ -111,6 +113,9 @@ func (s *server) fetchOne(ctx context.Context, url string, timeout *duration.Dur
 }
 
 func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qualifier) (*rpb.Digest, error) {
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
+
 	// N.B. We must construct a new SRI checker each time here since it is stateful per request.
 	//      We've already checked it for errors though.
 	sri, _ := s.sriChecker(qualifiers)

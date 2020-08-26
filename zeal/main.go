@@ -17,6 +17,7 @@ var opts = struct {
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
 	GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
+	Parallelism int           `long:"parallelism" default:"4" description:"Max parallel download tasks to run"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -49,5 +50,5 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS)
+	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism)
 }
