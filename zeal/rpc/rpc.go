@@ -11,6 +11,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
@@ -75,6 +76,13 @@ type server struct {
 	client        *retryablehttp.Client
 	storageClient *client.Client
 	limiter       chan struct{}
+	downloads     sync.Map
+}
+
+type download struct {
+	once   sync.Once
+	digest *rpb.Digest
+	err    error
 }
 
 func (s *server) FetchDirectory(ctx context.Context, req *pb.FetchDirectoryRequest) (*pb.FetchDirectoryResponse, error) {
@@ -107,9 +115,33 @@ func (s *server) fetchOne(ctx context.Context, url string, timeout *duration.Dur
 	if d, err := ptypes.Duration(timeout); err != nil {
 		ctx, cancel := context.WithTimeout(ctx, d)
 		defer cancel()
-		return s.fetchURL(ctx, url, qualifiers)
+		return s.singleflightFetchURL(ctx, url, qualifiers)
 	}
-	return s.fetchURL(ctx, url, qualifiers)
+	return s.singleflightFetchURL(ctx, url, qualifiers)
+}
+
+// singleflightFetchURL fetches a single URL, ensuring we are only fetching the same one once at a time.
+func (s *server) singleflightFetchURL(ctx context.Context, url string, qualifiers []*pb.Qualifier) (*rpb.Digest, error) {
+	v, _ := s.downloads.LoadOrStore(url, &download{})
+	d := v.(*download)
+	d.once.Do(func() {
+		d.digest, d.err = s.fetchURL(ctx, url, qualifiers)
+	})
+	// Don't keep failed downloads around in the singleflight map, but we can remember successful ones.
+	if d.err != nil {
+		s.downloads.Delete(url)
+		return d.digest, d.err
+	}
+	// Verify that the CAS still contains this resource.
+	if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
+		InstanceName: s.storageClient.InstanceName,
+		BlobDigests:  []*rpb.Digest{d.digest},
+	}); err != nil || len(resp.MissingBlobDigests) > 0 {
+		log.Warning("CAS does not still contain blob for %s, re-triggering download.", url)
+		s.downloads.Delete(url)
+		return s.singleflightFetchURL(ctx, url, qualifiers)
+	}
+	return d.digest, d.err
 }
 
 func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qualifier) (*rpb.Digest, error) {
