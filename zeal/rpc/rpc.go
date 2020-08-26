@@ -130,6 +130,16 @@ func (s *server) singleflightFetchURL(ctx context.Context, url string, qualifier
 	// Don't keep failed downloads around in the singleflight map, but we can remember successful ones.
 	if d.err != nil {
 		s.downloads.Delete(url)
+		return d.digest, d.err
+	}
+	// Verify that the CAS still contains this resource.
+	if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
+		InstanceName: s.storageClient.InstanceName,
+		BlobDigests:  []*rpb.Digest{d.digest},
+	}); err != nil || len(resp.MissingBlobDigests) > 0 {
+		log.Warning("CAS does not still contain blob for %s, re-triggering download.", url)
+		s.downloads.Delete(url)
+		return s.singleflightFetchURL(ctx, url, qualifiers)
 	}
 	return d.digest, d.err
 }
