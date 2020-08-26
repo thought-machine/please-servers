@@ -49,6 +49,8 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dr
 		return err
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
+	} else if err := gc.RemoveBrokenBlobs(); err != nil {
+		return err
 	}
 	log.Notice("Complete in %s!", time.Since(start).Truncate(time.Second))
 	return nil
@@ -404,6 +406,7 @@ func (c *collector) RemoveBlobs() error {
 	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
+			log.Debug("Identified action result %s for deletion", ar.Hash)
 			key := ar.Hash[:2]
 			ars[key] = append(ars[key], &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
 			totalSize += ar.SizeBytes
@@ -412,6 +415,7 @@ func (c *collector) RemoveBlobs() error {
 	}
 	for hash, size := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
+			log.Debug("Identified blob %s for deletion", hash)
 			key := hash[:2]
 			blobs[key] = append(blobs[key], &ppb.Blob{Hash: hash, SizeBytes: size})
 			totalSize += size
@@ -461,7 +465,7 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	if c.dryRun {
 		log.Notice("Would remove %d actions:", len(digests))
 		for _, h := range digests {
-			log.Debug("Would remove action %s", h)
+			log.Info("Would remove action %s", h)
 		}
 		return nil
 	} else if len(digests) == 0 {
@@ -477,6 +481,7 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	for _, digest := range digests {
+		log.Debug("Removing action result %s", digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
 			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
