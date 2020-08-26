@@ -98,6 +98,10 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 func init() {
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(bytesServed)
+	prometheus.MustRegister(streamBytesReceived)
+	prometheus.MustRegister(streamBytesServed)
+	prometheus.MustRegister(batchBytesReceived)
+	prometheus.MustRegister(batchBytesServed)
 	prometheus.MustRegister(readLatencies)
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
