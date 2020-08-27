@@ -605,11 +605,11 @@ func (c *collector) replicateBlobs(name string, blobs []*pb.Digest, f func(*pb.D
 	if c.dryRun {
 		return nil
 	}
-	ch := newProgressBar("Deleting "+name, len(blobs))
+	ch := newProgressBar("Replicating "+name, len(blobs))
 	defer func() {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
-		log.Notice("Deleted %d %s", len(blobs), name)
+		log.Notice("Replicated %d %s", len(blobs), name)
 	}()
 	var me *multierror.Error
 	for _, b := range blobs {

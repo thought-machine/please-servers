@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -560,6 +561,9 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 		mutex.Lock()
 		defer mutex.Unlock()
 		for _, ar := range r.ActionResults {
+			if strings.HasPrefix(ar.Hash, "tmp") {
+				continue
+			}
 			if ar.Replicas == 0 {
 				ar.Replicas = 1
 			}
@@ -574,6 +578,9 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 			}
 		}
 		for _, blob := range r.Blobs {
+			if strings.HasPrefix(blob.Hash, "tmp") {
+				continue
+			}
 			if blob.Replicas == 0 {
 				blob.Replicas = 1
 			}
