@@ -29,12 +29,14 @@ var opts = struct {
 		TLS          bool   `long:"tls" description:"Use TLS for communicating with the storage server"`
 	} `group:"Options controlling GC settings"`
 	One struct {
-		DryRun bool         `long:"dry_run" description:"Don't actually clean anything, just log what we'd do"`
-		MinAge cli.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
+		DryRun            bool         `long:"dry_run" description:"Don't actually clean anything, just log what we'd do"`
+		MinAge            cli.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
+		ReplicationFactor int          `long:"replication_factor" description:"Min number of replicas to expect for a blob"`
 	} `command:"one" description:"Run just once and terminate after"`
 	Periodic struct {
-		Frequency cli.Duration `long:"frequency" default:"1h" description:"Length of time to wait between updates"`
-		MinAge    cli.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
+		Frequency         cli.Duration `long:"frequency" default:"1h" description:"Length of time to wait between updates"`
+		MinAge            cli.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
+		ReplicationFactor int          `long:"replication_factor" description:"Min number of replicas to expect for a blob"`
 	} `command:"periodic" description:"Run continually, triggering GCs at a regular interval"`
 	Delete struct {
 		Args struct {
@@ -44,6 +46,10 @@ var opts = struct {
 	Clean struct {
 		DryRun bool `long:"dry_run" description:"Don't actually clean anything, just log what we'd do"`
 	} `command:"clean" description:"Cleans out any build actions with missing inputs or outputs"`
+	Replicate struct {
+		ReplicationFactor int  `long:"replication_factor" required:"true" description:"Min number of replicas to expect for a blob"`
+		DryRun            bool `long:"dry_run" description:"Don't actually do anything, just log what we'd do"`
+	} `command:"replicate" description:"Re-replicates any underreplicated blobs"`
 	Admin       admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
 	ProfileFile string     `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 }{
@@ -82,20 +88,16 @@ func run(cmd string) error {
 		defer pprof.StopCPUProfile()
 	}
 	if cmd == "one" {
-		if err := gc.Run(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.One.MinAge), opts.One.DryRun); err != nil {
-			return err
-		}
+		return gc.Run(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.One.MinAge), opts.One.ReplicationFactor, opts.One.DryRun)
 	} else if cmd == "periodic" {
 		go admin.Serve(opts.Admin)
-		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.Periodic.MinAge), time.Duration(opts.Periodic.Frequency))
+		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.Periodic.MinAge), time.Duration(opts.Periodic.Frequency), opts.One.ReplicationFactor)
 	} else if cmd == "delete" {
-		if err := gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, flags.AllToProto(opts.Delete.Args.Actions)); err != nil {
-			return err
-		}
+		return gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, flags.AllToProto(opts.Delete.Args.Actions))
 	} else if cmd == "clean" {
-		if err := gc.Clean(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Clean.DryRun); err != nil {
-			return err
-		}
+		return gc.Clean(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Clean.DryRun)
+	} else if cmd == "replicate" {
+		return gc.Replicate(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Replicate.ReplicationFactor, opts.Replicate.DryRun)
 	}
 	return nil
 }

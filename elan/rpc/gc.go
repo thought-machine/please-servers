@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -29,7 +30,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	g.Go(func() error {
 		ar, err := s.list(ctx, "cas", req.Prefix)
 		for _, a := range ar {
-			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes})
+			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes, Replicas: 1})
 		}
 		return err
 	})
@@ -49,12 +50,14 @@ func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.Actio
 			return ret, err
 		} else if obj.IsDir {
 			continue
+		} else if hash := path.Base(obj.Key); !strings.HasPrefix(hash, "tmp") {
+			ret = append(ret, &ppb.ActionResult{
+				Hash:         hash,
+				SizeBytes:    obj.Size,
+				LastAccessed: obj.ModTime.Unix(),
+				Replicas:     1,
+			})
 		}
-		ret = append(ret, &ppb.ActionResult{
-			Hash:         path.Base(obj.Key),
-			SizeBytes:    obj.Size,
-			LastAccessed: obj.ModTime.Unix(),
-		})
 	}
 	return ret, nil
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -549,7 +550,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	var mutex sync.Mutex
 	resp := &ppb.ListResponse{}
 	ars := map[string]*ppb.ActionResult{}
-	blobs := map[string]struct{}{}
+	blobs := map[string]*ppb.Blob{}
 	err := s.replicator.All(req.Prefix, func(srv *trie.Server) error {
 		ctx, cancel := context.WithTimeout(ctx, 100*s.timeout) // Multiply up timeout since this operation can be expensive.
 		defer cancel()
@@ -560,17 +561,34 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 		mutex.Lock()
 		defer mutex.Unlock()
 		for _, ar := range r.ActionResults {
+			if strings.HasPrefix(ar.Hash, "tmp") {
+				continue
+			}
+			if ar.Replicas == 0 {
+				ar.Replicas = 1
+			}
 			if existing, present := ars[ar.Hash]; !present {
 				resp.ActionResults = append(resp.ActionResults, ar)
 				ars[ar.Hash] = ar
-			} else if existing.LastAccessed < ar.LastAccessed {
-				existing.LastAccessed = ar.LastAccessed
+			} else {
+				if existing.LastAccessed < ar.LastAccessed {
+					existing.LastAccessed = ar.LastAccessed
+				}
+				existing.Replicas += ar.Replicas
 			}
 		}
 		for _, blob := range r.Blobs {
-			if _, present := blobs[blob.Hash]; !present {
+			if strings.HasPrefix(blob.Hash, "tmp") {
+				continue
+			}
+			if blob.Replicas == 0 {
+				blob.Replicas = 1
+			}
+			if existing, present := blobs[blob.Hash]; !present {
 				resp.Blobs = append(resp.Blobs, blob)
-				blobs[blob.Hash] = struct{}{}
+				blobs[blob.Hash] = blob
+			} else {
+				existing.Replicas += blob.Replicas
 			}
 		}
 		return nil
