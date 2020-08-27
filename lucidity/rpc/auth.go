@@ -54,7 +54,10 @@ func (v *validator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if payload, err := v.validator.Validate(context.Background(), hdr, v.audience); err != nil {
 		log.Warning("Rejecting unauthorized request: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
-	} else if _, present := v.allowedUsers[payload.Subject]; !present {
+	} else if email, present := payload.Claims["email"]; !present {
+		log.Warning("Rejecting request, missing email claim")
+		w.WriteHeader(http.StatusForbidden)
+	} else if _, present := v.allowedUsers[email.(string)]; !present {
 		log.Warning("Rejecting request from %s; not in allowed user list", payload.Subject)
 		w.WriteHeader(http.StatusForbidden)
 	} else {
