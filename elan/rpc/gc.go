@@ -29,7 +29,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	g.Go(func() error {
 		ar, err := s.list(ctx, "cas", req.Prefix)
 		for _, a := range ar {
-			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes})
+			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes, Replicas: 1})
 		}
 		return err
 	})
@@ -54,6 +54,7 @@ func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.Actio
 			Hash:         path.Base(obj.Key),
 			SizeBytes:    obj.Size,
 			LastAccessed: obj.ModTime.Unix(),
+			Replicas:     1,
 		})
 	}
 	return ret, nil

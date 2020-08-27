@@ -29,11 +29,13 @@ message ActionResult {
   string hash = 1;
   int64 size_bytes = 2;
   int64 last_accessed = 3;
+  int32 replicas = 4;
 }
 
 message Blob {
   string hash = 1;
   int64 size_bytes = 2;
+  int32 replicas = 4;
 }
 
 message DeleteRequest {

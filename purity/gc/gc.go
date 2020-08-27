@@ -28,17 +28,20 @@ import (
 
 var log = cli.MustGetLogger()
 
+// We use eternity to indicate cases where we don't care about max blob age.
+const eternity = 1000000 * time.Hour
+
 // RunForever runs indefinitely, periodically hitting the remote server and possibly GC'ing it.
-func RunForever(url, instanceName, tokenFile string, tls bool, minAge, frequency time.Duration) {
+func RunForever(url, instanceName, tokenFile string, tls bool, minAge, frequency time.Duration, replicationFactor int) {
 	for range time.NewTicker(frequency).C {
-		if err := Run(url, instanceName, tokenFile, tls, minAge, false); err != nil {
+		if err := Run(url, instanceName, tokenFile, tls, minAge, replicationFactor, false); err != nil {
 			log.Error("Failed to GC: %s", err)
 		}
 	}
 }
 
 // Run runs once against the remote servers and triggers a GC if needed.
-func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dryRun bool) error {
+func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, replicationFactor int, dryRun bool) error {
 	start := time.Now()
 	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, minAge)
 	if err != nil {
@@ -50,6 +53,8 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, dr
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBrokenBlobs(); err != nil {
+		return err
+	} else if err := gc.ReplicateBlobs(replicationFactor); err != nil {
 		return err
 	}
 	log.Notice("Complete in %s!", time.Since(start).Truncate(time.Second))
@@ -67,7 +72,7 @@ func Delete(url, instanceName, tokenFile string, tls bool, actions []*pb.Digest)
 
 // Clean cleans any build actions referencing missing blobs from the server.
 func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
-	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, 1000000*time.Hour)
+	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, eternity)
 	if err != nil {
 		return err
 	} else if err := gc.LoadAllBlobs(); err != nil {
@@ -80,7 +85,7 @@ func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
 
 // Sizes returns the sizes of the top N actions.
 func Sizes(url, instanceName, tokenFile string, tls bool, n int) ([]Action, error) {
-	gc, err := newCollector(url, instanceName, tokenFile, tls, true, 1000000*time.Hour)
+	gc, err := newCollector(url, instanceName, tokenFile, tls, true, eternity)
 	if err != nil {
 		return nil, err
 	} else if err := gc.LoadAllBlobs(); err != nil {
@@ -89,6 +94,17 @@ func Sizes(url, instanceName, tokenFile string, tls bool, n int) ([]Action, erro
 		return nil, err
 	}
 	return gc.Sizes(n), nil
+}
+
+// Replicate re-replicates any underreplicated blobs.
+func Replicate(url, instanceName, tokenFile string, tls bool, replicationFactor int, dryRun bool) error {
+	gc, err := newCollector(url, instanceName, tokenFile, tls, dryRun, eternity)
+	if err != nil {
+		return err
+	} else if err := gc.LoadAllBlobs(); err != nil {
+		return err
+	}
+	return gc.ReplicateBlobs(replicationFactor)
 }
 
 // An Action is a convenience type returned from Sizes.
@@ -102,10 +118,13 @@ type collector struct {
 	gcclient        ppb.GCClient
 	actionResults   []*ppb.ActionResult
 	allBlobs        map[string]int64
+	actionSizes     map[string]int64
 	referencedBlobs map[string]struct{}
 	brokenResults   map[string]int64
 	inputSizes      map[string]int
 	outputSizes     map[string]int
+	actionRFs       map[string]int
+	blobRFs         map[string]int
 	mutex           sync.Mutex
 	ageThreshold    int64
 	missingInputs   int64
@@ -124,16 +143,19 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		return nil, err
 	}
 	return &collector{
-		client:   client,
-		gcclient: ppb.NewGCClient(client.Connection),
-		dryRun:   dryRun,
-		allBlobs: map[string]int64{},
+		client:      client,
+		gcclient:    ppb.NewGCClient(client.Connection),
+		dryRun:      dryRun,
+		allBlobs:    map[string]int64{},
+		actionSizes: map[string]int64{},
 		referencedBlobs: map[string]struct{}{
 			digest.Empty.Hash: struct{}{}, // The empty blob always counts as referenced.
 		},
 		brokenResults: map[string]int64{},
 		inputSizes:    map[string]int{},
 		outputSizes:   map[string]int{},
+		actionRFs:     map[string]int{},
+		blobRFs:       map[string]int{},
 		ageThreshold:  time.Now().Add(-minAge).Unix(),
 	}, nil
 }
@@ -162,8 +184,13 @@ func (c *collector) LoadAllBlobs() error {
 				}
 				mutex.Lock()
 				c.actionResults = append(c.actionResults, resp.ActionResults...)
+				for _, ar := range resp.ActionResults {
+					c.actionRFs[ar.Hash] = int(ar.Replicas)
+					c.actionSizes[ar.Hash] = ar.SizeBytes
+				}
 				for _, b := range resp.Blobs {
 					c.allBlobs[b.Hash] = b.SizeBytes
+					c.blobRFs[b.Hash] = int(b.Replicas)
 				}
 				mutex.Unlock()
 				ch <- 1
@@ -409,6 +436,7 @@ func (c *collector) RemoveBlobs() error {
 			log.Debug("Identified action result %s for deletion", ar.Hash)
 			key := ar.Hash[:2]
 			ars[key] = append(ars[key], &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
+			delete(c.actionRFs, ar.Hash)
 			totalSize += ar.SizeBytes
 			numArs++
 		}
@@ -418,6 +446,7 @@ func (c *collector) RemoveBlobs() error {
 			log.Debug("Identified blob %s for deletion", hash)
 			key := hash[:2]
 			blobs[key] = append(blobs[key], &ppb.Blob{Hash: hash, SizeBytes: size})
+			delete(c.blobRFs, hash)
 			totalSize += size
 			numBlobs++
 		}
@@ -462,6 +491,9 @@ func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 }
 
 func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
+	for _, d := range digests {
+		delete(c.actionRFs, d.Hash)
+	}
 	if c.dryRun {
 		log.Notice("Would remove %d actions:", len(digests))
 		for _, h := range digests {
@@ -521,6 +553,83 @@ func (c *collector) Sizes(n int) []Action {
 	})
 	if len(ret) > n {
 		return ret[:n]
+	}
+	return ret
+}
+
+// ReplicateBlobs re-replicates any blobs with a replication factor lower than expected.
+func (c *collector) ReplicateBlobs(rf int) error {
+	blobs := c.underreplicatedDigests(c.blobRFs, c.allBlobs, rf)
+	ars := c.underreplicatedDigests(c.actionRFs, c.actionSizes, rf)
+	if err := c.replicateBlobs("blobs", blobs, func(dg *pb.Digest) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		blob, err := c.client.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
+		if err != nil {
+			return err
+		}
+		_, err = c.client.WriteBlob(ctx, blob)
+		return err
+	}); err != nil {
+		return err
+	}
+	return c.replicateBlobs("action results", ars, func(dg *pb.Digest) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		ar, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
+			InstanceName: c.client.InstanceName,
+			ActionDigest: dg,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = c.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
+			InstanceName: c.client.InstanceName,
+			ActionDigest: dg,
+			ActionResult: ar,
+		})
+		return err
+	})
+}
+
+func (c *collector) replicateBlobs(name string, blobs []*pb.Digest, f func(*pb.Digest) error) error {
+	if len(blobs) == 0 {
+		log.Notice("No underreplicated %s found!", name)
+		return nil
+	}
+	var size int64
+	for _, blob := range blobs {
+		size += blob.SizeBytes
+	}
+	log.Notice("Found %d underreplicated %s, total size %s", len(blobs), name, humanize.Bytes(uint64(size)))
+	if c.dryRun {
+		return nil
+	}
+	ch := newProgressBar("Deleting "+name, len(blobs))
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+		log.Notice("Deleted %d %s", len(blobs), name)
+	}()
+	var me *multierror.Error
+	for _, b := range blobs {
+		if err := f(b); err != nil {
+			me = multierror.Append(me, err)
+		}
+		ch <- 1
+	}
+	return me.ErrorOrNil()
+}
+
+func (c *collector) underreplicatedDigests(blobs map[string]int, sizes map[string]int64, rf int) []*pb.Digest {
+	ret := []*pb.Digest{}
+	for hash, replicas := range blobs {
+		if replicas < rf {
+			ret = append(ret, &pb.Digest{
+				Hash:      hash,
+				SizeBytes: sizes[hash],
+			})
+		}
 	}
 	return ret
 }
