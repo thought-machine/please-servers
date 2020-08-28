@@ -106,7 +106,7 @@ go_get(
 go_get(
     name = "rpcstatus",
     get = "google.golang.org/genproto/googleapis/rpc/status",
-    revision = "2b5a72b8730b0b16380010cfe5286c42108d88e7",
+    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [":protobuf"],
 )
 
@@ -286,9 +286,9 @@ go_get(
 )
 
 go_get(
-    name = "cloud-metadata",
+    name = "metadata",
     get = "cloud.google.com/go/compute/metadata",
-    revision = "v0.40.0",
+    revision = "v0.46.3",
 )
 
 go_get(
@@ -304,7 +304,7 @@ go_get(
     revision = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
     visibility = ["//third_party/go/..."],
     deps = [
-        ":cloud-metadata",
+        ":metadata",
         "//third_party/go:net",
     ],
 )
@@ -314,7 +314,7 @@ go_get(
 go_get(
     name = "annotations",
     get = "google.golang.org/genproto/googleapis/api/annotations",
-    revision = "3bdd9d9f5532d75d09efb230bd767d265245cfe5",
+    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         ":grpc",
         ":protobuf",
@@ -324,7 +324,7 @@ go_get(
 go_get(
     name = "longrunning",
     get = "google.golang.org/genproto/googleapis/longrunning",
-    revision = "3bdd9d9f5532d75d09efb230bd767d265245cfe5",
+    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         ":annotations",
         ":grpc",
@@ -335,7 +335,7 @@ go_get(
 go_get(
     name = "bytestream",
     get = "google.golang.org/genproto/googleapis/bytestream",
-    revision = "3bdd9d9f5532d75d09efb230bd767d265245cfe5",
+    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         ":annotations",
         ":grpc",

@@ -57,7 +57,7 @@ go_get(
     revision = "v0.46.3",
     deps = [
         ":api",
-        ":cloud-metadata",
+        "//third_party/go:metadata",
         ":gax-go",
         "//third_party/go:grpc",
         ":genproto",
@@ -80,12 +80,6 @@ go_get(
         ":gax-go",
         ":go.opencensus.io",
     ],
-)
-
-go_get(
-    name = "cloud-metadata",
-    get = "cloud.google.com/go/compute/metadata",
-    revision = "v0.46.3",
 )
 
 go_get(
