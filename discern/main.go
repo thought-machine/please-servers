@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,11 @@ var opts = struct {
 		N          int    `short:"n" long:"number" default:"100" description:"Number of actions to display"`
 		BrowserURL string `long:"browser_url" description:"Browser base URL to display links to"`
 	} `command:"topn" description:"Display information on the top N actions with biggest inputs / outputs"`
+	MostUsed struct {
+		N       int      `short:"n" long:"number" default:"100" description:"Number of blobs to display"`
+		Include []string `short:"i" long:"include" description:"Filename prefixes to include"`
+		Exclude []string `short:"e" long:"exclude" description:"Filename prefixes to exclude"`
+	} `command:"mostused" description:"Display information on the most-downloaded blobs"`
 }{
 	Usage: `
 Discern is a simple binary for visualising build actions; either showing differences
@@ -62,6 +68,11 @@ func main() {
 	if cmd == "topn" {
 		if err := topn(); err != nil {
 			log.Fatalf("Failed to find action results: %s", err)
+		}
+		return
+	} else if cmd == "mostused" {
+		if err := mostused(); err != nil {
+			log.Fatalf("Failed to find blob info: %s", err)
 		}
 		return
 	}
@@ -252,4 +263,49 @@ func topn() error {
 		}
 	}
 	return nil
+}
+
+func mostused() error {
+	allBlobs, err := gc.BlobUsage(opts.Storage.Storage, opts.Storage.InstanceName, "", opts.Storage.TLS)
+	if err != nil {
+		return err
+	}
+	blobs := make([]gc.Blob, 0, len(allBlobs))
+	for _, blob := range allBlobs {
+		if shouldInclude(blob.Filename) {
+			blobs = append(blobs, blob)
+		}
+	}
+	sort.Slice(blobs, func(i, j int) bool {
+		return blobs[i].SizeBytes*blobs[i].Count > blobs[j].SizeBytes*blobs[j].Count
+	})
+	if len(blobs) > opts.MostUsed.N {
+		blobs = blobs[:opts.MostUsed.N]
+	}
+	log.Notice("Most used %d blobs:", opts.MostUsed.N)
+	var size, total int64
+	for _, blob := range blobs {
+		log.Notice("%s/%08d: %s (%s, used %d times, total %s)", blob.Hash, blob.SizeBytes, blob.Filename, humanize.Bytes(uint64(blob.SizeBytes)), blob.Count, humanize.Bytes(uint64(blob.SizeBytes*blob.Count)))
+		size += blob.SizeBytes
+		total += blob.SizeBytes * blob.Count
+	}
+	log.Notice("Total size %s, total downloads %s", humanize.Bytes(uint64(size)), humanize.Bytes(uint64(total)))
+	return nil
+}
+
+func shouldInclude(name string) bool {
+	for _, excl := range opts.MostUsed.Exclude {
+		if strings.HasPrefix(name, excl) {
+			return false
+		}
+	}
+	if len(opts.MostUsed.Include) == 0 {
+		return true
+	}
+	for _, incl := range opts.MostUsed.Include {
+		if strings.HasPrefix(name, incl) {
+			return true
+		}
+	}
+	return false
 }
