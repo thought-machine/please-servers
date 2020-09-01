@@ -671,7 +671,7 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		}
 		dir, present := m[digest.Hash]
 		if !present {
-			log.Warning("Failed to find input directory with hash %s", digest.Hash)
+			log.Debug("Failed to find input directory with hash %s", digest.Hash)
 			return
 		}
 		for _, file := range dir.Files {
