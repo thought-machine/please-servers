@@ -45,6 +45,7 @@ var opts = struct {
 	} `command:"topn" description:"Display information on the top N actions with biggest inputs / outputs"`
 	MostUsed struct {
 		N       int      `short:"n" long:"number" default:"100" description:"Number of blobs to display"`
+		Include []string `short:"i" long:"include" description:"Filename prefixes to include"`
 		Exclude []string `short:"e" long:"exclude" description:"Filename prefixes to exclude"`
 	} `command:"mostused" description:"Display information on the most-downloaded blobs"`
 }{
@@ -271,7 +272,7 @@ func mostused() error {
 	}
 	blobs := make([]gc.Blob, 0, len(allBlobs))
 	for _, blob := range allBlobs {
-		if !shouldExclude(blob.Filename) {
+		if shouldInclude(blob.Filename) {
 			blobs = append(blobs, blob)
 		}
 	}
@@ -282,15 +283,27 @@ func mostused() error {
 		blobs = blobs[:opts.MostUsed.N]
 	}
 	log.Notice("Most used %d blobs:", opts.MostUsed.N)
+	var size, total int64
 	for _, blob := range blobs {
 		log.Notice("%s/%08d: %s (%s, used %d times, total %s)", blob.Hash, blob.SizeBytes, blob.Filename, humanize.Bytes(uint64(blob.SizeBytes)), blob.Count, humanize.Bytes(uint64(blob.SizeBytes*blob.Count)))
+		size += blob.SizeBytes
+		total += blob.SizeBytes * blob.Count
 	}
+	log.Notice("Total size %s, total downloads %s", humanize.Bytes(uint64(size)), humanize.Bytes(uint64(total)))
 	return nil
 }
 
-func shouldExclude(name string) bool {
+func shouldInclude(name string) bool {
 	for _, excl := range opts.MostUsed.Exclude {
 		if strings.HasPrefix(name, excl) {
+			return false
+		}
+	}
+	if len(opts.MostUsed.Include) == 0 {
+		return true
+	}
+	for _, incl := range opts.MostUsed.Include {
+		if strings.HasPrefix(name, incl) {
 			return true
 		}
 	}
