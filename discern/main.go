@@ -269,7 +269,7 @@ func mostused() error {
 		return err
 	}
 	sort.Slice(blobs, func(i, j int) bool {
-		return blobs[i].SizeBytes*blobs[i].Count < blobs[j].SizeBytes*blobs[j].Count
+		return blobs[i].SizeBytes*blobs[i].Count > blobs[j].SizeBytes*blobs[j].Count
 	})
 	if len(blobs) > opts.MostUsed.N {
 		blobs = blobs[:opts.MostUsed.N]
