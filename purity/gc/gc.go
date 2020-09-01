@@ -684,8 +684,8 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				outs, _ := c.allOutputs(ar)
-				for _, out := range outs {
-					markBlob(out.Digest.ToProto(), out.Path, 0)
+				for name, out := range outs {
+					markBlob(out.Digest.ToProto(), name, 0)
 				}
 				_, dirs := c.inputDirs(&pb.Digest{
 					Hash:      ar.Hash,
