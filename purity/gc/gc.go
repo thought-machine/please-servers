@@ -13,6 +13,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/chunker"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
 	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
@@ -105,6 +106,17 @@ func Replicate(url, instanceName, tokenFile string, tls bool, replicationFactor 
 		return err
 	}
 	return gc.ReplicateBlobs(replicationFactor)
+}
+
+// BlobUsage returns the a series of blobs for analysis of how much they're used.
+func BlobUsage(url, instanceName, tokenFile string, tls bool) ([]Blob, error) {
+	gc, err := newCollector(url, instanceName, tokenFile, tls, true, eternity)
+	if err != nil {
+		return nil, err
+	} else if err := gc.LoadAllBlobs(); err != nil {
+		return nil, err
+	}
+	return gc.BlobUsage()
 }
 
 // An Action is a convenience type returned from Sizes.
@@ -632,4 +644,92 @@ func (c *collector) underreplicatedDigests(blobs map[string]int, sizes map[strin
 		}
 	}
 	return ret
+}
+
+func (c *collector) BlobUsage() ([]Blob, error) {
+	blobs := map[string]*Blob{}
+	var mutex sync.Mutex
+
+	markBlob := func(dg *pb.Digest, filename string, count int64) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		if blob, present := blobs[dg.Hash]; present {
+			blob.Count += count
+			if filename != "" {
+				blob.Filename = filename
+			}
+		} else {
+			blobs[dg.Hash] = &Blob{
+				Hash:      dg.Hash,
+				SizeBytes: dg.SizeBytes,
+				Count:     count,
+				Filename:  filename,
+			}
+		}
+	}
+
+	// Get a little bit of parallelism here, but not too much.
+	const parallelism = 16
+	log.Notice("Finding all input blobs...")
+	ch := newProgressBar("Searching input actions", len(c.actionResults))
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+	}()
+	var wg sync.WaitGroup
+	// Loop one extra time to catch the remaining ars as the step size is rounded down
+	wg.Add(parallelism + 1)
+	step := len(c.actionResults) / parallelism
+	for i := 0; i < (parallelism + 1); i++ {
+		go func(ars []*ppb.ActionResult) {
+			for _, ar := range ars {
+				outs, _ := c.allOutputs(ar)
+				for _, out := range outs {
+					markBlob(out.Digest.ToProto(), out.Path, 0)
+				}
+				_, dirs := c.inputDirs(&pb.Digest{
+					Hash:      ar.Hash,
+					SizeBytes: ar.SizeBytes,
+				})
+				for _, dir := range dirs {
+					for _, file := range dir.Files {
+						markBlob(file.Digest, "", 1)
+					}
+				}
+				ch <- 1
+			}
+			wg.Done()
+		}(c.actionResults[step*i : min(step*(i+1), len(c.actionResults))])
+	}
+	wg.Wait()
+	ret := make([]Blob, 0, len(blobs))
+	for _, blob := range blobs {
+		ret = append(ret, *blob)
+	}
+	return ret, nil
+}
+
+func (c *collector) allOutputs(ar *ppb.ActionResult) (map[string]*tree.Output, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
+		InstanceName: c.client.InstanceName,
+		ActionDigest: &pb.Digest{
+			Hash:      ar.Hash,
+			SizeBytes: ar.SizeBytes,
+		},
+	})
+	if err != nil {
+		log.Warning("Error retrieving action result: %s", err)
+		return map[string]*tree.Output{}, err
+	}
+	return c.client.FlattenActionOutputs(ctx, result)
+}
+
+// A Blob is a representation of a blob with its usage.
+type Blob struct {
+	Filename  string
+	Hash      string
+	SizeBytes int64
+	Count     int64
 }

@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,9 @@ var opts = struct {
 		N          int    `short:"n" long:"number" default:"100" description:"Number of actions to display"`
 		BrowserURL string `long:"browser_url" description:"Browser base URL to display links to"`
 	} `command:"topn" description:"Display information on the top N actions with biggest inputs / outputs"`
+	MostUsed struct {
+		N int `short:"n" long:"number" default:"100" description:"Number of blobs to display"`
+	} `command:"mostused" description:"Display information on the most-downloaded blobs"`
 }{
 	Usage: `
 Discern is a simple binary for visualising build actions; either showing differences
@@ -62,6 +66,11 @@ func main() {
 	if cmd == "topn" {
 		if err := topn(); err != nil {
 			log.Fatalf("Failed to find action results: %s", err)
+		}
+		return
+	} else if cmd == "mostused" {
+		if err := mostused(); err != nil {
+			log.Fatalf("Failed to find blob info: %s", err)
 		}
 		return
 	}
@@ -250,6 +259,24 @@ func topn() error {
 		} else {
 			log.Notice("%d: %s (in) %s (out): %s/%d", i, in, out, a.Hash, a.SizeBytes)
 		}
+	}
+	return nil
+}
+
+func mostused() error {
+	blobs, err := gc.BlobUsage(opts.Storage.Storage, opts.Storage.InstanceName, "", opts.Storage.TLS)
+	if err != nil {
+		return err
+	}
+	sort.Slice(blobs, func(i, j int) bool {
+		return blobs[i].SizeBytes*blobs[i].Count < blobs[j].SizeBytes*blobs[j].Count
+	})
+	if len(blobs) > opts.MostUsed.N {
+		blobs = blobs[:opts.MostUsed.N]
+	}
+	log.Notice("Most used %d blobs:", opts.MostUsed.N)
+	for _, blob := range blobs {
+		log.Notice("%s/%08d: %s (used %d times, total %s)", blob.Hash, blob.SizeBytes, blob.Filename, blob.Count, humanize.Bytes(uint64(blob.SizeBytes*blob.Count)))
 	}
 	return nil
 }
