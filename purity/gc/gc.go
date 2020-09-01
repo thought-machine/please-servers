@@ -666,6 +666,9 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	}
 	var markBlobs func(m map[string]*pb.Directory, digest *pb.Digest, root string)
 	markBlobs = func(m map[string]*pb.Directory, digest *pb.Digest, root string) {
+		if digest == nil {
+			return
+		}
 		dir, present := m[digest.Hash]
 		if !present {
 			log.Warning("Failed to find input directory with hash %s", digest.Hash)
