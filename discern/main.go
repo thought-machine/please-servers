@@ -44,7 +44,8 @@ var opts = struct {
 		BrowserURL string `long:"browser_url" description:"Browser base URL to display links to"`
 	} `command:"topn" description:"Display information on the top N actions with biggest inputs / outputs"`
 	MostUsed struct {
-		N int `short:"n" long:"number" default:"100" description:"Number of blobs to display"`
+		N       int      `short:"n" long:"number" default:"100" description:"Number of blobs to display"`
+		Exclude []string `short:"e" long:"exclude" description:"Filename prefixes to exclude"`
 	} `command:"mostused" description:"Display information on the most-downloaded blobs"`
 }{
 	Usage: `
@@ -264,9 +265,15 @@ func topn() error {
 }
 
 func mostused() error {
-	blobs, err := gc.BlobUsage(opts.Storage.Storage, opts.Storage.InstanceName, "", opts.Storage.TLS)
+	allBlobs, err := gc.BlobUsage(opts.Storage.Storage, opts.Storage.InstanceName, "", opts.Storage.TLS)
 	if err != nil {
 		return err
+	}
+	blobs := make([]gc.Blob, 0, len(allBlobs))
+	for _, blob := range allBlobs {
+		if !shouldExclude(blob.Filename) {
+			blobs = append(blobs, blob)
+		}
 	}
 	sort.Slice(blobs, func(i, j int) bool {
 		return blobs[i].SizeBytes*blobs[i].Count > blobs[j].SizeBytes*blobs[j].Count
@@ -276,7 +283,16 @@ func mostused() error {
 	}
 	log.Notice("Most used %d blobs:", opts.MostUsed.N)
 	for _, blob := range blobs {
-		log.Notice("%s/%08d: %s (used %d times, total %s)", blob.Hash, blob.SizeBytes, blob.Filename, blob.Count, humanize.Bytes(uint64(blob.SizeBytes*blob.Count)))
+		log.Notice("%s/%08d: %s (%s, used %d times, total %s)", blob.Hash, blob.SizeBytes, blob.Filename, humanize.Bytes(uint64(blob.SizeBytes)), blob.Count, humanize.Bytes(uint64(blob.SizeBytes*blob.Count)))
 	}
 	return nil
+}
+
+func shouldExclude(name string) bool {
+	for _, excl := range opts.MostUsed.Exclude {
+		if strings.HasPrefix(name, excl) {
+			return true
+		}
+	}
+	return false
 }
