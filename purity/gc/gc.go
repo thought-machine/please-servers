@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -13,7 +14,6 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/chunker"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
 	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
@@ -295,7 +295,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	}
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
-	inputSize, dirs := c.inputDirs(dg)
+	inputSize, dirs, _ := c.inputDirs(dg)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.referencedBlobs[ar.Hash] = struct{}{}
@@ -322,7 +322,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 
 // inputDirs returns all the inputs for an action. It doesn't return any errors because we don't
 // want it to be fatal on failure; otherwise anything missing breaks the whole process.
-func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
+func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	action := &pb.Action{}
@@ -331,7 +331,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 	if !present {
 		log.Debug("missing action for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil
+		return size, nil, nil
 	}
 	if err := c.client.ReadProto(ctx, digest.Digest{
 		Hash: dg.Hash,
@@ -339,20 +339,20 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 	}, action); err != nil {
 		log.Debug("Failed to read action %s: %s", dg.Hash, err)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil
+		return size, nil, nil
 	}
 	size += dg.SizeBytes
 	if action.InputRootDigest == nil {
 		log.Debug("nil input root for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil
+		return size, nil, nil
 	}
 	size += action.InputRootDigest.SizeBytes
 	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
 	if err != nil {
 		log.Debug("Failed to read directory tree for %s (input root %s): %s", dg.Hash, action.InputRootDigest, err)
 		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil
+		return size, nil, action.InputRootDigest
 	}
 	for _, dir := range dirs {
 		for _, d := range dir.Directories {
@@ -367,7 +367,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory) {
 	c.referencedBlobs[action.CommandDigest.Hash] = struct{}{}
 	c.referencedBlobs[dg.Hash] = struct{}{}
 	c.referencedBlobs[action.InputRootDigest.Hash] = struct{}{}
-	return size, dirs
+	return size, dirs, action.InputRootDigest
 }
 
 // markBroken marks an action result as missing some relevant files.
@@ -650,21 +650,32 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	blobs := map[string]*Blob{}
 	var mutex sync.Mutex
 
-	markBlob := func(dg *pb.Digest, filename string, count int64) {
+	markBlob := func(dg *pb.Digest, filename string) {
 		mutex.Lock()
 		defer mutex.Unlock()
 		if blob, present := blobs[dg.Hash]; present {
-			blob.Count += count
-			if filename != "" {
-				blob.Filename = filename
-			}
+			blob.Count++
 		} else {
 			blobs[dg.Hash] = &Blob{
 				Hash:      dg.Hash,
 				SizeBytes: dg.SizeBytes,
-				Count:     count,
+				Count:     1,
 				Filename:  filename,
 			}
+		}
+	}
+	var markBlobs func(m map[string]*pb.Directory, digest *pb.Digest, root string)
+	markBlobs = func(m map[string]*pb.Directory, digest *pb.Digest, root string) {
+		dir, present := m[digest.Hash]
+		if !present {
+			log.Warning("Failed to find input directory with hash %s", digest.Hash)
+			return
+		}
+		for _, file := range dir.Files {
+			markBlob(file.Digest, path.Join(root, file.Name))
+		}
+		for _, dir := range dir.Directories {
+			markBlobs(m, dir.Digest, path.Join(root, dir.Name))
 		}
 	}
 
@@ -683,19 +694,11 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	for i := 0; i < (parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
-				outs, _ := c.allOutputs(ar)
-				for name, out := range outs {
-					markBlob(out.Digest.ToProto(), name, 0)
-				}
-				_, dirs := c.inputDirs(&pb.Digest{
+				_, dirs, digest := c.inputDirs(&pb.Digest{
 					Hash:      ar.Hash,
 					SizeBytes: ar.SizeBytes,
 				})
-				for _, dir := range dirs {
-					for _, file := range dir.Files {
-						markBlob(file.Digest, "", 1)
-					}
-				}
+				markBlobs(c.inputDirMap(dirs), digest, "")
 				ch <- 1
 			}
 			wg.Done()
@@ -709,21 +712,13 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	return ret, nil
 }
 
-func (c *collector) allOutputs(ar *ppb.ActionResult) (map[string]*tree.Output, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
-		InstanceName: c.client.InstanceName,
-		ActionDigest: &pb.Digest{
-			Hash:      ar.Hash,
-			SizeBytes: ar.SizeBytes,
-		},
-	})
-	if err != nil {
-		log.Warning("Error retrieving action result: %s", err)
-		return map[string]*tree.Output{}, err
+func (c *collector) inputDirMap(dirs []*pb.Directory) map[string]*pb.Directory {
+	m := map[string]*pb.Directory{}
+	for _, dir := range dirs {
+		dg, _ := digest.NewFromMessage(dir)
+		m[dg.Hash] = dir
 	}
-	return c.client.FlattenActionOutputs(ctx, result)
+	return m
 }
 
 // A Blob is a representation of a blob with its usage.
