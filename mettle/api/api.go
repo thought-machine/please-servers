@@ -272,6 +272,12 @@ func (s *server) process(msg *pubsub.Message) {
 		// re-broadcasting a QUEUED message after something's already started executing.
 		j.Current = op
 		j.SentFirst = true
+		if j.Done && !op.Done {
+			log.Warning("Got a progress message after completion for %s, discarding", metadata.ActionDigest.Hash)
+			return
+		} else if op.Done {
+			j.Done = true
+		}
 		for _, stream := range j.Streams {
 			// Invoke this in a goroutine so we do not block.
 			go func(ch chan<- *longrunning.Operation) {
@@ -307,4 +313,5 @@ type job struct {
 	Streams   []chan *longrunning.Operation
 	Current   *longrunning.Operation
 	SentFirst bool
+	Done      bool
 }
