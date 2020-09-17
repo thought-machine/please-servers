@@ -50,6 +50,9 @@ var log = cli.MustGetLogger()
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
 
+// uncompressed is a constant we use in a few places to indicate we're not compressing blobs.
+const uncompressed = false
+
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "bytes_received_total",
@@ -111,7 +114,7 @@ func init() {
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int) {
 	srv := &server{
-		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
 		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
 		bucket:        mustOpenStorage(storage),
@@ -255,7 +258,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
-			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data)); err != nil {
+			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), uncompressed); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 			} else {
@@ -388,12 +391,12 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	} else if req.ResourceName == "" {
 		return status.Errorf(codes.InvalidArgument, "missing ResourceName")
 	}
-	digest, err := s.bytestreamBlobName(req.ResourceName)
+	digest, compressed, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
 	}
 	r := &bytestreamReader{stream: srv, buf: req.Data}
-	if err := s.writeBlob(ctx, "cas", digest, r); err != nil {
+	if err := s.writeBlob(ctx, "cas", digest, r, compressed); err != nil {
 		return err
 	} else if r.TotalSize != digest.SizeBytes {
 		return status.Errorf(codes.InvalidArgument, "invalid digest size (digest: %d, wrote: %d)", digest.SizeBytes, r.TotalSize)
@@ -456,16 +459,25 @@ func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest 
 	return nil
 }
 
+// key returns the key for storing a blob. It's always uncompressed.
 func (s *server) key(prefix string, digest *pb.Digest) string {
 	return fmt.Sprintf("%s/%c%c/%s", prefix, digest.Hash[0], digest.Hash[1], digest.Hash)
+}
+
+// compressedKey returns a key for storing a blob, optionally compressed.
+func (s *server) compressedKey(prefix string, digest *pb.Digest, compressed bool) string {
+	if compressed {
+		return s.key("zstd_"+prefix, digest)
+	}
+	return s.key(prefix, digest)
 }
 
 func (s *server) labelKey(label string) string {
 	return path.Join("rec", strings.Replace(strings.TrimLeft(label, "/"), ":", "/", -1))
 }
 
-func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
-	key := s.key(prefix, digest)
+func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {
+	key := s.compressedKey(prefix, digest, compressed)
 	if s.isEmpty(digest) || (prefix == "cas" && s.blobExists(ctx, key)) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
@@ -520,20 +532,21 @@ func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Dig
 	if err != nil {
 		return err
 	}
-	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b))
+	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b), uncompressed)
 }
 
-// bytestreamBlobName returns the digest corresponding to a bytestream resource name.
-func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, error) {
+// bytestreamBlobName returns the digest corresponding to a bytestream resource name
+// and whether or not it is compressed (the digest is always uncompressed).
+func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, bool, error) {
 	matches := s.bytestreamRe.FindStringSubmatch(bytestream)
 	if matches == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
 	}
-	size, _ := strconv.Atoi(matches[2])
+	size, _ := strconv.Atoi(matches[3])
 	return &pb.Digest{
-		Hash:      matches[1],
+		Hash:      matches[2],
 		SizeBytes: int64(size),
-	}, nil
+	}, matches[1] == "compressed-blobs/zstd", nil
 }
 
 // bufferSize returns the buffer size for a digest, or a default if it's too big.
