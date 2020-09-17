@@ -79,9 +79,6 @@ func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob
 				me = multierror.Append(me, err)
 			}
 		}
-		if s.fileCache != nil {
-			s.fileCache.Remove(key)
-		}
 	}
 	return me.ErrorOrNil()
 }
