@@ -240,7 +240,7 @@ go_get(
     name = "remote-apis",
     get = "github.com/bazelbuild/remote-apis/build/...",
     repo = "github.com/peterebden/remote-apis",
-    revision = "b456ec9de5fdea4f4a5ea05891612d6f2e2433d4",
+    revision = "6381217ebb0a38ffbd7baacbfb53d69500a3a64d",
     deps = [
         ":annotations",
         ":grpc",
