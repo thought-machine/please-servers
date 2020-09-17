@@ -5,13 +5,11 @@ import (
 	"io"
 
 	"gocloud.dev/blob"
-
-	"github.com/thought-machine/please-servers/elan/mux"
 )
 
 // A bucket is a minimal interface that we need to talk to our backend storage.
-// It is very similar to a subset of blob.Bucket but slightly different (the
-// reader and writer returned are more generic to facilitate our multiplexer).
+// It is very similar to a subset of blob.Bucket but slightly different (the reader and
+// writer returned are more generic to facilitate us putting a generic interface around it).
 type bucket interface {
 	NewRangeReader(ctx context.Context, key string, offset, length int64, opts *blob.ReaderOptions) (io.ReadCloser, error)
 	NewWriter(ctx context.Context, key string, opts *blob.WriterOptions) (io.WriteCloser, error)
@@ -20,19 +18,12 @@ type bucket interface {
 	Delete(ctx context.Context, key string, hard bool) error
 }
 
-func mustOpenStorage(url string) *blob.Bucket {
+func mustOpenStorage(url string) bucket {
 	bucket, err := blob.OpenBucket(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open storage %s: %v", url, err)
 	}
-	return bucket
-}
-
-func mustOpenStorages(primary, secondary string) bucket {
-	if secondary == "" {
-		return &adapter{bucket: mustOpenStorage(primary)}
-	}
-	return mux.New(mustOpenStorage(primary), mustOpenStorage(secondary))
+	return &adapter{bucket: bucket}
 }
 
 type adapter struct {

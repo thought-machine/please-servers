@@ -109,20 +109,13 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage, secondaryStorage string, fileCachePath string, maxFileCacheSize int64, parallelism int) {
+func ServeForever(opts grpcutil.Opts, storage string, parallelism int) {
 	srv := &server{
 		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
 		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
-		bucket:        mustOpenStorages(storage, secondaryStorage),
+		bucket:        mustOpenStorage(storage),
 		limiter:       make(chan struct{}, parallelism),
-	}
-	if fileCachePath != "" && maxFileCacheSize > 0 {
-		c, err := newFileCache(fileCachePath, maxFileCacheSize)
-		if err != nil {
-			log.Fatalf("Failed to create file cache: %s", err)
-		}
-		srv.fileCache = c
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -140,7 +133,6 @@ type server struct {
 	bytestreamRe     *regexp.Regexp
 	limiter          chan struct{}
 	maxCacheItemSize int64
-	fileCache        *fileCache
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -420,11 +412,6 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 		// Special case any empty read request
 		return ioutil.NopCloser(bytes.NewReader(nil)), nil
 	}
-	if s.fileCache != nil {
-		if r := s.fileCache.Get(key); r != nil {
-			return r, nil
-		}
-	}
 	start := time.Now()
 	defer func() { readLatencies.Observe(time.Since(start).Seconds()) }()
 	r, err := s.bucket.NewRangeReader(ctx, key, offset, length, nil)
@@ -446,11 +433,6 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	key := s.key(prefix, digest)
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	if s.fileCache != nil {
-		if b := s.fileCache.GetAll(key); b != nil {
-			return b, nil
-		}
-	}
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	r, err := s.readBlob(ctx, key, 0, -1)
@@ -504,12 +486,6 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	if digest.SizeBytes < s.maxCacheItemSize {
 		buf.Grow(int(digest.SizeBytes))
 		wr = io.MultiWriter(w, &buf)
-	}
-	if s.fileCache != nil {
-		if w := s.fileCache.Set(ctx, key, digest.SizeBytes); w != nil {
-			defer w.Close()
-			wr = io.MultiWriter(wr, w)
-		}
 	}
 	h := sha256.New()
 	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.
