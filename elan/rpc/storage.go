@@ -8,6 +8,7 @@ import (
 	"hash"
 	"io"
 
+	"github.com/DataDog/zstd"
 	"gocloud.dev/blob"
 )
 
@@ -78,4 +79,32 @@ func (r *verifyingReader) Read(p []byte) (int, error) {
 		return n, fmt.Errorf("Rejecting write of %s; actual received digest was %s", r.expected, h)
 	}
 	return n, err
+}
+
+// compressedReader returns a reader wrapped in a decompressor or compressor as needed.
+func compressedReader(r io.ReadCloser, needCompression, isCompressed bool) (io.ReadCloser, bool, error) {
+	if needCompression == isCompressed {
+		return r, false, nil // stream back bytes directly
+	} else if isCompressed {
+		return &doubleCloser{c: r, r: zstd.NewReader(r)}, false, nil
+	}
+	return r, true, nil
+}
+
+// A doubleCloser wraps an io.ReadCloser and an io.Closer and closes both on Close().
+type doubleCloser struct {
+	c io.Closer
+	r io.ReadCloser
+}
+
+func (c *doubleCloser) Read(p []byte) (int, error) {
+	return c.r.Read(p)
+}
+
+func (c *doubleCloser) Close() error {
+	if err := c.r.Close(); err != nil {
+		c.c.Close()
+		return err
+	}
+	return c.c.Close()
 }

@@ -341,7 +341,6 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	defer cancel()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	digest, compressed, err := s.bytestreamBlobName(req.ResourceName)
-	compressed = compressed
 	if err != nil {
 		return err
 	}
@@ -356,27 +355,33 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, err := s.readBlob(ctx, s.key("cas", digest), req.ReadOffset, req.ReadLimit)
+	r, needCompression, err := s.readCompressed(ctx, digest, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	buf := make([]byte, 64*1024)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			if err := srv.Send(&bs.ReadResponse{Data: buf[:n]}); err != nil {
-				return err
-			}
-		}
-		if err != nil {
-			if err == io.EOF {
-				log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
-				return nil
-			}
-			return err
-		}
+	var w io.Writer = &bytestreamWriter{stream: srv}
+	if needCompression {
+		zw := zstd.NewWriterLevel(w, zstd.BestSpeed)
+		defer zw.Close()
+		w = zw
 	}
+	_, err = io.Copy(w, r)
+	if err == nil {
+		log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
+	}
+	return err
+}
+
+func (s *server) readCompressed(ctx context.Context, digest *pb.Digest, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
+	r, err := s.readBlob(ctx, s.compressedKey("cas", digest, compressed), offset, limit)
+	if err != nil {
+		if r, err := s.readBlob(ctx, s.compressedKey("cas", digest, !compressed), offset, limit); err == nil {
+			return compressedReader(r, compressed, !compressed)
+		}
+		return nil, false, err
+	}
+	return compressedReader(r, compressed, compressed)
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
@@ -582,6 +587,18 @@ func (r *bytestreamReader) read(buf []byte) (int, error) {
 		}
 		r.buf = append(r.buf, req.Data...)
 	}
+}
+
+// A bytestreamWriter wraps an outgoing byte stream into an io.Writer
+type bytestreamWriter struct {
+	stream bs.ByteStream_ReadServer
+}
+
+func (r *bytestreamWriter) Write(buf []byte) (int, error) {
+	if err := r.stream.Send(&bs.ReadResponse{Data: buf}); err != nil {
+		return 0, err
+	}
+	return len(buf), nil
 }
 
 // A countingReader wraps a ReadCloser and counts bytes read from it.
