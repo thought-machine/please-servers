@@ -6,8 +6,6 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -25,6 +23,7 @@ import (
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
 
+	"github.com/DataDog/zstd"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
@@ -130,12 +129,11 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int) {
 }
 
 type server struct {
-	storageRoot      string
-	isFileStorage    bool
-	bucket           bucket
-	bytestreamRe     *regexp.Regexp
-	limiter          chan struct{}
-	maxCacheItemSize int64
+	storageRoot   string
+	isFileStorage bool
+	bucket        bucket
+	bytestreamRe  *regexp.Regexp
+	limiter       chan struct{}
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -342,7 +340,8 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
 	defer cancel()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	digest, err := s.bytestreamBlobName(req.ResourceName)
+	digest, compressed, err := s.bytestreamBlobName(req.ResourceName)
+	compressed = compressed
 	if err != nil {
 		return err
 	}
@@ -496,16 +495,16 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		return err
 	}
 	defer w.Close()
-	var buf bytes.Buffer
 	var wc io.WriteCloser = w
 	var wr io.Writer = w
-	if digest.SizeBytes < s.maxCacheItemSize {
-		buf.Grow(int(digest.SizeBytes))
-		wr = io.MultiWriter(w, &buf)
-	}
-	h := sha256.New()
 	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.
-		wr = io.MultiWriter(wr, h)
+		if compressed {
+			zr := zstd.NewReader(r)
+			defer zr.Close()
+			r = newVerifyingReader(zr, digest.Hash)
+		} else {
+			r = newVerifyingReader(r, digest.Hash)
+		}
 	}
 	n, err := io.Copy(wr, r)
 	bytesReceived.Add(float64(n))
@@ -513,16 +512,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		cancel() // ensure this happens before w.Close()
 		return err
 	}
-	if prefix == "cas" {
-		if receivedDigest := hex.EncodeToString(h.Sum(nil)); receivedDigest != digest.Hash {
-			cancel()
-			return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, receivedDigest)
-		}
-	}
-	if err := wc.Close(); err != nil {
-		return err
-	}
-	return nil
+	return wc.Close()
 }
 
 func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
@@ -540,7 +530,7 @@ func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Dig
 func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, bool, error) {
 	matches := s.bytestreamRe.FindStringSubmatch(bytestream)
 	if matches == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
+		return nil, false, status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
 	}
 	size, _ := strconv.Atoi(matches[3])
 	return &pb.Digest{

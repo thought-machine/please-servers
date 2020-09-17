@@ -492,3 +492,9 @@ go_get(
     revision = "v2.17.09",
     deps = [":unix"],
 )
+
+go_get(
+    name = "zstd",
+    get = "github.com/DataDog/zstd",
+    revision = "v1.4.5",
+)

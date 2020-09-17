@@ -1,6 +1,9 @@
 go_library(
     name = "rpc",
-    srcs = glob(["*.go"]),
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
     deps = [
         "//elan/gzfile",
         "//grpcutil",
@@ -17,6 +20,15 @@ go_library(
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:rpcstatus",
+        "//third_party/go:zstd",
     ],
     visibility = ["//elan/..."],
+)
+
+go_test(
+    name = "storage_test",
+    srcs = ["storage_test.go"],
+    deps = [
+        ":rpc",
+        "//third_party/go:testify",    ],
 )
