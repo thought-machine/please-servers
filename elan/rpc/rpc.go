@@ -146,6 +146,10 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				UpdateEnabled: false,
 			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
+			SupportedCompressor: []pb.Compressor_Value{
+				pb.Compressor_IDENTITY,
+				pb.Compressor_ZSTD,
+			},
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1},
