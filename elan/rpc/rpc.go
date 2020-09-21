@@ -97,7 +97,7 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 })
 var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
-	Name:      "blobs_served",
+	Name:      "blobs_served_total",
 	Help:      "Number of blobs served, partitioned by compressor required & used.",
 }, []string{"compressor_requested", "compressor_used"})
 
