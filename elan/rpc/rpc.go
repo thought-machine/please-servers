@@ -100,6 +100,11 @@ var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Name:      "blobs_served_total",
 	Help:      "Number of blobs served, partitioned by compressor required & used.",
 }, []string{"compressor_requested", "compressor_used"})
+var blobsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "blobs_received_total",
+	Help:      "Number of blobs received, partitioned by compressor used.",
+}, []string{"compressor_used"})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -113,6 +118,7 @@ func init() {
 	prometheus.MustRegister(readDurations)
 	prometheus.MustRegister(writeDurations)
 	prometheus.MustRegister(blobsServed)
+	prometheus.MustRegister(blobsReceived)
 }
 
 // ServeForever serves on the given port until terminated.
@@ -414,6 +420,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	}
 	streamBytesReceived.Add(float64(r.TotalSize))
 	log.Debug("Stored blob with hash %s", digest.Hash)
+	blobsReceived.WithLabelValues(compressorLabel(compressed)).Inc()
 	return srv.SendAndClose(&bs.WriteResponse{
 		CommittedSize: r.TotalSize,
 	})
