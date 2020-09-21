@@ -19,8 +19,11 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 )
 
-// maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
-const maxBlobBatchSize = 4012000 // 4000 Kelly-Bootle standard units
+// maxBatchSize is the maximum size of a single blob batch we'll ever request.
+const maxBatchSize = 4012000 // 4000 Kelly-Bootle standard units
+
+// maxBlobSize is the maximum size of any single blob within a batch.
+const maxBlobSize = maxBatchSize / 50
 
 // downloadParallelism is the maximum number of parallel downloads we'll allow.
 const downloadParallelism = 4
@@ -115,7 +118,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			w.cachedBytes += file.Digest.SizeBytes
 			continue
 		}
-		if file.Digest.SizeBytes > maxBlobBatchSize {
+		if file.Digest.SizeBytes > maxBlobSize {
 			// This blob is big enough that it must always be done on its own.
 			w.downloadedBytes += file.Digest.SizeBytes
 			fn := filename
@@ -135,7 +138,7 @@ func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
 			continue
 		}
 		cacheMisses.Inc()
-		if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {
+		if totalSize+file.Digest.SizeBytes > maxBatchSize {
 			// This blob on its own is OK but will exceed the total.
 			// Download what we have so far then deal with it.
 			fs := filenames[:]
@@ -200,10 +203,11 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
-	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
+	comp := compressor(filename)
+	log.Debug("Downloading file of %d bytes with compressor %s...", file.Digest.SizeBytes, comp)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if _, err := w.client.ReadCompressedBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename, compressor(filename)); err != nil {
+	if _, err := w.client.ReadCompressedBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename, comp); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
