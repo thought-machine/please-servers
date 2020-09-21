@@ -96,6 +96,11 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:      "write_duration_seconds",
 	Buckets:   prometheus.DefBuckets,
 })
+var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "blobs_served",
+	Help:      "Number of blobs served, partitioned by compressor required & used.",
+}, []string{"compressor_requested", "compressor_used"})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -108,6 +113,7 @@ func init() {
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
 	prometheus.MustRegister(writeDurations)
+	prometheus.MustRegister(blobsServed)
 }
 
 // ServeForever serves on the given port until terminated.
@@ -377,10 +383,12 @@ func (s *server) readCompressed(ctx context.Context, digest *pb.Digest, compress
 	r, err := s.readBlob(ctx, s.compressedKey("cas", digest, compressed), offset, limit)
 	if err != nil {
 		if r, err := s.readBlob(ctx, s.compressedKey("cas", digest, !compressed), offset, limit); err == nil {
+			blobsServed.WithLabelValues(compressorLabel(compressed), compressorLabel(!compressed)).Inc()
 			return compressedReader(r, compressed, !compressed)
 		}
 		return nil, false, err
 	}
+	blobsServed.WithLabelValues(compressorLabel(compressed), compressorLabel(compressed)).Inc()
 	return compressedReader(r, compressed, compressed)
 }
 
@@ -614,4 +622,12 @@ func (r *countingReader) Read(buf []byte) (int, error) {
 
 func (r *countingReader) Close() error {
 	return r.r.Close()
+}
+
+// compressorLabel returns a label to use for Prometheus metrics to represent compression.
+func compressorLabel(compressed bool) string {
+	if compressed {
+		return "zstd"
+	}
+	return "identity"
 }
