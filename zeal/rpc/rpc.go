@@ -174,28 +174,24 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	blob := buf.Bytes()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if s.shouldSkipCompression(blob) {
-		ctx = grpcutil.SkipCompression(ctx)
-	}
-	digest, err := s.storageClient.WriteBlob(ctx, blob)
+	digest, err := s.storageClient.WriteCompressedBlob(ctx, blob, s.compressor(blob))
 	return digest.ToProto(), err
 }
 
-// shouldSkipCompression returns true if we should skip compression for uploading this
-// blob because it is already compressed (e.g. it's a zip / gzip / etc).
-func (s *server) shouldSkipCompression(blob []byte) bool {
+// compressor returns the compressor we should use for uploading this blob.
+func (s *server) compressor(blob []byte) rpb.Compressor_Value {
 	mime := http.DetectContentType(blob)
 	switch mime {
 	case "application/x-rar-compressed", "application/x-gzip", "application/zip", "video/webm", "image/gif", "image/webp", "image/png", "image/jpeg":
-		return true
+		return rpb.Compressor_IDENTITY
 	}
 	// xz and bzip2 aren't detected by the net/http package
 	if bytes.HasPrefix(blob, []byte{0xFD, '7', 'z', 'X', 'Z', 0x00}) {
-		return true
+		return rpb.Compressor_IDENTITY
 	} else if bytes.HasPrefix(blob, []byte{0x42, 0x5A, 0x68}) {
-		return true
+		return rpb.Compressor_IDENTITY
 	}
-	return false
+	return rpb.Compressor_ZSTD
 }
 
 func (s *server) logHTTPRequests(logger retryablehttp.Logger, req *http.Request, n int) {
