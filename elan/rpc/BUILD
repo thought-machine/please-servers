@@ -5,7 +5,6 @@ go_library(
         exclude = ["*_test.go"],
     ),
     deps = [
-        "//elan/gzfile",
         "//grpcutil",
         "//proto:purity",
         "//third_party/go/gocloud",
@@ -30,5 +29,6 @@ go_test(
     srcs = ["storage_test.go"],
     deps = [
         ":rpc",
-        "//third_party/go:testify",    ],
+        "//third_party/go:testify",
+    ],
 )
