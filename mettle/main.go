@@ -150,7 +150,7 @@ func main() {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests, responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
