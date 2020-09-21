@@ -244,6 +244,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		requests:        common.MustOpenSubscription(requestQueue),
 		responses:       common.MustOpenTopic(responseQueue),
 		client:          client,
+		fmc:             fileMetadataCache{},
 		rootDir:         abspath,
 		clean:           clean,
 		home:            home,
@@ -292,6 +293,7 @@ type worker struct {
 	lucidity        lpb.LucidityClient
 	lucidChan       chan *lpb.UpdateRequest
 	cache           *ristretto.Cache
+	fmc             filemetadata.Cache
 	dir, rootDir    string
 	home            string
 	name            string
@@ -720,7 +722,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		}
 	}
 
-	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), filemetadata.NewNoopCache())
+	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), w.fmc)
 	if err != nil {
 		return err
 	}
@@ -730,10 +732,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if !shouldCompressAll(cmd.OutputPaths) {
-		ctx = grpcutil.SkipCompression(ctx)
-	}
-	err = w.client.UploadIfMissing(ctx, chomks...)
+	_, err = w.client.UploadIfMissing(ctx, chomks...)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories

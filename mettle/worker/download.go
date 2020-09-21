@@ -17,8 +17,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
-
-	"github.com/thought-machine/please-servers/grpcutil"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -205,10 +203,7 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if !shouldCompress(filename) {
-		ctx = grpcutil.SkipCompression(ctx)
-	}
-	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
+	if _, err := w.client.ReadCompressedBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename, compressor(filename)); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
@@ -264,20 +259,4 @@ func fileMode(isExecutable bool) os.FileMode {
 		return 0555
 	}
 	return 0444
-}
-
-// shouldCompress returns true if the given filename should be compressed.
-func shouldCompress(filename string) bool {
-	return !(strings.HasSuffix(filename, ".zip") || strings.HasSuffix(filename, ".pex") ||
-		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz"))
-}
-
-// shouldCompressAll returns true if all of the given filenames should be compressed.
-func shouldCompressAll(filenames []string) bool {
-	for _, f := range filenames {
-		if shouldCompress(f) {
-			return true
-		}
-	}
-	return false
 }
