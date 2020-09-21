@@ -733,7 +733,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	if !shouldCompressAll(cmd.OutputPaths) {
 		ctx = grpcutil.SkipCompression(ctx)
 	}
-	err = w.client.UploadIfMissing(ctx, chomks...)
+	_, err = w.client.UploadIfMissing(ctx, chomks...)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories

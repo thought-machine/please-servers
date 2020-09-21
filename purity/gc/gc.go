@@ -425,7 +425,7 @@ func (c *collector) checkDirectories(dirs []*pb.Directory) {
 	if !c.dryRun {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
-		if err := c.client.UploadIfMissing(ctx, chunkers...); err != nil {
+		if _, err := c.client.UploadIfMissing(ctx, chunkers...); err != nil {
 			log.Warning("Failed to upload missing directory protos: %s", err)
 		}
 	}
