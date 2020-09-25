@@ -506,9 +506,10 @@ go_get(
     name = "zstd",
     get = "github.com/klauspost/compress",
     install = [
+        "fse",
         "huff0",
         "snappy",
-        "zstd",
+        "zstd/...",
     ],
     revision = "v1.11.0",
 )
