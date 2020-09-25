@@ -491,3 +491,24 @@ go_get(
     revision = "v2.17.09",
     deps = [":unix"],
 )
+
+go_get(
+    name = "go-grpc-compression",
+    get = "github.com/mostynb/go-grpc-compression/zstd",
+    revision = "v1.1.2",
+    deps = [
+        ":zstd",
+        ":grpc",
+    ],
+)
+
+go_get(
+    name = "zstd",
+    get = "github.com/klauspost/compress",
+    install = [
+        "huff0",
+        "snappy",
+        "zstd",
+    ],
+    revision = "v1.11.0",
+)
