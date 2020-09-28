@@ -266,6 +266,8 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
+	log.Warningf("batch read")
+
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -335,25 +337,28 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
 	defer cancel()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	digest, err := s.bytestreamBlobName(req.ResourceName)
+	d, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
 	}
-	if req.ReadOffset < 0 || req.ReadOffset > digest.SizeBytes {
-		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
+	if req.ReadOffset < 0 || req.ReadOffset > d.SizeBytes {
+		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, d.Hash, d.SizeBytes)
 	} else if req.ReadLimit == 0 {
 		req.ReadLimit = -1
-		streamBytesServed.Add(float64(digest.SizeBytes - req.ReadOffset))
-	} else if req.ReadOffset+req.ReadLimit > digest.SizeBytes {
-		req.ReadLimit = digest.SizeBytes - req.ReadOffset
+		streamBytesServed.Add(float64(d.SizeBytes - req.ReadOffset))
+	} else if req.ReadOffset+req.ReadLimit > d.SizeBytes {
+		req.ReadLimit = d.SizeBytes - req.ReadOffset
 		streamBytesServed.Add(float64(req.ReadLimit))
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, err := s.readBlob(ctx, s.key("cas", digest), req.ReadOffset, req.ReadLimit)
+	r, err := s.readBlob(ctx, s.key("cas", d), req.ReadOffset, req.ReadLimit)
 	if err != nil {
+		log.Warningf("readBlob %v", err)
 		return err
 	}
+
+
 	defer r.Close()
 	buf := make([]byte, 64*1024)
 	for {
@@ -365,7 +370,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		}
 		if err != nil {
 			if err == io.EOF {
-				log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
+				log.Debug("Completed ByteStream.Read request of %d bytes in %s", d.SizeBytes, time.Since(start))
 				return nil
 			}
 			return err
@@ -408,7 +413,7 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 }
 
 func (s *server) readBlob(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
-	if length == 0 {
+	if length == 0 || strings.Contains(key, digest.Empty.Hash){
 		// Special case any empty read request
 		return ioutil.NopCloser(bytes.NewReader(nil)), nil
 	}
