@@ -7,9 +7,9 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/mostynb/go-grpc-compression/zstd"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -102,7 +102,7 @@ func streamCompressionInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc
 
 func compressionInterceptor(ctx context.Context, method string, opts []grpc.CallOption) (context.Context, []grpc.CallOption) {
 	if ShouldCompress(ctx) && (strings.HasSuffix(method, "BatchReadBlobs") || strings.HasSuffix(method, "BatchUpdateBlobs") || strings.HasPrefix(method, "/google.bytestream.ByteStream/")) {
-		return ctx, append(opts, grpc.UseCompressor(gzip.Name))
+		return ctx, append(opts, grpc.UseCompressor(zstd.Name))
 	}
 	return SkipCompression(ctx), opts
 }

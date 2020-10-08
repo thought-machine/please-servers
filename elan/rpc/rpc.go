@@ -21,6 +21,7 @@ import (
 
 	// Necessary to register providers that we'll use.
 	_ "github.com/thought-machine/please-servers/elan/gzfile"
+	_ "github.com/thought-machine/please-servers/elan/zstfile"
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
