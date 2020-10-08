@@ -6,6 +6,7 @@
 package zstfile
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -14,8 +15,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v2"
@@ -49,7 +52,8 @@ func (o *URLOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket
 }
 
 type bucket struct {
-	dir string
+	dir                    string
+	readerPool, writerPool sync.Pool
 }
 
 // openBucket creates a driver.Bucket that reads and writes to dir.
@@ -66,7 +70,10 @@ func openBucket(dir string) (driver.Bucket, error) {
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
-	return &bucket{dir: dir}, nil
+	b := &bucket{dir: dir}
+	b.readerPool.New = b.NewReader
+	b.writerPool.New = b.NewWriter
+	return b, nil
 }
 
 // OpenBucket creates a *blob.Bucket backed by the filesystem and rooted at
@@ -237,12 +244,14 @@ func (b *bucket) newReader(key string) (ReadSeekCloser, os.FileInfo, error) {
 		return nil, nil, err
 	}
 	if tag, err := xattr.FGet(f, xattrName); err == nil && len(tag) > 0 {
-		r, err := zstd.NewReader(f)
-		if err != nil {
+		r := b.readerPool.Get().(*zstdreader)
+		r.f = f
+		if err := r.r.Reset(f); err != nil {
 			f.Close()
+			b.readerPool.Put(r)
 			return nil, info, err
 		}
-		return &zstdreader{f: f, r: r}, info, nil
+		return r, info, nil
 	}
 	return f, info, nil
 }
@@ -290,11 +299,10 @@ func (b *bucket) NewTypedWriter(ctx context.Context, key string, contentType str
 		temp: f.Name(),
 	}
 	if grpcutil.ShouldCompress(ctx) {
-		zstw, err := zstd.NewWriter(f)
-		if err != nil {
-			return nil, err
-		}
-		w.w = &zstdwriter{f: f, w: zstw}
+		zw := b.writerPool.Get().(*zstdwriter)
+		zw.f = f
+		zw.w.Reset(f)
+		w.w = zw
 		w.zst = true
 	}
 	return w, nil
@@ -353,3 +361,27 @@ func (b *bucket) Delete(ctx context.Context, key string) error {
 func (b *bucket) SignedURL(ctx context.Context, key string, opts *driver.SignedURLOptions) (string, error) {
 	return "", fmt.Errorf("SignedURL is unimplemented")
 }
+
+// NewReader is called by the internal reader pool to supply a new reader if one doesn't exist.
+func (b *bucket) NewReader() interface{} {
+	zr, err := zstd.NewReader(&emptyBuf)
+	if err != nil {
+		return err
+	}
+	r := &zstdreader{r: zr, p: &b.readerPool}
+	runtime.SetFinalizer(r, finalizeReader)
+	return r
+}
+
+// NewWriter is called by the internal writer pool to supply a new writer if one doesn't exist.
+func (b *bucket) NewWriter() interface{} {
+	zw, err := zstd.NewWriter(ioutil.Discard)
+	if err != nil {
+		return err
+	}
+	w := &zstdwriter{w: zw, p: &b.writerPool}
+	runtime.SetFinalizer(w, finalizeWriter)
+	return w
+}
+
+var emptyBuf bytes.Buffer

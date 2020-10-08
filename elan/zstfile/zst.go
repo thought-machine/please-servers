@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 )
@@ -19,6 +20,7 @@ type ReadSeekCloser interface {
 type zstdreader struct {
 	f *os.File
 	r *zstd.Decoder
+	p *sync.Pool
 }
 
 // Read normally passes through to our
@@ -27,7 +29,7 @@ func (r *zstdreader) Read(buf []byte) (int, error) {
 }
 
 func (r *zstdreader) Close() error {
-	r.r.Close()
+	r.p.Put(r.r)
 	return r.f.Close()
 }
 
@@ -38,10 +40,15 @@ func (r *zstdreader) Seek(offset int64, whence int) (int64, error) {
 	return offset, err
 }
 
+func finalizeReader(r *zstdreader) {
+	r.r.Close()
+}
+
 // A zstdwriter implements gzip compression over a file.
 type zstdwriter struct {
 	f *os.File
 	w *zstd.Encoder
+	p *sync.Pool
 }
 
 func (w *zstdwriter) Write(buf []byte) (int, error) {
@@ -49,9 +56,14 @@ func (w *zstdwriter) Write(buf []byte) (int, error) {
 }
 
 func (w *zstdwriter) Close() error {
+	defer w.p.Put(w.w)
 	if err := w.w.Close(); err != nil {
 		w.f.Close() // Must still close the file
 		return err
 	}
 	return w.f.Close()
+}
+
+func finalizeWriter(w *zstdwriter) {
+	w.w.Close()
 }
