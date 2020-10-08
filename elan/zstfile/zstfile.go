@@ -23,6 +23,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v2"
 	"github.com/pkg/xattr"
+	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
 	"gocloud.dev/gcerrors"
@@ -32,8 +33,19 @@ import (
 
 var log = cli.MustGetLogger()
 
+var liveReaders = prometheus.NewGauge(prometheus.GaugeOpts{
+	Namespace: "elan_zst",
+	Name:      "live_readers_total",
+})
+var liveWriters = prometheus.NewGauge(prometheus.GaugeOpts{
+	Namespace: "elan_zst",
+	Name:      "live_writers_total",
+})
+
 func init() {
 	blob.DefaultURLMux().RegisterBucket(Scheme, &URLOpener{})
+	prometheus.MustRegister(liveReaders)
+	prometheus.MustRegister(liveWriters)
 }
 
 // Scheme is the URL scheme zstfile registers its URLOpener under on blob.DefaultMux.
@@ -369,6 +381,7 @@ func (b *bucket) NewReader() interface{} {
 		return err
 	}
 	r := &zstdreader{r: zr, p: &b.readerPool}
+	liveReaders.Inc()
 	runtime.SetFinalizer(r, finalizeReader)
 	return r
 }
@@ -380,6 +393,7 @@ func (b *bucket) NewWriter() interface{} {
 		return err
 	}
 	w := &zstdwriter{w: zw, p: &b.writerPool}
+	liveWriters.Inc()
 	runtime.SetFinalizer(w, finalizeWriter)
 	return w
 }

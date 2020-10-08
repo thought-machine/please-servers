@@ -42,6 +42,7 @@ func (r *zstdreader) Seek(offset int64, whence int) (int64, error) {
 
 func finalizeReader(r *zstdreader) {
 	r.r.Close()
+	liveReaders.Dec()
 }
 
 // A zstdwriter implements gzip compression over a file.
@@ -66,4 +67,5 @@ func (w *zstdwriter) Close() error {
 
 func finalizeWriter(w *zstdwriter) {
 	w.w.Close()
+	liveWriters.Dec()
 }

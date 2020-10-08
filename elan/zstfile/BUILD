@@ -11,6 +11,7 @@ go_library(
         "//third_party/go:xattr",
         "//third_party/go:zstd",
         "//third_party/go/gocloud",
+        "//third_party/go/prometheus",
     ],
 )
 
