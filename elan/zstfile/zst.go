@@ -29,7 +29,7 @@ func (r *zstdreader) Read(buf []byte) (int, error) {
 }
 
 func (r *zstdreader) Close() error {
-	r.p.Put(r.r)
+	r.p.Put(r)
 	return r.f.Close()
 }
 
@@ -56,7 +56,7 @@ func (w *zstdwriter) Write(buf []byte) (int, error) {
 }
 
 func (w *zstdwriter) Close() error {
-	defer w.p.Put(w.w)
+	defer w.p.Put(w)
 	if err := w.w.Close(); err != nil {
 		w.f.Close() // Must still close the file
 		return err
