@@ -95,6 +95,14 @@ var writeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:      "write_duration_seconds",
 	Buckets:   prometheus.DefBuckets,
 })
+var actionCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "action_cache_hits_total",
+})
+var actionCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "action_cache_misses_total",
+})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -107,6 +115,8 @@ func init() {
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
 	prometheus.MustRegister(writeDurations)
+	prometheus.MustRegister(actionCacheHits)
+	prometheus.MustRegister(actionCacheMisses)
 }
 
 // ServeForever serves on the given port until terminated.
@@ -158,8 +168,10 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 	defer cancel()
 	ar := &pb.ActionResult{}
 	if err := s.readBlobIntoMessage(ctx, "ac", req.ActionDigest, ar); err != nil {
+		actionCacheMisses.Inc()
 		return nil, err
 	}
+	actionCacheHits.Inc()
 	if req.InlineStdout && ar.StdoutDigest != nil {
 		// The docs say that the server MAY omit inlining, even if asked. Hence we assume that if we can't find it here
 		// we might be in a sharded setup where we don't have the stdout digest, and it's better to return what we can
