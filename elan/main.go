@@ -16,10 +16,11 @@ var opts = struct {
 		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
 		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
 	} `group:"Options controlling logging output"`
-	GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
-	Storage     string        `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
-	Parallelism int           `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer"`
-	Admin       admin.Opts    `group:"Options controlling HTTP admin server" namespace:"admin"`
+	GRPC         grpcutil.Opts `group:"Options controlling the gRPC server"`
+	Storage      string        `short:"s" long:"storage" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
+	Parallelism  int           `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer"`
+	DirCacheSize int64         `long:"dir_cache_size" default:"10240" description:"Number of directory entries to cache for GetTree"`
+	Admin        admin.Opts    `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
@@ -39,5 +40,5 @@ func main() {
 	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	go admin.Serve(opts.Admin)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism)
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize)
 }

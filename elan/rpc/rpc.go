@@ -29,6 +29,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
+	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
 	"github.com/peterebden/go-cli-init/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -103,6 +104,14 @@ var actionCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "action_cache_misses_total",
 })
+var dirCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "dir_cache_hits_total",
+})
+var dirCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "dir_cache_misses_total",
+})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -117,16 +126,24 @@ func init() {
 	prometheus.MustRegister(writeDurations)
 	prometheus.MustRegister(actionCacheHits)
 	prometheus.MustRegister(actionCacheMisses)
+	prometheus.MustRegister(dirCacheHits)
+	prometheus.MustRegister(dirCacheMisses)
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int) {
+func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize int64) {
+	cache, _ := ristretto.NewCache(&ristretto.Config{
+		NumCounters: maxDirCacheSize / 10, // bit of a guess
+		MaxCost:     maxDirCacheSize,
+		BufferItems: 64, // recommended by upstream
+	})
 	srv := &server{
 		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
 		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
 		bucket:        mustOpenStorage(storage),
 		limiter:       make(chan struct{}, parallelism),
+		dirCache:      cache,
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -144,6 +161,7 @@ type server struct {
 	bytestreamRe     *regexp.Regexp
 	limiter          chan struct{}
 	maxCacheItemSize int64
+	dirCache         *ristretto.Cache
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -319,28 +337,11 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	} else if req.RootDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "missing root_digest field")
 	}
-	resp := &pb.GetTreeResponse{}
-	resp, err := s.getWholeTree(req.RootDigest)
+	dirs, err := s.getTree(req.RootDigest)
 	if err != nil {
 		return err
 	}
-	return srv.Send(resp)
-}
-
-// getWholeTree builds a directory tree proto with no caching.
-// It's also called from the cache.
-func (s *server) getWholeTree(digest *pb.Digest) (*pb.GetTreeResponse, error) {
-	resp := &pb.GetTreeResponse{}
-	if s.isEmpty(digest) {
-		return resp, nil // don't need to do anything for the empty blob.
-	}
-	for r := range s.getTree(digest) {
-		if r.Err != nil {
-			return nil, r.Err
-		}
-		resp.Directories = append(resp.Directories, r.Dir)
-	}
-	return resp, nil
+	return srv.Send(&pb.GetTreeResponse{Directories: dirs})
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
