@@ -422,7 +422,7 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 }
 
 func (s *server) readBlob(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
-	if length == 0 {
+	if length == 0 || strings.Contains(key, digest.Empty.Hash){
 		// Special case any empty read request
 		return ioutil.NopCloser(bytes.NewReader(nil)), nil
 	}
