@@ -116,8 +116,6 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
 	log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
-	totalRequests.Inc()
-	currentRequests.Inc()
 	// N.B. We never try a cache lookup here because Please always tells us not to; it's not
 	//      clear to me that is ever useful (because a good client will try to optimise by
 	//      not uploading sources unnecessarily, and to work out that it can not do that it
@@ -189,6 +187,8 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 		j = &job{Current: &longrunning.Operation{Metadata: any}}
 		s.jobs[digest.Hash] = j
 		log.Debug("Created job for %s", digest.Hash)
+		totalRequests.Inc()
+		currentRequests.Inc()
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	j.Streams = append(j.Streams, ch)
