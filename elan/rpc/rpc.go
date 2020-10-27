@@ -112,6 +112,14 @@ var dirCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "dir_cache_misses_total",
 })
+var knownBlobCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "known_blob_cache_hits_total",
+})
+var knownBlobCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "known_blob_cache_misses_total",
+})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -128,22 +136,20 @@ func init() {
 	prometheus.MustRegister(actionCacheMisses)
 	prometheus.MustRegister(dirCacheHits)
 	prometheus.MustRegister(dirCacheMisses)
+	prometheus.MustRegister(knownBlobCacheHits)
+	prometheus.MustRegister(knownBlobCacheMisses)
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize int64) {
-	cache, _ := ristretto.NewCache(&ristretto.Config{
-		NumCounters: maxDirCacheSize / 10, // bit of a guess
-		MaxCost:     maxDirCacheSize,
-		BufferItems: 64, // recommended by upstream
-	})
+func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
 	srv := &server{
-		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
-		isFileStorage: strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
-		bucket:        mustOpenStorage(storage),
-		limiter:       make(chan struct{}, parallelism),
-		dirCache:      cache,
+		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
+		isFileStorage:  strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
+		bucket:         mustOpenStorage(storage),
+		limiter:        make(chan struct{}, parallelism),
+		dirCache:       mustCache(maxDirCacheSize),
+		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -154,14 +160,29 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 	grpcutil.ServeForever(lis, s)
 }
 
+func mustCache(size int64) *ristretto.Cache {
+	if size == 0 {
+		return nil
+	}
+	cache, err := ristretto.NewCache(&ristretto.Config{
+		NumCounters: size / 10, // bit of a guess
+		MaxCost:     size,
+		BufferItems: 64, // recommended by upstream
+	})
+	if err != nil {
+		log.Fatalf("Failed to construct cache: %s", err)
+	}
+	return cache
+}
+
 type server struct {
-	storageRoot      string
-	isFileStorage    bool
-	bucket           bucket
-	bytestreamRe     *regexp.Regexp
-	limiter          chan struct{}
-	maxCacheItemSize int64
-	dirCache         *ristretto.Cache
+	storageRoot              string
+	isFileStorage            bool
+	bucket                   bucket
+	bytestreamRe             *regexp.Regexp
+	limiter                  chan struct{}
+	maxCacheItemSize         int64
+	dirCache, knownBlobCache *ristretto.Cache
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -249,10 +270,34 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 
 // blobExists returns true if this blob exists in the underlying storage.
 func (s *server) blobExists(ctx context.Context, key string) bool {
+	if s.knownBlobCache != nil {
+		if _, present := s.knownBlobCache.Get(key); present {
+			knownBlobCacheHits.Inc()
+			return true
+		}
+		knownBlobCacheMisses.Inc()
+	}
+	// N.B. if the blob is not known in the cache we still have to check, since something
+	//      else could have written it when we weren't looking.
+	if !s.blobExistsUncached(ctx, key) {
+		return false
+	}
+	s.markKnownBlob(key)
+	return true
+}
+
+func (s *server) blobExistsUncached(ctx context.Context, key string) bool {
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	exists, _ := s.bucket.Exists(ctx, key)
 	return exists
+}
+
+// markKnownBlob marks a blob as one we know exists.
+func (s *server) markKnownBlob(key string) {
+	if s.knownBlobCache != nil {
+		s.knownBlobCache.Set(key, nil, int64(len(key)))
+	}
 }
 
 // isEmpty returns true if this digest is for the empty blob.
@@ -422,7 +467,7 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 }
 
 func (s *server) readBlob(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
-	if length == 0 || strings.Contains(key, digest.Empty.Hash){
+	if length == 0 || strings.Contains(key, digest.Empty.Hash) {
 		// Special case any empty read request
 		return ioutil.NopCloser(bytes.NewReader(nil)), nil
 	}
@@ -435,6 +480,7 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 		}
 		return nil, err
 	}
+	s.markKnownBlob(key)
 	return &countingReader{r: r}, nil
 }
 
@@ -520,6 +566,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	if err := wc.Close(); err != nil {
 		return err
 	}
+	s.markKnownBlob(key)
 	return nil
 }
 
