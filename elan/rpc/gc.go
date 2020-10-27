@@ -78,6 +78,9 @@ func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob
 			if err := s.bucket.Delete(ctx, key, hard); err != nil {
 				me = multierror.Append(me, err)
 			}
+			if s.knownBlobCache != nil {
+				s.knownBlobCache.Del(key)
+			}
 		}
 	}
 	return me.ErrorOrNil()
