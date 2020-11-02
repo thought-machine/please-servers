@@ -161,9 +161,20 @@ func (s *server) Clean(maxAge time.Duration) {
 		min := time.Now().Add(-maxAge).Unix()
 		s.workers.Range(func(k, v interface{}) bool {
 			if v.(*pb.UpdateRequest).UpdateTime < min {
-				s.workers.Delete(k)
+				go s.removeWorker(k.(string))
 			}
 			return true
 		})
 	}
+}
+
+func (s *server) removeWorker(key string) {
+	s.workers.Delete(key)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	delete(s.liveWorkers, key)
+	delete(s.deadWorkers, key)
+	delete(s.healthyWorkers, key)
+	delete(s.unhealthyWorkers, key)
+	delete(s.busyWorkers, key)
 }
