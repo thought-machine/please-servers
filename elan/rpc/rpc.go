@@ -144,8 +144,8 @@ func init() {
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
 	srv := &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
-		isFileStorage:  strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://"),
+		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"), "zstfile://"),
+		isFileStorage:  strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://") || strings.HasPrefix(storage, "zstfile://"),
 		bucket:         mustOpenStorage(storage),
 		limiter:        make(chan struct{}, parallelism),
 		dirCache:       mustCache(maxDirCacheSize),
