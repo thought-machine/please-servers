@@ -154,7 +154,7 @@ func compareRepeatedString(name string, b, a []string) bool {
 			log.Warning("%s differ; %s not in 'after' action", name, s1)
 			ret = true
 		} else if s2 := a[i]; s1 != s2 {
-			log.Warning("%s differ: %s / %s", s1, s2)
+			log.Warning("%s differ: %s / %s", name, s1, s2)
 			ret = true
 		}
 	}
