@@ -1,14 +1,73 @@
 # This is for local development only, runs a local version of bb-browser to help
 # visualise some of the outputs.
-remote_file(
+go_get(
     name = "bb_browser",
-    url = "https://get.please.build/third_party/binary/bb-browser-${OS}_${ARCH}-20200730",
-    hashes = [
-        "c26928e8d53e6ed9cce4a74c9f10eb9b2dbaaeed7da988440e741c3ee024c9fc",
-        "317d967ebfddfd6eb6bc3baa0519ec4e9580d604a4edb3d759ebae81b90adb2d",
-    ],
-    out = "bb-browser",
+    get = "github.com/buildbarn/bb-browser/cmd/bb_browser",
+    revision = "83d8601dd9c21310c772b64cb8da78bf1d39d6d8",
     binary = True,
+    deps = [
+        ":bb-remote-execution",
+        "//third_party/go:protobuf",
+        "//third_party/go:grpc",
+        "//third_party/go:mux",
+        "//third_party/go:remote-apis",
+    ],
+)
+
+go_get(
+    name = "bb-remote-execution",
+    get = "github.com/buildbarn/bb-remote-execution",
+    revision = "1bf59395c8ef3ae9574fdef2d6457cf01be22360",
+    install = [
+        "pkg/proto/configuration/bb_browser",
+        "pkg/proto/resourceusage",
+    ],
+    deps = [
+        ":bb-storage",
+    ],
+)
+
+go_get(
+    name = "bb-storage",
+    get = "github.com/buildbarn/bb-storage",
+    revision = "023d250792d9e21af77721fcbefc9e051b3316cf",
+    install = [
+        "pkg/blobstore",
+        "pkg/digest",
+        "pkg/global",
+        "pkg/grpc",
+        "pkg/proto/cas",
+        "pkg/util",
+    ],
+    deps = [
+        ":aws-sdk-go",
+        "//third_party/go:protobuf",
+        "//third_party/go:grpc",
+    ],
+)
+
+go_get(
+    name = "aws-sdk-go",
+    get = "github.com/aws/aws-sdk-go/...",
+    install = [
+        "aws/...",
+        "internal/...",
+        "private/...",
+        "service/...",
+    ],
+    licences = ["apache-2.0"],
+    revision = "v1.33.5",
+    deps = [
+        ":jmespath",
+        "//third_party/go:net",
+    ],
+)
+
+go_get(
+    name = "jmespath",
+    get = "github.com/jmespath/go-jmespath",
+    licences = ["apache-2.0"],
+    revision = "3433f3ea46d9f8019119e7dd41274e112a2359a9",
 )
 
 filegroup(
