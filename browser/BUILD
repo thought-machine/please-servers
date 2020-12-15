@@ -2,9 +2,9 @@
 # visualise some of the outputs.
 remote_file(
     name = "bb_browser",
-    url = "https://get.please.build/third_party/binary/bb-browser-${OS}_${ARCH}-20200730",
+    url = "https://github.com/thought-machine/please-servers/releases/download/v7.6.1/bb_browser_${OS}_${ARCH}",
     hashes = [
-        "c26928e8d53e6ed9cce4a74c9f10eb9b2dbaaeed7da988440e741c3ee024c9fc",
+        "35691a41fe5cb8d134ed7f0728d9696f492c346ef133cdb718397937c1d667af",
         "317d967ebfddfd6eb6bc3baa0519ec4e9580d604a4edb3d759ebae81b90adb2d",
     ],
     out = "bb-browser",
