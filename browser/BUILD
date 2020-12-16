@@ -5,7 +5,7 @@ remote_file(
     url = "https://github.com/thought-machine/please-servers/releases/download/v7.6.1/bb_browser_${OS}_${ARCH}",
     hashes = [
         "35691a41fe5cb8d134ed7f0728d9696f492c346ef133cdb718397937c1d667af",
-        "317d967ebfddfd6eb6bc3baa0519ec4e9580d604a4edb3d759ebae81b90adb2d",
+        "ae9a13454da895d4ff5b8137afe39050b8af6b67fc3ec364636312dae000b50a",
     ],
     out = "bb-browser",
     binary = True,
