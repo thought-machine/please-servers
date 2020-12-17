@@ -29,8 +29,7 @@ go_get(
     revision = "v0.17.0",
     patch = "batch_size.patch",
     deps = [
-        ":cloud-pubsub",
-        ":cloud-storage",
+        ":google-cloud-go",
         ":gax-go",
         ":go.opencensus.io",
         "//third_party/go:grpc",
@@ -42,60 +41,25 @@ go_get(
 )
 
 go_get(
-    name = "cloud-storage",
-    get = "cloud.google.com/go/storage",
+    name = "google-cloud-go",
+    get = "cloud.google.com/go",
+    repo = "github.com/googleapis/google-cloud-go",
     revision = "v0.46.3",
-    deps = [
-        ":cloud-iam",
-        ":cloud-internal",
-    ],
-)
-
-go_get(
-    name = "cloud-iam",
-    get = "cloud.google.com/go/iam",
-    revision = "v0.46.3",
-    deps = [
-        ":api",
-        "//third_party/go:metadata",
-        ":gax-go",
-        "//third_party/go:grpc",
-        ":genproto",
-    ],
-)
-
-go_get(
-    name = "cloud-internal",
-    get = "cloud.google.com/go/internal",
     install = [
-        "",
-        "optional",
-        "trace",
-        "version",
+        "iam",
+        "internal",
+        "internal/optional",
+        "internal/trace",
+        "internal/version",
+        "pubsub",
+        "pubsub/apiv1",
+        "storage",
     ],
-    revision = "v0.46.3",
     deps = [
         ":genproto",
         ":api",
         ":gax-go",
         ":go.opencensus.io",
-    ],
-)
-
-go_get(
-    name = "cloud-pubsub",
-    get = "cloud.google.com/go/pubsub",
-    install = [
-        "",
-        "apiv1",
-    ],
-    revision = "v0.46.3",
-    deps = [
-        ":cloud-iam",
-        ":cloud-internal",
-        ":genproto",
-        ":semaphore",
-        "//third_party/go:errgroup",
     ],
 )
 
