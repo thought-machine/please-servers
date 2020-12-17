@@ -17,11 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/chunker"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/tree"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dustin/go-humanize"
@@ -42,12 +41,6 @@ import (
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 	bbru "github.com/thought-machine/please-servers/third_party/proto/resourceusage"
 )
-
-// On Linux and FreeBSD, the getrusage(2) man pages document
-// that the resident set size is returned in kilobytes, though
-// kernel sources indicate kibibytes are used.
-// On Darwin it's in bytes so if this is run there this stat will be incorrect #dealwithit
-const maximumResidentSetSizeUnit = 1024
 
 var log = cli.MustGetLogger()
 
@@ -654,7 +647,9 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 	}
 	rusage := cmd.ProcessState.SysUsage().(*syscall.Rusage)
 	peakMemory.Observe(float64(rusage.Maxrss) / 1024.0) // maxrss is in kb, we use mb for convenience
-	cpuUsage.Observe(float64(rusage.Utime.Sec+rusage.Stime.Sec+1000000*(rusage.Utime.Usec+rusage.Stime.Usec)) / execDuration)
+	ssec, snsec := rusage.Stime.Unix()
+	usec, unsec := rusage.Utime.Unix()
+	cpuUsage.Observe((float64(ssec+usec) + float64(snsec+unsec)/1000000000) / execDuration)
 	// Add this to the metadata.
 	any, err := ptypes.MarshalAny(&bbru.POSIXResourceUsage{
 		UserTime:                   toDuration(rusage.Utime),
@@ -720,20 +715,20 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		}
 	}
 
-	m, ar2, err := tree.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, int(w.client.ChunkMaxSize), filemetadata.NewNoopCache())
+	m, ar2, err := w.client.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, filemetadata.NewNoopCache())
 	if err != nil {
 		return err
 	}
-	chomks := make([]*chunker.Chunker, 0, len(m))
-	for _, c := range m {
-		chomks = append(chomks, c)
+	entries := make([]*uploadinfo.Entry, 0, len(m))
+	for _, e := range m {
+		entries = append(entries, e)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
 	if !shouldCompressAll(cmd.OutputPaths) {
 		ctx = grpcutil.SkipCompression(ctx)
 	}
-	_, err = w.client.UploadIfMissing(ctx, chomks...)
+	_, _, err = w.client.UploadIfMissing(ctx, entries...)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories

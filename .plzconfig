@@ -1,5 +1,5 @@
 [please]
-version = >=15.0.0-beta9
+version = >=15.10.0
 
 [go]
 importpath = github.com/thought-machine/please-servers

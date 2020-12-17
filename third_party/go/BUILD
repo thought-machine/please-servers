@@ -130,6 +130,9 @@ go_get(
     name = "protobuf",
     get = "github.com/golang/protobuf/...",
     revision = "v1.4.2",
+    exported_deps = [
+        ":golang-protobuf",
+    ],
     deps = [
         ":golang-protobuf",
     ],
@@ -262,7 +265,7 @@ go_get(
     name = "remote-apis-sdks",
     get = "github.com/bazelbuild/remote-apis-sdks/go/...",
     repo = "github.com/peterebden/remote-apis-sdks",
-    revision = "93ae091ba3951110d51b8c91d426cc2e8fb6305d",
+    revision = "42404d9c04bba51a27bc8cf1d3f244f95233c2f5",
     deps = [
         ":annotations",
         ":bytestream",
