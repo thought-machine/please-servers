@@ -60,6 +60,7 @@ go_get(
         ":api",
         ":gax-go",
         ":go.opencensus.io",
+        "//third_party/go:errgroup",
     ],
 )
 

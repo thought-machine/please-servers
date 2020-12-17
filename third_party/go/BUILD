@@ -129,7 +129,10 @@ go_get(
 go_get(
     name = "protobuf",
     get = "github.com/golang/protobuf/...",
-    revision = "v1.3.2",
+    revision = "v1.4.2",
+    deps = [
+        ":golang-protobuf",
+    ],
     strip = [
         "proto/proto3_proto",
         "conformance",
@@ -176,7 +179,14 @@ go_get(
 go_get(
     name = "errgroup",
     get = "golang.org/x/sync/errgroup",
-    revision = "457c5828408160d6a47e17645169cf8fa20218c4",
+    revision = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
+    deps = [":net"],
+)
+
+go_get(
+    name = "semaphore",
+    get = "golang.org/x/sync/semaphore",
+    revision = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
 
@@ -260,6 +270,7 @@ go_get(
         ":errgroup",
         ":errors",
         ":glog",
+        ":golang-protobuf",
         ":grpc",
         ":longrunning",
         ":oauth2",
@@ -267,6 +278,17 @@ go_get(
         ":protobuf",
         ":remote-apis",
         ":rpcstatus",
+        ":semaphore",
+        ":zstd",
+    ],
+)
+
+go_get(
+    name = "golang-protobuf",
+    get = "google.golang.org/protobuf/...",
+    revision = "v1.25.0",
+    deps = [
+        ":cmp",
     ],
 )
 
