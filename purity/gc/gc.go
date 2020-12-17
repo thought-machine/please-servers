@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/chunker"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
 	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
@@ -417,22 +417,22 @@ func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
 
 // checkDirectory checks that the directory protos from a Tree still exist in the CAS and uploads it if not.
 func (c *collector) checkDirectories(dirs []*pb.Directory) {
-	chunkers := make([]*chunker.Chunker, len(dirs))
+	entries := make([]*uploadinfo.Entry, len(dirs))
 	for i, d := range dirs {
-		chomk, _ := chunker.NewFromProto(d, int(c.client.ChunkMaxSize))
-		chunkers[i] = chomk
+		e, _ := uploadinfo.EntryFromProto(d)
+		entries[i] = e
 	}
 	if !c.dryRun {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
-		if _, err := c.client.UploadIfMissing(ctx, chunkers...); err != nil {
+		if _, _, err := c.client.UploadIfMissing(ctx, entries...); err != nil {
 			log.Warning("Failed to upload missing directory protos: %s", err)
 		}
 	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for _, chomk := range chunkers {
-		c.referencedBlobs[chomk.Digest().Hash] = struct{}{}
+	for _, e := range entries {
+		c.referencedBlobs[e.Digest.Hash] = struct{}{}
 	}
 }
 
