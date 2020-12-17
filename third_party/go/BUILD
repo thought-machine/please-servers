@@ -129,7 +129,13 @@ go_get(
 go_get(
     name = "protobuf",
     get = "github.com/golang/protobuf/...",
-    revision = "v1.3.2",
+    revision = "v1.4.2",
+    exported_deps = [
+        ":golang-protobuf",
+    ],
+    deps = [
+        ":golang-protobuf",
+    ],
     strip = [
         "proto/proto3_proto",
         "conformance",
@@ -176,7 +182,14 @@ go_get(
 go_get(
     name = "errgroup",
     get = "golang.org/x/sync/errgroup",
-    revision = "457c5828408160d6a47e17645169cf8fa20218c4",
+    revision = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
+    deps = [":net"],
+)
+
+go_get(
+    name = "semaphore",
+    get = "golang.org/x/sync/semaphore",
+    revision = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
 
@@ -238,8 +251,7 @@ go_get(
 go_get(
     name = "remote-apis",
     get = "github.com/bazelbuild/remote-apis/build/...",
-    repo = "github.com/peterebden/remote-apis",
-    revision = "b456ec9de5fdea4f4a5ea05891612d6f2e2433d4",
+    revision = "9e72daff42c941baaf43a4c370e2607a984c58a7",
     deps = [
         ":annotations",
         ":grpc",
@@ -253,7 +265,7 @@ go_get(
     name = "remote-apis-sdks",
     get = "github.com/bazelbuild/remote-apis-sdks/go/...",
     repo = "github.com/peterebden/remote-apis-sdks",
-    revision = "55a36fd111054c42b7d30ef0eeaf755df82faea1",
+    revision = "42404d9c04bba51a27bc8cf1d3f244f95233c2f5",
     deps = [
         ":annotations",
         ":bytestream",
@@ -261,6 +273,7 @@ go_get(
         ":errgroup",
         ":errors",
         ":glog",
+        ":golang-protobuf",
         ":grpc",
         ":longrunning",
         ":oauth2",
@@ -268,6 +281,17 @@ go_get(
         ":protobuf",
         ":remote-apis",
         ":rpcstatus",
+        ":semaphore",
+        ":zstd",
+    ],
+)
+
+go_get(
+    name = "golang-protobuf",
+    get = "google.golang.org/protobuf/...",
+    revision = "v1.25.0",
+    deps = [
+        ":cmp",
     ],
 )
 

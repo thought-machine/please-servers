@@ -83,7 +83,7 @@ func (w *worker) checkFreeSpace() bool {
 		log.Error("Failed to statfs %s: %s", w.rootDir, err)
 		w.Report(false, false, true, "Failed statfs: %s", err)
 		return false
-	} else if (statfs.Flags & syscall.MS_RDONLY) == syscall.MS_RDONLY {
+	} else if (statfs.Flags & rdOnly) == rdOnly {
 		// This should really be ST_RDONLY but syscall doesn't define it and they happen to be the same.
 		log.Error("Read-only file system")
 		w.Report(false, false, true, "Filesystem has gone read-only")
