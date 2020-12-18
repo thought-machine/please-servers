@@ -155,6 +155,7 @@ func init() {
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
 	dec, _ := zstd.NewReader(nil)
+	enc, _ := zstd.NewWriter(nil)
 	srv := &server{
 		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
@@ -163,6 +164,7 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 		limiter:       make(chan struct{}, parallelism),
 		dirCache:       mustCache(maxDirCacheSize),
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
+		compressor:     enc,
 		decompressor:   dec,
 	}
 	lis, s := grpcutil.NewServer(opts)
@@ -197,6 +199,7 @@ type server struct {
 	limiter                  chan struct{}
 	maxCacheItemSize         int64
 	dirCache, knownBlobCache *ristretto.Cache
+	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
 }
 
@@ -234,7 +237,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		// The docs say that the server MAY omit inlining, even if asked. Hence we assume that if we can't find it here
 		// we might be in a sharded setup where we don't have the stdout digest, and it's better to return what we can
 		// (the client can still request the actual blob themselves).
-		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest); err == nil {
+		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest, false); err == nil {
 			ar.StdoutRaw = b
 		}
 	}
@@ -364,33 +367,46 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	n := len(req.Digests)
+	m := n + len(req.Requests)
 	resp := &pb.BatchReadBlobsResponse{
-		Responses: make([]*pb.BatchReadBlobsResponse_Response, len(req.Digests)),
+		Responses: make([]*pb.BatchReadBlobsResponse_Response, m),
 	}
 	var wg sync.WaitGroup
 	var size int64
-	wg.Add(len(req.Digests))
+	wg.Add(m)
 	for i, d := range req.Digests {
 		size += d.SizeBytes
 		go func(i int, d *pb.Digest) {
-			rr := &pb.BatchReadBlobsResponse_Response{
-				Status: &rpcstatus.Status{},
-				Digest: d,
-			}
-			resp.Responses[i] = rr
-			if data, err := s.readAllBlob(ctx, "cas", d); err != nil {
-				rr.Status.Code = int32(status.Code(err))
-				rr.Status.Message = err.Error()
-			} else {
-				rr.Data = data
-			}
+			resp.Responses[i] = s.batchReadBlob(ctx, &pb.BatchReadBlobsRequest_Request{Digest: d})
 			wg.Done()
-			batchBytesServed.Add(float64(d.SizeBytes))
 		}(i, d)
+	}
+	for i, r := range req.Requests {
+		size += r.Digest.SizeBytes
+		go func(i int, r *pb.BatchReadBlobsRequest_Request) {
+			resp.Responses[n + i] = s.batchReadBlob(ctx, r)
+			wg.Done()
+		}(i, r)
 	}
 	wg.Wait()
 	log.Debug("Served BatchReadBlobs request of %d blobs, total %d bytes in %s", len(req.Digests), size, time.Since(start))
 	return resp, nil
+}
+
+func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsRequest_Request) *pb.BatchReadBlobsResponse_Response {
+	r := &pb.BatchReadBlobsResponse_Response{
+		Status: &rpcstatus.Status{},
+		Digest: req.Digest,
+	}
+	if data, err := s.readAllBlob(ctx, "cas", req.Digest, req.Compressor == pb.Compressor_ZSTD); err != nil {
+		r.Status.Code = int32(status.Code(err))
+		r.Status.Message = err.Error()
+	} else {
+		r.Data = data
+		batchBytesServed.Add(float64(req.Digest.SizeBytes))
+	}
+	return r
 }
 
 func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorage_GetTreeServer) error {
@@ -515,27 +531,30 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 	return &countingReader{r: r}, nil
 }
 
-func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
+func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, compressed bool) ([]byte, error) {
 	if len(digest.Hash) < 2 {
 		return nil, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
 	} else if s.isEmpty(digest) {
 		return nil, nil
 	}
-	key := s.key(prefix, digest)
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	r, err := s.readBlob(ctx, key, 0, -1)
+	r, needCompression, err := s.readCompressed(ctx, digest, compressed, 0, -1)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
-	return ioutil.ReadAll(r)
+	data, err := ioutil.ReadAll(r)
+	if err != nil || !needCompression {
+		return data, err
+	}
+	return s.compressor.EncodeAll(data, make([]byte, 0, digest.SizeBytes)), nil
 }
 
 func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
-	if b, err := s.readAllBlob(ctx, prefix, digest); err != nil {
+	if b, err := s.readAllBlob(ctx, prefix, digest, false); err != nil {
 		return err
 	} else if err := proto.Unmarshal(b, message); err != nil {
 		return status.Errorf(codes.Unknown, "%s", err)
