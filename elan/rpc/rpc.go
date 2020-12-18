@@ -123,13 +123,13 @@ var knownBlobCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "blobs_served_total",
-	Help:      "Number of blobs served, partitioned by compressor required & used.",
-}, []string{"compressor_requested", "compressor_used"})
+	Help:      "Number of blobs served, partitioned by batching, compressor required & used.",
+}, []string{"batched", "compressor_requested", "compressor_used"})
 var blobsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "blobs_received_total",
-	Help:      "Number of blobs received, partitioned by compressor used.",
-}, []string{"compressor_used"})
+	Help:      "Number of blobs received, partitioned by batching and compressor used.",
+}, []string{"batched", "compressor_used"})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -237,7 +237,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		// The docs say that the server MAY omit inlining, even if asked. Hence we assume that if we can't find it here
 		// we might be in a sharded setup where we don't have the stdout digest, and it's better to return what we can
 		// (the client can still request the actual blob themselves).
-		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest, false); err == nil {
+		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest, false, false); err == nil {
 			ar.StdoutRaw = b
 		}
 	}
@@ -352,6 +352,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), r.Compressor == pb.Compressor_ZSTD); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
+				blobsReceived.WithLabelValues(batchLabel(true), compressorLabel(r.Compressor == pb.Compressor_ZSTD)).Inc()
 			} else {
 				log.Debug("Stored blob with digest %s", r.Digest.Hash)
 			}
@@ -399,7 +400,7 @@ func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsReques
 		Status: &rpcstatus.Status{},
 		Digest: req.Digest,
 	}
-	if data, err := s.readAllBlob(ctx, "cas", req.Digest, req.Compressor == pb.Compressor_ZSTD); err != nil {
+	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, req.Compressor == pb.Compressor_ZSTD); err != nil {
 		r.Status.Code = int32(status.Code(err))
 		r.Status.Message = err.Error()
 	} else {
@@ -444,7 +445,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, needCompression, err := s.readCompressed(ctx, digest, compressed, req.ReadOffset, req.ReadLimit)
+	r, needCompression, err := s.readCompressed(ctx, digest, false, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
@@ -465,16 +466,16 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	return err
 }
 
-func (s *server) readCompressed(ctx context.Context, digest *pb.Digest, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
+func (s *server) readCompressed(ctx context.Context, digest *pb.Digest, batched, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
 	r, err := s.readBlob(ctx, s.compressedKey("cas", digest, compressed), offset, limit)
 	if err != nil {
 		if r, err := s.readBlob(ctx, s.compressedKey("cas", digest, !compressed), offset, limit); err == nil {
-			blobsServed.WithLabelValues(compressorLabel(compressed), compressorLabel(!compressed)).Inc()
+			blobsServed.WithLabelValues(batchLabel(batched), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
 			return compressedReader(r, compressed, !compressed)
 		}
 		return nil, false, err
 	}
-	blobsServed.WithLabelValues(compressorLabel(compressed), compressorLabel(compressed)).Inc()
+	blobsServed.WithLabelValues(batchLabel(batched), compressorLabel(compressed), compressorLabel(compressed)).Inc()
 	return compressedReader(r, compressed, compressed)
 }
 
@@ -501,7 +502,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	}
 	streamBytesReceived.Add(float64(r.TotalSize))
 	log.Debug("Stored blob with hash %s", digest.Hash)
-	blobsReceived.WithLabelValues(compressorLabel(compressed)).Inc()
+	blobsReceived.WithLabelValues(batchLabel(false), compressorLabel(compressed)).Inc()
 	return srv.SendAndClose(&bs.WriteResponse{
 		CommittedSize: r.TotalSize,
 	})
@@ -531,7 +532,7 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 	return &countingReader{r: r}, nil
 }
 
-func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, compressed bool) ([]byte, error) {
+func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
 	if len(digest.Hash) < 2 {
 		return nil, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
 	} else if s.isEmpty(digest) {
@@ -541,7 +542,7 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	r, needCompression, err := s.readCompressed(ctx, digest, compressed, 0, -1)
+	r, needCompression, err := s.readCompressed(ctx, digest, batched, compressed, 0, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +555,7 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 }
 
 func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
-	if b, err := s.readAllBlob(ctx, prefix, digest, false); err != nil {
+	if b, err := s.readAllBlob(ctx, prefix, digest, false, false); err != nil {
 		return err
 	} else if err := proto.Unmarshal(b, message); err != nil {
 		return status.Errorf(codes.Unknown, "%s", err)
@@ -728,4 +729,12 @@ func compressorLabel(compressed bool) string {
 		return "zstd"
 	}
 	return "identity"
+}
+
+// batchLabel returns a label to use for Prometheus metrics to represent batching.
+func batchLabel(batched bool) string {
+	if batched {
+		return "batched"
+	}
+	return "single"
 }
