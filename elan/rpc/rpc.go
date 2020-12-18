@@ -405,6 +405,7 @@ func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsReques
 		r.Status.Message = err.Error()
 	} else {
 		r.Data = data
+		r.Compressor = req.Compressor
 		batchBytesServed.Add(float64(req.Digest.SizeBytes))
 	}
 	return r
