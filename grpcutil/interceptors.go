@@ -18,8 +18,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	// Register the compressors on the server side.
-	_ "github.com/mostynb/go-grpc-compression/zstd"
+	// Register the compressor on the server side.
 	_ "google.golang.org/grpc/encoding/gzip"
 )
 
