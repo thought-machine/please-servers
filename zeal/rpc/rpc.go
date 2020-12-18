@@ -55,7 +55,7 @@ func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parall
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
 		DialOpts:           grpcutil.DialOptions(opts.TokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true})
+	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
 	if err != nil {
 		log.Fatalf("Failed to connect to storage backend: %s", err)
 	}

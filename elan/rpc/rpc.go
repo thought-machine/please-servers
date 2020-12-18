@@ -52,30 +52,14 @@ var emptyHash = digest.Empty.Hash
 // uncompressed is a constant we use in a few places to indicate we're not compressing blobs.
 const uncompressed = false
 
-var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
+var bytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "bytes_received_total",
-})
-var bytesServed = prometheus.NewCounter(prometheus.CounterOpts{
+}, []string{"batched", "compressed"})
+var bytesServed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "bytes_served_total",
-})
-var streamBytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "elan",
-	Name:      "stream_bytes_received_total",
-})
-var streamBytesServed = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "elan",
-	Name:      "stream_bytes_served_total",
-})
-var batchBytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "elan",
-	Name:      "batch_bytes_received_total",
-})
-var batchBytesServed = prometheus.NewCounter(prometheus.CounterOpts{
-	Namespace: "elan",
-	Name:      "batch_bytes_served_total",
-})
+}, []string{"batched", "compressed"})
 var readLatencies = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "elan",
 	Name:      "read_latency_seconds",
@@ -124,7 +108,7 @@ var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "blobs_served_total",
 	Help:      "Number of blobs served, partitioned by batching, compressor required & used.",
-}, []string{"batched", "compressor_requested", "compressor_used"})
+}, []string{"batched", "compressor_used", "compressor_preferred"})
 var blobsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "blobs_received_total",
@@ -134,10 +118,6 @@ var blobsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 func init() {
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(bytesServed)
-	prometheus.MustRegister(streamBytesReceived)
-	prometheus.MustRegister(streamBytesServed)
-	prometheus.MustRegister(batchBytesReceived)
-	prometheus.MustRegister(batchBytesServed)
 	prometheus.MustRegister(readLatencies)
 	prometheus.MustRegister(writeLatencies)
 	prometheus.MustRegister(readDurations)
@@ -342,22 +322,23 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				Status: &rpcstatus.Status{},
 			}
 			resp.Responses[i] = rr
+			compressed := r.Compressor == pb.Compressor_ZSTD
 			if s.isEmpty(r.Digest) {
 				log.Debug("Ignoring empty blob in BatchUpdateBlobs")
-			} else if len(r.Data) != int(r.Digest.SizeBytes) && r.Compressor == pb.Compressor_IDENTITY {
+			} else if len(r.Data) != int(r.Digest.SizeBytes) && !compressed {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
-			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), r.Compressor == pb.Compressor_ZSTD); err != nil {
+			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), compressed); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
-				blobsReceived.WithLabelValues(batchLabel(true), compressorLabel(r.Compressor == pb.Compressor_ZSTD)).Inc()
+				blobsReceived.WithLabelValues(batchLabel(true), compressorLabel(compressed)).Inc()
 			} else {
 				log.Debug("Stored blob with digest %s", r.Digest.Hash)
 			}
 			wg.Done()
-			batchBytesReceived.Add(float64(r.Digest.SizeBytes))
+			bytesReceived.WithLabelValues(batchLabel(true), compressorLabel(compressed)).Add(float64(r.Digest.SizeBytes))
 		}(i, r)
 	}
 	wg.Wait()
@@ -400,13 +381,14 @@ func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsReques
 		Status: &rpcstatus.Status{},
 		Digest: req.Digest,
 	}
-	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, req.Compressor == pb.Compressor_ZSTD); err != nil {
+	compressed := req.Compressor == pb.Compressor_ZSTD
+	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, compressed); err != nil {
 		r.Status.Code = int32(status.Code(err))
 		r.Status.Message = err.Error()
 	} else {
 		r.Data = data
 		r.Compressor = req.Compressor
-		batchBytesServed.Add(float64(req.Digest.SizeBytes))
+		bytesServed.WithLabelValues(batchLabel(true), compressorLabel(compressed)).Add(float64(req.Digest.SizeBytes))
 	}
 	return r
 }
@@ -439,10 +421,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
 	} else if req.ReadLimit == 0 {
 		req.ReadLimit = -1
-		streamBytesServed.Add(float64(digest.SizeBytes - req.ReadOffset))
+		bytesServed.WithLabelValues(batchLabel(false), compressorLabel(compressed)).Add(float64(digest.SizeBytes - req.ReadOffset))
 	} else if req.ReadOffset+req.ReadLimit > digest.SizeBytes {
 		req.ReadLimit = digest.SizeBytes - req.ReadOffset
-		streamBytesServed.Add(float64(req.ReadLimit))
+		bytesServed.WithLabelValues(batchLabel(false), compressorLabel(compressed)).Add(float64(req.ReadLimit))
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
@@ -506,7 +488,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	if err := s.writeBlob(ctx, "cas", digest, r, compressed); err != nil {
 		return err
 	}
-	streamBytesReceived.Add(float64(r.TotalSize))
+	bytesReceived.WithLabelValues(batchLabel(false), compressorLabel(compressed)).Add(float64(r.TotalSize))
 	log.Debug("Stored blob with hash %s", digest.Hash)
 	blobsReceived.WithLabelValues(batchLabel(false), compressorLabel(compressed)).Inc()
 	return srv.SendAndClose(&bs.WriteResponse{
@@ -535,7 +517,7 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 		return nil, err
 	}
 	s.markKnownBlob(key)
-	return &countingReader{r: r}, nil
+	return r, nil
 }
 
 func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
@@ -620,9 +602,7 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 			r = newVerifyingReader(r, digest.Hash)
 		}
 	}
-	n, err := io.Copy(wr, r)
-	bytesReceived.Add(float64(n))
-	if err != nil {
+	if _, err := io.Copy(wr, r); err != nil {
 		cancel() // ensure this happens before w.Close()
 		return err
 	}
@@ -712,21 +692,6 @@ func (r *bytestreamWriter) Write(buf []byte) (int, error) {
 		return 0, err
 	}
 	return len(buf), nil
-}
-
-// A countingReader wraps a ReadCloser and counts bytes read from it.
-type countingReader struct {
-	r io.ReadCloser
-}
-
-func (r *countingReader) Read(buf []byte) (int, error) {
-	n, err := r.r.Read(buf)
-	bytesServed.Add(float64(n))
-	return n, err
-}
-
-func (r *countingReader) Close() error {
-	return r.r.Close()
 }
 
 // compressorLabel returns a label to use for Prometheus metrics to represent compression.

@@ -81,7 +81,7 @@ func main() {
 		NoSecurity:         !opts.Storage.TLS,
 		TransportCredsOnly: opts.Storage.TLS,
 		DialOpts:           grpcutil.DialOptions(""),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true})
+	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
 	if err != nil {
 		log.Fatalf("Failed to contact CAS server: %s", err)
 	}

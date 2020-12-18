@@ -220,7 +220,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		NoSecurity:         !secureStorage,
 		TransportCredsOnly: secureStorage,
 		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true})
+	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
 	if err != nil {
 		return nil, err
 	}
