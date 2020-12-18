@@ -17,8 +17,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
-
-	"github.com/thought-machine/please-servers/grpcutil"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -279,5 +277,6 @@ func compressor(filename string) pb.Compressor_Value {
 // shouldCompress returns true if the given filename should be compressed.
 func shouldCompress(filename string) bool {
 	return !(strings.HasSuffix(filename, ".zip") || strings.HasSuffix(filename, ".pex") ||
-		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz"))
+		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz") ||
+		strings.HasSuffix(filename, ".bz2") || strings.HasSuffix(filename, ".xz"))
 }
