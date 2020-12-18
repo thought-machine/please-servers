@@ -721,13 +721,11 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	entries := make([]*uploadinfo.Entry, 0, len(m))
 	for _, e := range m {
+		e.Compressor = compressor(e.Path)
 		entries = append(entries, e)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if !shouldCompressAll(cmd.OutputPaths) {
-		ctx = grpcutil.SkipCompression(ctx)
-	}
 	_, _, err = w.client.UploadIfMissing(ctx, entries...)
 
 	ar.OutputFiles = ar2.OutputFiles

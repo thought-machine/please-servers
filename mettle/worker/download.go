@@ -202,9 +202,6 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if !shouldCompress(filename) {
-		ctx = grpcutil.SkipCompression(ctx)
-	}
 	if _, err := w.readBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
