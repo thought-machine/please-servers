@@ -26,6 +26,7 @@ import (
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
@@ -142,6 +143,7 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
+	dec, _ := zstd.NewReader(nil)
 	srv := &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"), "zstfile://"),
@@ -150,6 +152,7 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 		limiter:        make(chan struct{}, parallelism),
 		dirCache:       mustCache(maxDirCacheSize),
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
+		decompressor:   dec,
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -183,6 +186,7 @@ type server struct {
 	limiter                  chan struct{}
 	maxCacheItemSize         int64
 	dirCache, knownBlobCache *ristretto.Cache
+	decompressor             *zstd.Decoder
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -327,7 +331,10 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
-			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data)); err != nil {
+			} else if err := s.validateCompressedBlob(r.Digest, r.Data); err != nil {
+				rr.Status.Code = int32(codes.InvalidArgument)
+				rr.Status.Message = err.Error()
+			} else if err := s.writeCompressedBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), r.Compressor); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 			} else {
@@ -518,6 +525,27 @@ func (s *server) key(prefix string, digest *pb.Digest) string {
 
 func (s *server) labelKey(label string) string {
 	return path.Join("rec", strings.Replace(strings.TrimLeft(label, "/"), ":", "/", -1))
+}
+
+func (s *server) validateCompressedBlob(expected *pb.Digest, data []byte) error {
+	decompressed, err := s.decompressor.DecodeAll(data, make([]byte, expected.SizeBytes))
+	if err != nil {
+		return err
+	}
+	h := sha256.Sum256(decompressed)
+	if actual := hex.EncodeToString(h[:]); expected.Hash != actual {
+		return fmt.Errorf("Mismatching hashes: got %s, should be %s", actual, expected.Hash)
+	} else if len(decompressed) != int(expected.SizeBytes) {
+		return fmt.Errorf("Mismatching sizes for %s; got %d, expected %d", expected.Hash, len(decompressed), expected.SizeBytes)
+	}
+	return nil
+}
+
+func (s *server) writeCompressedBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressor pb.Compressor_Value) error {
+	if compressor == pb.Compressor_IDENTITY {
+		return s.writeBlob(ctx, prefix, digest, r)
+	}
+	return s.writeBlob(ctx, "zstd/" + prefix, digest, r)
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
