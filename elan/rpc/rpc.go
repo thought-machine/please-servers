@@ -344,7 +344,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			resp.Responses[i] = rr
 			if s.isEmpty(r.Digest) {
 				log.Debug("Ignoring empty blob in BatchUpdateBlobs")
-			} else if len(r.Data) != int(r.Digest.SizeBytes) {
+			} else if len(r.Data) != int(r.Digest.SizeBytes) && r.Compressor == pb.Compressor_IDENTITY {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
@@ -497,8 +497,6 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	r := &bytestreamReader{stream: srv, buf: req.Data}
 	if err := s.writeBlob(ctx, "cas", digest, r, compressed); err != nil {
 		return err
-	} else if r.TotalSize != digest.SizeBytes {
-		return status.Errorf(codes.InvalidArgument, "invalid digest size (digest: %d, wrote: %d)", digest.SizeBytes, r.TotalSize)
 	}
 	streamBytesReceived.Add(float64(r.TotalSize))
 	log.Debug("Stored blob with hash %s", digest.Hash)
