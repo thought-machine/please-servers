@@ -205,13 +205,21 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	if !shouldCompress(filename) {
 		ctx = grpcutil.SkipCompression(ctx)
 	}
-	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
+	if _, err := w.readBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
 	}
 	w.fileCache.Store(w.dir, filename, file.Digest.Hash)
 	return nil
+}
+
+// readBlobToFile wraps around the SDK's ReadBlobToFile(Uncompressed) methods.
+func (w *worker) readBlobToFile(ctx context.Context, dg sdkdigest.Digest, filename string) (int64, error) {
+	if shouldCompress(filename) {
+		return w.client.ReadBlobToFile(ctx, dg, filename)
+	}
+	return w.client.ReadBlobToFileUncompressed(ctx, dg, filename)
 }
 
 // writeFile writes a blob to disk.
