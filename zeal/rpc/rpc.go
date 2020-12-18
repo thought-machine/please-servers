@@ -175,7 +175,8 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if s.shouldSkipCompression(blob) {
-		ctx = grpcutil.SkipCompression(ctx)
+		digest, err := s.storageClient.WriteBlobUncompressed(ctx, blob)
+		return digest.ToProto(), err
 	}
 	digest, err := s.storageClient.WriteBlob(ctx, blob)
 	return digest.ToProto(), err
