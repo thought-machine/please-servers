@@ -6,8 +6,6 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,8 +18,6 @@ import (
 	"time"
 
 	// Necessary to register providers that we'll use.
-	_ "github.com/thought-machine/please-servers/elan/gzfile"
-	_ "github.com/thought-machine/please-servers/elan/zstfile"
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
@@ -52,6 +48,9 @@ var log = cli.MustGetLogger()
 
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
+
+// uncompressed is a constant we use in a few places to indicate we're not compressing blobs.
+const uncompressed = false
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
@@ -121,6 +120,16 @@ var knownBlobCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "known_blob_cache_misses_total",
 })
+var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "blobs_served_total",
+	Help:      "Number of blobs served, partitioned by compressor required & used.",
+}, []string{"compressor_requested", "compressor_used"})
+var blobsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "blobs_received_total",
+	Help:      "Number of blobs received, partitioned by compressor used.",
+}, []string{"compressor_used"})
 
 func init() {
 	prometheus.MustRegister(bytesReceived)
@@ -139,17 +148,19 @@ func init() {
 	prometheus.MustRegister(dirCacheMisses)
 	prometheus.MustRegister(knownBlobCacheHits)
 	prometheus.MustRegister(knownBlobCacheMisses)
+	prometheus.MustRegister(blobsServed)
+	prometheus.MustRegister(blobsReceived)
 }
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
 	dec, _ := zstd.NewReader(nil)
 	srv := &server{
-		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"), "zstfile://"),
-		isFileStorage:  strings.HasPrefix(storage, "file://") || strings.HasPrefix(storage, "gzfile://") || strings.HasPrefix(storage, "zstfile://"),
-		bucket:         mustOpenStorage(storage),
-		limiter:        make(chan struct{}, parallelism),
+		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
+		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
+		isFileStorage: strings.HasPrefix(storage, "file://"),
+		bucket:        mustOpenStorage(storage),
+		limiter:       make(chan struct{}, parallelism),
 		dirCache:       mustCache(maxDirCacheSize),
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		decompressor:   dec,
@@ -200,6 +211,10 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				UpdateEnabled: false,
 			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
+			SupportedCompressor: []pb.Compressor_Value{
+				pb.Compressor_IDENTITY,
+				pb.Compressor_ZSTD,
+			},
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1},
@@ -334,7 +349,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if err := s.validateCompressedBlob(r.Digest, r.Data); err != nil {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = err.Error()
-			} else if err := s.writeCompressedBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), r.Compressor); err != nil {
+			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), r.Compressor == pb.Compressor_ZSTD); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 			} else {
@@ -401,7 +416,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
 	defer cancel()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	digest, err := s.bytestreamBlobName(req.ResourceName)
+	digest, compressed, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
 	}
@@ -416,27 +431,35 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, err := s.readBlob(ctx, s.key("cas", digest), req.ReadOffset, req.ReadLimit)
+	r, needCompression, err := s.readCompressed(ctx, digest, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	buf := make([]byte, 64*1024)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			if err := srv.Send(&bs.ReadResponse{Data: buf[:n]}); err != nil {
-				return err
-			}
-		}
-		if err != nil {
-			if err == io.EOF {
-				log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
-				return nil
-			}
-			return err
-		}
+	var w io.Writer = &bytestreamWriter{stream: srv}
+	if needCompression {
+		zw := zstd.NewWriterLevel(w, zstd.BestSpeed)
+		defer zw.Close()
+		w = zw
 	}
+	_, err = io.Copy(w, r)
+	if err == nil {
+		log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
+	}
+	return err
+}
+
+func (s *server) readCompressed(ctx context.Context, digest *pb.Digest, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
+	r, err := s.readBlob(ctx, s.compressedKey("cas", digest, compressed), offset, limit)
+	if err != nil {
+		if r, err := s.readBlob(ctx, s.compressedKey("cas", digest, !compressed), offset, limit); err == nil {
+			blobsServed.WithLabelValues(compressorLabel(compressed), compressorLabel(!compressed)).Inc()
+			return compressedReader(r, compressed, !compressed)
+		}
+		return nil, false, err
+	}
+	blobsServed.WithLabelValues(compressorLabel(compressed), compressorLabel(compressed)).Inc()
+	return compressedReader(r, compressed, compressed)
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
@@ -450,18 +473,19 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	} else if req.ResourceName == "" {
 		return status.Errorf(codes.InvalidArgument, "missing ResourceName")
 	}
-	digest, err := s.bytestreamBlobName(req.ResourceName)
+	digest, compressed, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
 	}
 	r := &bytestreamReader{stream: srv, buf: req.Data}
-	if err := s.writeBlob(ctx, "cas", digest, r); err != nil {
+	if err := s.writeBlob(ctx, "cas", digest, r, compressed); err != nil {
 		return err
 	} else if r.TotalSize != digest.SizeBytes {
 		return status.Errorf(codes.InvalidArgument, "invalid digest size (digest: %d, wrote: %d)", digest.SizeBytes, r.TotalSize)
 	}
 	streamBytesReceived.Add(float64(r.TotalSize))
 	log.Debug("Stored blob with hash %s", digest.Hash)
+	blobsReceived.WithLabelValues(compressorLabel(compressed)).Inc()
 	return srv.SendAndClose(&bs.WriteResponse{
 		CommittedSize: r.TotalSize,
 	})
@@ -519,8 +543,17 @@ func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest 
 	return nil
 }
 
+// key returns the key for storing a blob. It's always uncompressed.
 func (s *server) key(prefix string, digest *pb.Digest) string {
 	return fmt.Sprintf("%s/%c%c/%s", prefix, digest.Hash[0], digest.Hash[1], digest.Hash)
+}
+
+// compressedKey returns a key for storing a blob, optionally compressed.
+func (s *server) compressedKey(prefix string, digest *pb.Digest, compressed bool) string {
+	if compressed {
+		return s.key("zstd_"+prefix, digest)
+	}
+	return s.key(prefix, digest)
 }
 
 func (s *server) labelKey(label string) string {
@@ -568,28 +601,22 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		return err
 	}
 	defer w.Close()
-	var buf bytes.Buffer
 	var wc io.WriteCloser = w
 	var wr io.Writer = w
-	if digest.SizeBytes < s.maxCacheItemSize {
-		buf.Grow(int(digest.SizeBytes))
-		wr = io.MultiWriter(w, &buf)
-	}
-	h := sha256.New()
 	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.
-		wr = io.MultiWriter(wr, h)
+		if compressed {
+			zr := zstd.NewReader(r)
+			defer zr.Close()
+			r = newVerifyingReader(zr, digest.Hash)
+		} else {
+			r = newVerifyingReader(r, digest.Hash)
+		}
 	}
 	n, err := io.Copy(wr, r)
 	bytesReceived.Add(float64(n))
 	if err != nil {
 		cancel() // ensure this happens before w.Close()
 		return err
-	}
-	if prefix == "cas" {
-		if receivedDigest := hex.EncodeToString(h.Sum(nil)); receivedDigest != digest.Hash {
-			cancel()
-			return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, receivedDigest)
-		}
 	}
 	if err := wc.Close(); err != nil {
 		return err
@@ -605,20 +632,21 @@ func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Dig
 	if err != nil {
 		return err
 	}
-	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b))
+	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b), uncompressed)
 }
 
-// bytestreamBlobName returns the digest corresponding to a bytestream resource name.
-func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, error) {
+// bytestreamBlobName returns the digest corresponding to a bytestream resource name
+// and whether or not it is compressed (the digest is always uncompressed).
+func (s *server) bytestreamBlobName(bytestream string) (*pb.Digest, bool, error) {
 	matches := s.bytestreamRe.FindStringSubmatch(bytestream)
 	if matches == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
+		return nil, false, status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
 	}
-	size, _ := strconv.Atoi(matches[2])
+	size, _ := strconv.Atoi(matches[3])
 	return &pb.Digest{
-		Hash:      matches[1],
+		Hash:      matches[2],
 		SizeBytes: int64(size),
-	}, nil
+	}, matches[1] == "compressed-blobs/zstd", nil
 }
 
 // bufferSize returns the buffer size for a digest, or a default if it's too big.
@@ -666,6 +694,18 @@ func (r *bytestreamReader) read(buf []byte) (int, error) {
 	}
 }
 
+// A bytestreamWriter wraps an outgoing byte stream into an io.Writer
+type bytestreamWriter struct {
+	stream bs.ByteStream_ReadServer
+}
+
+func (r *bytestreamWriter) Write(buf []byte) (int, error) {
+	if err := r.stream.Send(&bs.ReadResponse{Data: buf}); err != nil {
+		return 0, err
+	}
+	return len(buf), nil
+}
+
 // A countingReader wraps a ReadCloser and counts bytes read from it.
 type countingReader struct {
 	r io.ReadCloser
@@ -679,4 +719,12 @@ func (r *countingReader) Read(buf []byte) (int, error) {
 
 func (r *countingReader) Close() error {
 	return r.r.Close()
+}
+
+// compressorLabel returns a label to use for Prometheus metrics to represent compression.
+func compressorLabel(compressed bool) string {
+	if compressed {
+		return "zstd"
+	}
+	return "identity"
 }
