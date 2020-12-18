@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 
-	"github.com/DataDog/zstd"
+	"github.com/klauspost/compress/zstd"
 	"gocloud.dev/blob"
 )
 
@@ -86,7 +87,11 @@ func compressedReader(r io.ReadCloser, needCompression, isCompressed bool) (io.R
 	if needCompression == isCompressed {
 		return r, false, nil // stream back bytes directly
 	} else if isCompressed {
-		return &doubleCloser{c: r, r: zstd.NewReader(r)}, false, nil
+		zr, err := zstd.NewReader(r)
+		if err != nil {
+			return nil, false, err
+		}
+		return &doubleCloser{c: r, r: ioutil.NopCloser(zr)}, false, nil
 	}
 	return r, true, nil
 }

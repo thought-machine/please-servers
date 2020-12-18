@@ -346,9 +346,6 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
-			} else if err := s.validateCompressedBlob(r.Digest, r.Data); err != nil {
-				rr.Status.Code = int32(codes.InvalidArgument)
-				rr.Status.Message = err.Error()
 			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), r.Compressor == pb.Compressor_ZSTD); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
@@ -438,7 +435,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	defer r.Close()
 	var w io.Writer = &bytestreamWriter{stream: srv}
 	if needCompression {
-		zw := zstd.NewWriterLevel(w, zstd.BestSpeed)
+		zw, err := zstd.NewWriter(w)
+		if err != nil {
+			return err
+		}
 		defer zw.Close()
 		w = zw
 	}
@@ -560,28 +560,7 @@ func (s *server) labelKey(label string) string {
 	return path.Join("rec", strings.Replace(strings.TrimLeft(label, "/"), ":", "/", -1))
 }
 
-func (s *server) validateCompressedBlob(expected *pb.Digest, data []byte) error {
-	decompressed, err := s.decompressor.DecodeAll(data, make([]byte, expected.SizeBytes))
-	if err != nil {
-		return err
-	}
-	h := sha256.Sum256(decompressed)
-	if actual := hex.EncodeToString(h[:]); expected.Hash != actual {
-		return fmt.Errorf("Mismatching hashes: got %s, should be %s", actual, expected.Hash)
-	} else if len(decompressed) != int(expected.SizeBytes) {
-		return fmt.Errorf("Mismatching sizes for %s; got %d, expected %d", expected.Hash, len(decompressed), expected.SizeBytes)
-	}
-	return nil
-}
-
-func (s *server) writeCompressedBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressor pb.Compressor_Value) error {
-	if compressor == pb.Compressor_IDENTITY {
-		return s.writeBlob(ctx, prefix, digest, r)
-	}
-	return s.writeBlob(ctx, "zstd/" + prefix, digest, r)
-}
-
-func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader) error {
+func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {
 	key := s.key(prefix, digest)
 	if s.isEmpty(digest) || (prefix == "cas" && s.blobExists(ctx, key)) {
 		// Read and discard entire content; there is no need to update.
@@ -605,7 +584,10 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	var wr io.Writer = w
 	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.
 		if compressed {
-			zr := zstd.NewReader(r)
+			zr, err := zstd.NewReader(r)
+			if err != nil {
+				return err
+			}
 			defer zr.Close()
 			r = newVerifyingReader(zr, digest.Hash)
 		} else {
