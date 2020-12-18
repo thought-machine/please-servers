@@ -445,7 +445,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, needCompression, err := s.readCompressed(ctx, digest, false, compressed, req.ReadOffset, req.ReadLimit)
+	r, needCompression, err := s.readCompressed(ctx, "cas", digest, false, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
@@ -466,10 +466,17 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	return err
 }
 
-func (s *server) readCompressed(ctx context.Context, digest *pb.Digest, batched, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
-	r, err := s.readBlob(ctx, s.compressedKey("cas", digest, compressed), offset, limit)
+func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
+	if prefix != "cas" {
+		if compressed {
+			return nil, false, fmt.Errorf("Attempted to do a compressed read for non-CAS prefix %s", prefix)  // This is a programming error and shouldn't happen.
+		}
+		r, err := s.readBlob(ctx, s.key(prefix, digest), offset, limit)
+		return r, false, err
+	}
+	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
 	if err != nil {
-		if r, err := s.readBlob(ctx, s.compressedKey("cas", digest, !compressed), offset, limit); err == nil {
+		if r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit); err == nil {
 			blobsServed.WithLabelValues(batchLabel(batched), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
 			return compressedReader(r, compressed, !compressed)
 		}
@@ -540,7 +547,7 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	r, needCompression, err := s.readCompressed(ctx, digest, batched, compressed, 0, -1)
+	r, needCompression, err := s.readCompressed(ctx, prefix, digest, batched, compressed, 0, -1)
 	if err != nil {
 		return nil, err
 	}
