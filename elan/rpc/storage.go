@@ -2,10 +2,6 @@ package rpc
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 
@@ -19,6 +15,7 @@ import (
 type bucket interface {
 	NewRangeReader(ctx context.Context, key string, offset, length int64, opts *blob.ReaderOptions) (io.ReadCloser, error)
 	NewWriter(ctx context.Context, key string, opts *blob.WriterOptions) (io.WriteCloser, error)
+	WriteAll(ctx context.Context, key string, data []byte) error
 	Exists(ctx context.Context, key string) (bool, error)
 	List(opts *blob.ListOptions) *blob.ListIterator
 	Delete(ctx context.Context, key string, hard bool) error
@@ -44,6 +41,10 @@ func (a *adapter) NewWriter(ctx context.Context, key string, opts *blob.WriterOp
 	return a.bucket.NewWriter(ctx, key, opts)
 }
 
+func (a *adapter) WriteAll(ctx context.Context, key string, data []byte) error {
+	return a.bucket.WriteAll(ctx, key, data, nil)
+}
+
 func (a *adapter) Exists(ctx context.Context, key string) (bool, error) {
 	return a.bucket.Exists(ctx, key)
 }
@@ -54,32 +55,6 @@ func (a *adapter) List(opts *blob.ListOptions) *blob.ListIterator {
 
 func (a *adapter) Delete(ctx context.Context, key string, hard bool) error {
 	return a.bucket.Delete(ctx, key) // this is always a 'hard' delete
-}
-
-// A verifyingReader verifies that the complete content read matches some expected hash.
-type verifyingReader struct {
-	expected string
-	h        hash.Hash
-	r        io.Reader
-}
-
-func newVerifyingReader(r io.Reader, expectedHash string) io.Reader {
-	return &verifyingReader{
-		expected: expectedHash,
-		h:        sha256.New(),
-		r:        r,
-	}
-}
-
-func (r *verifyingReader) Read(p []byte) (int, error) {
-	n, err := r.r.Read(p)
-	r.h.Write(p[:n])
-	if err != io.EOF {
-		return n, err
-	} else if h := hex.EncodeToString(r.h.Sum(nil)); h != r.expected {
-		return n, fmt.Errorf("Rejecting write of %s; actual received digest was %s", r.expected, h)
-	}
-	return n, err
 }
 
 // compressedReader returns a reader wrapped in a decompressor or compressor as needed.

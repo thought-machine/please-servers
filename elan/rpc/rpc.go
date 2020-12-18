@@ -6,6 +6,8 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -238,7 +240,11 @@ func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionRes
 		log.Debug("Returning existing action result for UpdateActionResult request for %s", req.ActionDigest.Hash)
 		return ar, nil
 	}
-	return req.ActionResult, s.writeMessage(ctx, "ac", req.ActionDigest, req.ActionResult)
+	b, err := proto.Marshal(req.ActionResult)
+	if err != nil {
+		return req.ActionResult, err
+	}
+	return req.ActionResult, s.bucket.WriteAll(ctx, s.key("ac", req.ActionDigest), b)
 }
 
 func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsRequest) (*pb.FindMissingBlobsResponse, error) {
@@ -330,7 +336,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
-			} else if err := s.writeBlob(ctx, "cas", r.Digest, bytes.NewReader(r.Data), compressed); err != nil {
+			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 				blobsReceived.WithLabelValues(batchLabel(true), compressorLabel(compressed)).Inc()
@@ -569,8 +575,11 @@ func (s *server) labelKey(label string) string {
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {
+	if compressed {
+		prefix = "zstd_cas"
+	}
 	key := s.key(prefix, digest)
-	if s.isEmpty(digest) || (prefix == "cas" && s.blobExists(ctx, key)) {
+	if s.isEmpty(digest) || s.blobExists(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
 		// this seems like the most compatible way.
@@ -588,39 +597,44 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		return err
 	}
 	defer w.Close()
-	var wc io.WriteCloser = w
-	var wr io.Writer = w
-	if prefix == "cas" { // The action cache does not have contents equivalent to their digest.
-		if compressed {
-			zr, err := zstd.NewReader(r)
-			if err != nil {
-				return err
-			}
-			defer zr.Close()
-			r = newVerifyingReader(zr, digest.Hash)
-		} else {
-			r = newVerifyingReader(r, digest.Hash)
+	tr := io.TeeReader(r, w)
+	r = tr
+	h := sha256.New()
+	if compressed {
+		zr, err := zstd.NewReader(tr)
+		if err != nil {
+			return err
 		}
+		defer zr.Close()
+		r = zr
 	}
-	if _, err := io.Copy(wr, r); err != nil {
+	if _, err := io.Copy(h, r); err != nil {
 		cancel() // ensure this happens before w.Close()
 		return err
+	} else if actual := hex.EncodeToString(h.Sum(nil)); actual != digest.Hash {
+		return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, actual)
 	}
-	if err := wc.Close(); err != nil {
+	if err := w.Close(); err != nil {
 		return err
 	}
 	s.markKnownBlob(key)
 	return nil
 }
 
-func (s *server) writeMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
-	start := time.Now()
-	defer writeDurations.Observe(time.Since(start).Seconds())
-	b, err := proto.Marshal(message)
-	if err != nil {
-		return err
+func (s *server) writeAll(ctx context.Context, digest *pb.Digest, data []byte, compressed bool) error {
+	canonical := data
+	if compressed {
+		decompressed, err := s.decompressor.DecodeAll(canonical, make([]byte, 0, digest.SizeBytes))
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "Invalid zstd data: %s", err)
+		}
+		canonical = decompressed
 	}
-	return s.writeBlob(ctx, prefix, digest, bytes.NewReader(b), uncompressed)
+	h := sha256.Sum256(canonical)
+	if actual := hex.EncodeToString(h[:]); actual != digest.Hash {
+		return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, actual)
+	}
+	return s.bucket.WriteAll(ctx, s.compressedKey("cas", digest, compressed), data)
 }
 
 // bytestreamBlobName returns the digest corresponding to a bytestream resource name
