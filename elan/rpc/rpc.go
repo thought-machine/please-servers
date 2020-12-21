@@ -140,7 +140,7 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	srv := &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
+		storageRoot:    strings.TrimPrefix(storage, "file://"),
 		isFileStorage:  strings.HasPrefix(storage, "file://"),
 		bucket:         mustOpenStorage(storage),
 		limiter:        make(chan struct{}, parallelism),
