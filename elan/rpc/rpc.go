@@ -576,10 +576,7 @@ func (s *server) labelKey(label string) string {
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {
-	if compressed {
-		prefix = "zstd_cas"
-	}
-	key := s.key(prefix, digest)
+	key := s.compressedKey(prefix, digest, compressed)
 	if s.isEmpty(digest) || s.blobExists(ctx, key) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
