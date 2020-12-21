@@ -200,6 +200,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				pb.Compressor_IDENTITY,
 				pb.Compressor_ZSTD,
 			},
+			BatchCompression: true,
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1},
