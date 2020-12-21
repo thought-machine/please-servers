@@ -17,8 +17,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
-
-	"github.com/thought-machine/please-servers/grpcutil"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -163,36 +161,33 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	defer func() { <-w.limiter }()
 
 	log.Debug("Downloading batch of %d files...", len(filenames))
-	digests := make([]*pb.Digest, 0, len(filenames))
+	digests := make([]sdkdigest.Digest, 0, len(filenames))
+	compressors := make([]pb.Compressor_Value, 0, len(filenames))
 	digestToFilenames := make(map[string][]string, len(filenames))
 	for _, f := range filenames {
 		d := files[f].Digest
 		filenames, present := digestToFilenames[d.Hash]
 		if !present {
-			digests = append(digests, d)
+			digests = append(digests, sdkdigest.NewFromProtoUnvalidated(d))
+			compressors = append(compressors, w.compressor(f, d.SizeBytes))
 		}
 		digestToFilenames[d.Hash] = append(filenames, f)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	resp, err := w.client.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
-		InstanceName: w.client.InstanceName,
-		Digests:      digests,
-	})
+	responses, err := w.client.BatchDownloadCompressedBlobs(ctx, digests, compressors)
 	if err != nil {
 		return err
 	}
-	for _, r := range resp.Responses {
-		if r.Status.Code != int32(codes.OK) {
-			return grpcstatus.Errorf(codes.Code(r.Status.Code), "Error fetching %s: %s", r.Digest.Hash, r.Status.Message)
-		} else if filenames, present := digestToFilenames[r.Digest.Hash]; !present {
-			return grpcstatus.Errorf(codes.InvalidArgument, "Unknown digest %s in response", r.Digest.Hash)
+	for dg, data := range responses {
+		if filenames, present := digestToFilenames[dg.Hash]; !present {
+			return grpcstatus.Errorf(codes.InvalidArgument, "Unknown digest %s in response", dg.Hash)
 			// The below isn't *quite* right since it assumes file modes are consistent across all files with a matching
 			// digest, which isn't actually what the protocol says....
-		} else if err := w.writeFiles(filenames, r.Data, files[filenames[0]]); err != nil {
+		} else if err := w.writeFiles(filenames, data, files[filenames[0]]); err != nil {
 			return err
 		}
-		w.cache.Set(r.Digest.Hash, r.Data, int64(len(r.Data)))
+		w.cache.Set(dg.Hash, data, int64(len(data)))
 	}
 	return nil
 }
@@ -205,16 +200,21 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	if !shouldCompress(filename) {
-		ctx = grpcutil.SkipCompression(ctx)
-	}
-	if _, err := w.client.ReadBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
+	if _, err := w.readBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
 	}
 	w.fileCache.Store(w.dir, filename, file.Digest.Hash)
 	return nil
+}
+
+// readBlobToFile wraps around the SDK's ReadBlobToFile(Uncompressed) methods.
+func (w *worker) readBlobToFile(ctx context.Context, dg sdkdigest.Digest, filename string) (int64, error) {
+	if shouldCompress(filename) {
+		return w.client.ReadBlobToFile(ctx, dg, filename)
+	}
+	return w.client.ReadBlobToFileUncompressed(ctx, dg, filename)
 }
 
 // writeFile writes a blob to disk.
@@ -266,18 +266,20 @@ func fileMode(isExecutable bool) os.FileMode {
 	return 0444
 }
 
+// compressor returns the compressor to use for a given filename
+func (w *worker) compressor(filename string, size int64) pb.Compressor_Value {
+	threshold := int64(w.client.CompressedBytestreamThreshold)
+	if threshold < 0 || !w.batchCompression {
+		return pb.Compressor_IDENTITY
+	} else if size >= threshold && shouldCompress(filename) {
+		return pb.Compressor_ZSTD
+	}
+	return pb.Compressor_IDENTITY
+}
+
 // shouldCompress returns true if the given filename should be compressed.
 func shouldCompress(filename string) bool {
 	return !(strings.HasSuffix(filename, ".zip") || strings.HasSuffix(filename, ".pex") ||
-		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz"))
-}
-
-// shouldCompressAll returns true if all of the given filenames should be compressed.
-func shouldCompressAll(filenames []string) bool {
-	for _, f := range filenames {
-		if shouldCompress(f) {
-			return true
-		}
-	}
-	return false
+		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz") ||
+		strings.HasSuffix(filename, ".bz2") || strings.HasSuffix(filename, ".xz"))
 }

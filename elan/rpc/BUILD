@@ -1,10 +1,11 @@
 go_library(
     name = "rpc",
-    srcs = glob(["*.go"]),
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
     visibility = ["//elan/..."],
     deps = [
-        "//elan/gzfile",
-        "//elan/zstfile",
         "//grpcutil",
         "//proto:purity",
         "//third_party/go:bytestream",
@@ -17,6 +18,7 @@ go_library(
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:ristretto",
         "//third_party/go:rpcstatus",
+        "//third_party/go:zstd",
         "//third_party/go/gocloud",
         "//third_party/go/gocloud:api",
         "//third_party/go/prometheus",

@@ -128,17 +128,17 @@ go_get(
 
 go_get(
     name = "protobuf",
-    get = "github.com/golang/protobuf/...",
-    revision = "v1.4.2",
     exported_deps = [
         ":golang-protobuf",
     ],
-    deps = [
-        ":golang-protobuf",
-    ],
+    get = "github.com/golang/protobuf/...",
+    revision = "v1.4.2",
     strip = [
         "proto/proto3_proto",
         "conformance",
+    ],
+    deps = [
+        ":golang-protobuf",
     ],
 )
 
@@ -238,8 +238,8 @@ go_get(
 go_get(
     name = "cli-init",
     get = "github.com/peterebden/go-cli-init/v2",
-    revision = "v2.0.1",
     module_major_version = "v2",
+    revision = "v2.0.1",
     deps = [
         ":go-flags",
         ":humanize",
@@ -251,7 +251,8 @@ go_get(
 go_get(
     name = "remote-apis",
     get = "github.com/bazelbuild/remote-apis/build/...",
-    revision = "9e72daff42c941baaf43a4c370e2607a984c58a7",
+    repo = "github.com/peterebden/remote-apis",
+    revision = "5306a2d66a1b879350f1a474cc639d569953fb48",
     deps = [
         ":annotations",
         ":grpc",
@@ -265,7 +266,7 @@ go_get(
     name = "remote-apis-sdks",
     get = "github.com/bazelbuild/remote-apis-sdks/go/...",
     repo = "github.com/peterebden/remote-apis-sdks",
-    revision = "42404d9c04bba51a27bc8cf1d3f244f95233c2f5",
+    revision = "566de795243cec8873566ad913dcb57747736530",
     deps = [
         ":annotations",
         ":bytestream",
@@ -438,8 +439,8 @@ go_get(
     get = "github.com/hashicorp/go-hclog",
     revision = "v0.12.0",
     deps = [
-        ":isatty",
         ":color",
+        ":isatty",
     ],
 )
 
@@ -485,9 +486,9 @@ go_get(
     get = "github.com/thought-machine/http-admin",
     revision = "v1.1.0",
     deps = [
+        ":logging",
         ":mux",
         ":net",
-        ":logging",
         "//third_party/go/prometheus",
     ],
 )
@@ -517,16 +518,6 @@ go_get(
 )
 
 go_get(
-    name = "go-grpc-compression",
-    get = "github.com/mostynb/go-grpc-compression/zstd",
-    revision = "v1.1.2",
-    deps = [
-        ":zstd",
-        ":grpc",
-    ],
-)
-
-go_get(
     name = "zstd",
     get = "github.com/klauspost/compress",
     install = [
@@ -536,4 +527,14 @@ go_get(
         "zstd/...",
     ],
     revision = "v1.11.0",
+)
+
+go_get(
+    name = "go-grpc-compression",
+    get = "github.com/mostynb/go-grpc-compression/zstd",
+    revision = "v1.1.2",
+    deps = [
+        ":grpc",
+        ":zstd",
+    ],
 )
