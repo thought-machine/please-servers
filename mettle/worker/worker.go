@@ -224,6 +224,13 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	caps, err := client.GetCapabilities(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -234,21 +241,22 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	}
 
 	w := &worker{
-		requests:        common.MustOpenSubscription(requestQueue),
-		responses:       common.MustOpenTopic(responseQueue),
-		client:          client,
-		rootDir:         abspath,
-		clean:           clean,
-		home:            home,
-		name:            name,
-		sandbox:         sandbox,
-		limiter:         make(chan struct{}, downloadParallelism),
-		iolimiter:       make(chan struct{}, ioParallelism),
-		browserURL:      browserURL,
-		timeout:         timeout,
-		startTime:       time.Now(),
-		diskSpace:       minDiskSpace,
-		memoryThreshold: memoryThreshold,
+		requests:         common.MustOpenSubscription(requestQueue),
+		responses:        common.MustOpenTopic(responseQueue),
+		client:           client,
+		rootDir:          abspath,
+		clean:            clean,
+		home:             home,
+		name:             name,
+		sandbox:          sandbox,
+		limiter:          make(chan struct{}, downloadParallelism),
+		iolimiter:        make(chan struct{}, ioParallelism),
+		browserURL:       browserURL,
+		timeout:          timeout,
+		startTime:        time.Now(),
+		diskSpace:        minDiskSpace,
+		memoryThreshold:  memoryThreshold,
+		batchCompression: caps.CacheCapabilities != nil && caps.CacheCapabilities.BatchCompression,
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix)
@@ -274,29 +282,30 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
-	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize)
+	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d batch compression: %v", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize, w.batchCompression)
 	return w, nil
 }
 
 type worker struct {
-	requests        *pubsub.Subscription
-	responses       *pubsub.Topic
-	client          *client.Client
-	lucidity        lpb.LucidityClient
-	lucidChan       chan *lpb.UpdateRequest
-	cache           *ristretto.Cache
-	dir, rootDir    string
-	home            string
-	name            string
-	browserURL      string
-	sandbox         string
-	clean           bool
-	disabled        bool
-	timeout         time.Duration
-	fileCache       *cache
-	startTime       time.Time
-	diskSpace       int64
-	memoryThreshold float64
+	requests         *pubsub.Subscription
+	responses        *pubsub.Topic
+	client           *client.Client
+	lucidity         lpb.LucidityClient
+	lucidChan        chan *lpb.UpdateRequest
+	cache            *ristretto.Cache
+	dir, rootDir     string
+	home             string
+	name             string
+	browserURL       string
+	sandbox          string
+	clean            bool
+	disabled         bool
+	batchCompression bool
+	timeout          time.Duration
+	fileCache        *cache
+	startTime        time.Time
+	diskSpace        int64
+	memoryThreshold  float64
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest

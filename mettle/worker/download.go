@@ -269,7 +269,7 @@ func fileMode(isExecutable bool) os.FileMode {
 // compressor returns the compressor to use for a given filename
 func (w *worker) compressor(filename string, size int64) pb.Compressor_Value {
 	threshold := int64(w.client.CompressedBytestreamThreshold)
-	if threshold < 0 {
+	if threshold < 0 || !w.batchCompression {
 		return pb.Compressor_IDENTITY
 	} else if size >= threshold && shouldCompress(filename) {
 		return pb.Compressor_ZSTD
