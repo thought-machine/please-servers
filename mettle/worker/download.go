@@ -169,7 +169,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 		filenames, present := digestToFilenames[d.Hash]
 		if !present {
 			digests = append(digests, sdkdigest.NewFromProtoUnvalidated(d))
-			compressors = append(compressors, compressor(f))
+			compressors = append(compressors, w.compressor(f, d.SizeBytes))
 		}
 		digestToFilenames[d.Hash] = append(filenames, f)
 	}
@@ -267,8 +267,11 @@ func fileMode(isExecutable bool) os.FileMode {
 }
 
 // compressor returns the compressor to use for a given filename
-func compressor(filename string) pb.Compressor_Value {
-	if shouldCompress(filename) {
+func (w *worker) compressor(filename string, size int64) pb.Compressor_Value {
+	threshold := int64(w.client.CompressedBytestreamThreshold)
+	if threshold < 0 {
+		return pb.Compressor_IDENTITY
+	} else if size >= threshold && shouldCompress(filename) {
 		return pb.Compressor_ZSTD
 	}
 	return pb.Compressor_IDENTITY

@@ -721,7 +721,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	entries := make([]*uploadinfo.Entry, 0, len(m))
 	for _, e := range m {
-		e.Compressor = compressor(e.Path)
+		e.Compressor = w.compressor(e.Path, e.Digest.Size)
 		entries = append(entries, e)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
