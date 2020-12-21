@@ -128,17 +128,17 @@ go_get(
 
 go_get(
     name = "protobuf",
-    get = "github.com/golang/protobuf/...",
-    revision = "v1.4.2",
     exported_deps = [
         ":golang-protobuf",
     ],
-    deps = [
-        ":golang-protobuf",
-    ],
+    get = "github.com/golang/protobuf/...",
+    revision = "v1.4.2",
     strip = [
         "proto/proto3_proto",
         "conformance",
+    ],
+    deps = [
+        ":golang-protobuf",
     ],
 )
 
@@ -238,8 +238,8 @@ go_get(
 go_get(
     name = "cli-init",
     get = "github.com/peterebden/go-cli-init/v2",
-    revision = "v2.0.1",
     module_major_version = "v2",
+    revision = "v2.0.1",
     deps = [
         ":go-flags",
         ":humanize",
@@ -439,8 +439,8 @@ go_get(
     get = "github.com/hashicorp/go-hclog",
     revision = "v0.12.0",
     deps = [
-        ":isatty",
         ":color",
+        ":isatty",
     ],
 )
 
@@ -486,9 +486,9 @@ go_get(
     get = "github.com/thought-machine/http-admin",
     revision = "v1.1.0",
     deps = [
+        ":logging",
         ":mux",
         ":net",
-        ":logging",
         "//third_party/go/prometheus",
     ],
 )
@@ -527,4 +527,14 @@ go_get(
         "zstd/...",
     ],
     revision = "v1.11.0",
+)
+
+go_get(
+    name = "go-grpc-compression",
+    get = "github.com/mostynb/go-grpc-compression/zstd",
+    revision = "v1.1.2",
+    deps = [
+        ":grpc",
+        ":zstd",
+    ],
 )
