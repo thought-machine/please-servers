@@ -24,12 +24,12 @@ import (
 	_ "gocloud.dev/blob/gcsblob"
 	_ "gocloud.dev/blob/memblob"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
+	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
@@ -137,13 +137,13 @@ func init() {
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
 	dec, _ := zstd.NewReader(nil)
-	enc, _ := zstd.NewWriter(nil)
+	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	srv := &server{
-		bytestreamRe:  regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:   strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
-		isFileStorage: strings.HasPrefix(storage, "file://"),
-		bucket:        mustOpenStorage(storage),
-		limiter:       make(chan struct{}, parallelism),
+		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
+		storageRoot:    strings.TrimPrefix(strings.TrimPrefix(storage, "file://"), "gzfile://"),
+		isFileStorage:  strings.HasPrefix(storage, "file://"),
+		bucket:         mustOpenStorage(storage),
+		limiter:        make(chan struct{}, parallelism),
 		dirCache:       mustCache(maxDirCacheSize),
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		compressor:     enc,
@@ -373,7 +373,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	for i, r := range req.Requests {
 		size += r.Digest.SizeBytes
 		go func(i int, r *pb.BatchReadBlobsRequest_Request) {
-			resp.Responses[n + i] = s.batchReadBlob(ctx, r)
+			resp.Responses[n+i] = s.batchReadBlob(ctx, r)
 			wg.Done()
 		}(i, r)
 	}
@@ -441,7 +441,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	defer r.Close()
 	var w io.Writer = &bytestreamWriter{stream: srv}
 	if needCompression {
-		zw, err := zstd.NewWriter(w)
+		zw, err := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
 		if err != nil {
 			return err
 		}
@@ -458,7 +458,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
 	if prefix != "cas" {
 		if compressed {
-			return nil, false, fmt.Errorf("Attempted to do a compressed read for non-CAS prefix %s", prefix)  // This is a programming error and shouldn't happen.
+			return nil, false, fmt.Errorf("Attempted to do a compressed read for non-CAS prefix %s", prefix) // This is a programming error and shouldn't happen.
 		}
 		r, err := s.readBlob(ctx, s.key(prefix, digest), offset, limit)
 		return r, false, err
