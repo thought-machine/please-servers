@@ -36,6 +36,7 @@ go_test(
         "//third_party/go:grpc",
         "//third_party/go:remote-apis",
         "//third_party/go:testify",
+        "//third_party/go:zstd",
     ],
 )
 

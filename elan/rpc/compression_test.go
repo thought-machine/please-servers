@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -118,6 +120,20 @@ func TestCompressedRead(t *testing.T) {
 	assert.Equal(t, compressedData, buf)
 }
 
+func TestCompressedReadResume(t *testing.T) {
+	r := newReconnectingReader(bsClient, cname)
+	var buf, ubuf bytes.Buffer
+	zr, err := zstd.NewReader(io.TeeReader(r, &buf))
+	require.NoError(t, err)
+	// Allocate our own buffer so we know it's small enough to require multiple reads.
+	n, err := io.CopyBuffer(&ubuf, zr, make([]byte, 1000))
+	require.NoError(t, err)
+	assert.EqualValues(t, n, size)
+	assert.True(t, r.Total < n) // We don't know exactly what this should be.
+	assert.Equal(t, expectedData, buf.Bytes())
+	assert.Equal(t, compressedData, ubuf.Bytes())
+}
+
 func testMain(m *testing.M) int {
 	storage := "file://" + os.Getenv("TEST_DIR") + "/elan/rpc"
 	lis, s := startServer(grpcutil.Opts{
@@ -148,4 +164,42 @@ func testMain(m *testing.M) int {
 
 func TestMain(m *testing.M) {
 	os.Exit(testMain(m))
+}
+
+// A reconnectingReader implements an io.Reader over the bytestream.Read RPC
+// by reconnecting every time to simulate connection failures.
+type reconnectingReader struct {
+	client bs.ByteStreamClient
+	name   string
+	offset int64
+	Total  int64
+}
+
+func newReconnectingReader(client bs.ByteStreamClient, resourceName string) *reconnectingReader {
+	return &reconnectingReader{
+		client: client,
+		name:   resourceName,
+	}
+}
+
+func (r *reconnectingReader) Read(buf []byte) (int, error) {
+	stream, err := r.client.Read(context.Background(), &bs.ReadRequest{
+		ResourceName: r.name,
+		ReadOffset:   r.offset,
+	})
+	if err != nil {
+		return 0, err
+	}
+	resp, err := stream.Recv()
+	if err != nil {
+		return 0, err
+	}
+	n := len(buf)
+	if n > len(resp.Data) {
+		n = len(resp.Data)
+	}
+	copy(buf, resp.Data[:n])
+	r.offset += int64(n)
+	r.Total += int64(n)
+	return n, err
 }

@@ -17,7 +17,7 @@ func check(err error) {
 func main() {
 	w, err := zstd.NewWriter(os.Stdout)
 	check(err)
-	_, err = io.Copy(os.Stdout, os.Stdin)
+	_, err = io.Copy(w, os.Stdin)
 	check(err)
 	err = w.Close()
 	check(err)
