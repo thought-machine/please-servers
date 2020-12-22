@@ -4,6 +4,7 @@
 package rpc
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -500,7 +501,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 		return err
 	}
 	r := &bytestreamReader{stream: srv, buf: req.Data}
-	if err := s.writeBlob(ctx, "cas", digest, r, compressed); err != nil {
+	if err := s.writeBlob(ctx, "cas", digest, bufio.NewReaderSize(r, 65536), compressed); err != nil {
 		return err
 	}
 	bytesReceived.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(r.TotalSize))
