@@ -456,11 +456,12 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		defer zw.Close()
 		w = zw
 	}
-	_, err = io.Copy(w, r)
-	if err == nil {
-		log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
+	n, err := io.Copy(w, r)
+	if err != nil {
+		return err
 	}
-	return err
+	log.Debug("Completed ByteStream.Read request of %d bytes (starting at %d) for %s in %s", n, req.ReadOffset, digest.Hash, time.Since(start))
+	return nil
 }
 
 func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, streamed, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {

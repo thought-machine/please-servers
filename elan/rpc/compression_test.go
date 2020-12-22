@@ -130,8 +130,10 @@ func TestCompressedReadResume(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, n, size)
 	assert.True(t, r.Total < n) // We don't know exactly what this should be.
-	assert.Equal(t, expectedData, buf.Bytes())
-	assert.Equal(t, compressedData, ubuf.Bytes())
+	assert.Equal(t, len(expectedData), ubuf.Len())
+	assert.Equal(t, len(compressedData), buf.Len())
+	assert.Equal(t, expectedData, ubuf.Bytes())
+	assert.Equal(t, compressedData, buf.Bytes())
 }
 
 func testMain(m *testing.M) int {
