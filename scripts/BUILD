@@ -8,3 +8,11 @@ python_binary(
         "//third_party/python:requests",
     ],
 )
+
+go_binary(
+    name = "compress",
+    srcs = ["compress.go"],
+    test_only = True,
+    visibility = ["PUBLIC"],
+    deps = ["//third_party/go:zstd"],
+)

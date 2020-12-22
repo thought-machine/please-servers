@@ -24,3 +24,32 @@ go_library(
         "//third_party/go/prometheus",
     ],
 )
+
+go_test(
+    name = "compression_test",
+    srcs = ["compression_test.go"],
+    data = [":test_data"],
+    deps = [
+        ":rpc",
+        "//grpcutil",
+        "//third_party/go:bytestream",
+        "//third_party/go:grpc",
+        "//third_party/go:remote-apis",
+        "//third_party/go:testify",
+    ],
+)
+
+genrule(
+    name = "test_data",
+    cmd = [
+        'for i in `seq 1 10000`; do echo "$i ----------------------------------------- $i" >> "tmp.txt"; done',
+        'HASH="`sha256sum tmp.txt | cut -c -64`"',
+        'PREFIX="${HASH:0:2}"',
+        'mkdir -p "data/cas/${PREFIX}" "data/zstd_cas/${PREFIX}"',
+        'cat tmp.txt | "$TOOL" > "data/zstd_cas/${PREFIX}/${HASH}"',
+        'mv tmp.txt "data/cas/${PREFIX}/${HASH}"',
+    ],
+    output_dirs = ["data"],
+    test_only = True,
+    tools = ["//scripts:compress"],
+)
