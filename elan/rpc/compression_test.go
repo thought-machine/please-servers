@@ -42,6 +42,63 @@ func TestStreamRead(t *testing.T) {
 	assert.Equal(t, expectedData, buf)
 }
 
+func TestStreamReadResume(t *testing.T) {
+	client, err := bsClient.Read(context.Background(), &bs.ReadRequest{
+		ResourceName: name,
+	})
+	require.NoError(t, err)
+	buf := []byte{}
+	for i := 0; i < 3; i++ {
+		msg, err := client.Recv()
+		require.NoError(t, err)
+		buf = append(buf, msg.Data...)
+	}
+	// Pretend the connection gets broken here.
+	client, err = bsClient.Read(context.Background(), &bs.ReadRequest{
+		ResourceName: name,
+		ReadOffset:   int64(len(buf)),
+	})
+	require.NoError(t, err)
+	for {
+		msg, err := client.Recv()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		buf = append(buf, msg.Data...)
+	}
+	assert.Equal(t, expectedData, buf)
+}
+
+func TestStreamReadResumeWithLimit(t *testing.T) {
+	client, err := bsClient.Read(context.Background(), &bs.ReadRequest{
+		ResourceName: name,
+	})
+	require.NoError(t, err)
+	buf := []byte{}
+	for i := 0; i < 6; i++ {
+		msg, err := client.Recv()
+		require.NoError(t, err)
+		buf = append(buf, msg.Data...)
+	}
+	// Pretend the connection gets broken here.
+	client, err = bsClient.Read(context.Background(), &bs.ReadRequest{
+		ResourceName: name,
+		ReadOffset:   int64(len(buf)),
+		ReadLimit:    int64(size - len(buf)),
+	})
+	require.NoError(t, err)
+	for {
+		msg, err := client.Recv()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		buf = append(buf, msg.Data...)
+	}
+	assert.Equal(t, expectedData, buf)
+}
+
 func testMain(m *testing.M) int {
 	storage := "file://" + os.Getenv("TEST_DIR") + "/elan/rpc"
 	lis, s := startServer(grpcutil.Opts{
