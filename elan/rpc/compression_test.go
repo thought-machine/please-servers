@@ -18,9 +18,11 @@ var bsClient bs.ByteStreamClient
 
 const (
 	// These are determined empirically from the generated test files.
-	hash = "5201263d9a7365629360c09a9ab780a1c15f94aaf3b38874d41500df3e0be87f"
-	size = 517788
-	name = "blobs/5201263d9a7365629360c09a9ab780a1c15f94aaf3b38874d41500df3e0be87f/517788"
+	hash  = "5201263d9a7365629360c09a9ab780a1c15f94aaf3b38874d41500df3e0be87f"
+	size  = 517788
+	ssize = "517788"
+	name  = "blobs/" + hash + "/" + ssize
+	cname = "compressed-blobs/zstd/" + hash + "/" + ssize
 )
 
 var expectedData, compressedData []byte
@@ -97,6 +99,23 @@ func TestStreamReadResumeWithLimit(t *testing.T) {
 		buf = append(buf, msg.Data...)
 	}
 	assert.Equal(t, expectedData, buf)
+}
+
+func TestCompressedRead(t *testing.T) {
+	client, err := bsClient.Read(context.Background(), &bs.ReadRequest{
+		ResourceName: cname,
+	})
+	require.NoError(t, err)
+	buf := []byte{}
+	for {
+		msg, err := client.Recv()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		buf = append(buf, msg.Data...)
+	}
+	assert.Equal(t, compressedData, buf)
 }
 
 func testMain(m *testing.M) int {
