@@ -156,6 +156,10 @@ func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCach
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		compressor:     enc,
 		decompressor:   dec,
+		compressorPool: &sync.Pool{New: func() interface{} {
+			w, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+			return w
+		}},
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -191,6 +195,7 @@ type server struct {
 	dirCache, knownBlobCache *ristretto.Cache
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
+	compressorPool           *sync.Pool
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -450,12 +455,11 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	defer r.Close()
 	var w io.Writer = &bytestreamWriter{stream: srv}
 	if needCompression {
-		zw, err := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
-		if err != nil {
-			return err
-		}
-		defer zw.Close()
+		zw := s.compressorPool.Get().(*zstd.Encoder)
+		defer s.compressorPool.Put(zw)
+		zw.Reset(w)
 		w = zw
+		defer zw.Flush()
 	}
 	n, err := io.Copy(w, r)
 	if err != nil {
