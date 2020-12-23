@@ -4,6 +4,7 @@
 package rpc
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"regexp"
@@ -37,6 +39,7 @@ import (
 	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -136,6 +139,11 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
+	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+	grpcutil.ServeForever(lis, s)
+}
+
+func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	srv := &server{
@@ -155,7 +163,7 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	ppb.RegisterGCServer(s, srv)
-	grpcutil.ServeForever(lis, s)
+	return lis, s
 }
 
 func mustCache(size int64) *ristretto.Cache {
@@ -449,11 +457,12 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		defer zw.Close()
 		w = zw
 	}
-	_, err = io.Copy(w, r)
-	if err == nil {
-		log.Debug("Completed ByteStream.Read request of %d bytes in %s", digest.SizeBytes, time.Since(start))
+	n, err := io.Copy(w, r)
+	if err != nil {
+		return err
 	}
-	return err
+	log.Debug("Completed ByteStream.Read request of %d bytes (starting at %d) for %s in %s", n, req.ReadOffset, digest.Hash, time.Since(start))
+	return nil
 }
 
 func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, streamed, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
@@ -492,7 +501,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 		return err
 	}
 	r := &bytestreamReader{stream: srv, buf: req.Data}
-	if err := s.writeBlob(ctx, "cas", digest, r, compressed); err != nil {
+	if err := s.writeBlob(ctx, "cas", digest, bufio.NewReaderSize(r, 65536), compressed); err != nil {
 		return err
 	}
 	bytesReceived.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(r.TotalSize))

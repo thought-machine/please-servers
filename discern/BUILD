@@ -3,8 +3,8 @@ go_binary(
     srcs = ["main.go"],
     deps = [
         "//cli",
-        "//grpcutil",
         "//purity/gc",
+        "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:humanize",
         "//third_party/go:protobuf",

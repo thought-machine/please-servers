@@ -24,6 +24,7 @@ go_library(
         "//third_party/proto:cas",
         "//third_party/proto:resourceusage",
         "//mettle/common",
+        "//rexclient",
     ],
     visibility = ["//mettle/..."],
 )

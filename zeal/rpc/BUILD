@@ -3,6 +3,7 @@ go_library(
     srcs = ["rpc.go"],
     deps = [
         "//grpcutil",
+        "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:grpc",
         "//third_party/go/prometheus",

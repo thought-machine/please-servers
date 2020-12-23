@@ -25,26 +25,24 @@ go_get(
         "pubsub/gcppubsub",
         "pubsub/mempubsub",
     ],
+    patch = "batch_size.patch",
     repo = "github.com/google/go-cloud",
     revision = "v0.17.0",
-    patch = "batch_size.patch",
+    visibility = ["PUBLIC"],
     deps = [
-        ":google-cloud-go",
         ":gax-go",
         ":go.opencensus.io",
-        "//third_party/go:grpc",
-        "//third_party/go:oauth2",
+        ":google-cloud-go",
         ":wire",
         ":x_errors",
+        "//third_party/go:grpc",
+        "//third_party/go:oauth2",
     ],
-    visibility = ["PUBLIC"],
 )
 
 go_get(
     name = "google-cloud-go",
     get = "cloud.google.com/go",
-    repo = "github.com/googleapis/google-cloud-go",
-    revision = "v0.46.3",
     install = [
         "iam",
         "internal",
@@ -55,10 +53,12 @@ go_get(
         "pubsub/apiv1",
         "storage",
     ],
+    repo = "github.com/googleapis/google-cloud-go",
+    revision = "v0.46.3",
     deps = [
-        ":genproto",
         ":api",
         ":gax-go",
+        ":genproto",
         ":go.opencensus.io",
         "//third_party/go:errgroup",
     ],
@@ -88,6 +88,7 @@ go_get(
         "sheets/v4",
         "support/bundler",
         "transport",
+        "transport/bytestream",
         "transport/cert",
         "transport/grpc",
         "transport/http",
@@ -103,6 +104,7 @@ go_get(
         ":gax-go",
         ":go.opencensus.io",
         ":semaphore",
+        "//third_party/go:bytestream",
         "//third_party/go:grpc",
         "//third_party/go:oauth2",
     ],
@@ -146,9 +148,9 @@ go_get(
     get = "google.golang.org/genproto/...",
     revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
-        "//third_party/go:protobuf",
-        "//third_party/go:net",
         "//third_party/go:grpc",
+        "//third_party/go:net",
+        "//third_party/go:protobuf",
     ],
 )
 

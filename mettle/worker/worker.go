@@ -37,6 +37,7 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
+	"github.com/thought-machine/please-servers/rexclient"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 	bbru "github.com/thought-machine/please-servers/third_party/proto/resourceusage"
@@ -214,19 +215,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 			return nil, fmt.Errorf("Error checking sandbox tool: %s", err)
 		}
 	}
-	log.Notice("Dialling remote %s...", storage)
-	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            storage,
-		NoSecurity:         !secureStorage,
-		TransportCredsOnly: secureStorage,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	caps, err := client.GetCapabilities(ctx)
+	client, err := rexclient.New(instanceName, storage, secureStorage, tokenFile)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +245,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		startTime:        time.Now(),
 		diskSpace:        minDiskSpace,
 		memoryThreshold:  memoryThreshold,
-		batchCompression: caps.CacheCapabilities != nil && caps.CacheCapabilities.BatchCompression,
+		batchCompression: client.CompressedBytestreamThreshold >= 0,
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix)

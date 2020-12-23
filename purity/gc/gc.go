@@ -16,15 +16,13 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
-	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v2"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 var log = cli.MustGetLogger()
@@ -144,13 +142,7 @@ type collector struct {
 }
 
 func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
-	log.Notice("Dialling remote...")
-	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            url,
-		NoSecurity:         !tls,
-		TransportCredsOnly: tls,
-		DialOpts:           append(grpcutil.DialOptions(tokenFile), grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor())),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
+	client, err := rexclient.New(instanceName, url, tls, tokenFile)
 	if err != nil {
 		return nil, err
 	}
