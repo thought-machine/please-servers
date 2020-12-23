@@ -160,6 +160,10 @@ func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCach
 			w, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 			return w
 		}},
+		decompressorPool: &sync.Pool{New: func() interface{} {
+			r, _ := zstd.NewReader(nil)
+			return r
+		}},
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -196,6 +200,7 @@ type server struct {
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
 	compressorPool           *sync.Pool
+	decompressorPool         *sync.Pool
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -612,11 +617,9 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	r = tr
 	h := sha256.New()
 	if compressed {
-		zr, err := zstd.NewReader(tr)
-		if err != nil {
-			return err
-		}
-		defer zr.Close()
+		zr := s.decompressorPool.Get().(*zstd.Decoder)
+		defer s.decompressorPool.Put(zr)
+		zr.Reset(r)
 		r = zr
 	}
 	if _, err := io.Copy(h, r); err != nil {
