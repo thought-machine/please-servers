@@ -486,12 +486,12 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	if err != nil {
 		if r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit); err == nil {
 			blobsServed.WithLabelValues(batchLabel(batched, streamed), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
-			return compressedReader(r, compressed, !compressed)
+			return s.compressedReader(r, compressed, !compressed)
 		}
 		return nil, false, err
 	}
 	blobsServed.WithLabelValues(batchLabel(batched, streamed), compressorLabel(compressed), compressorLabel(compressed)).Inc()
-	return compressedReader(r, compressed, compressed)
+	return s.compressedReader(r, compressed, compressed)
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {

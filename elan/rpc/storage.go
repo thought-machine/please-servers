@@ -58,14 +58,13 @@ func (a *adapter) Delete(ctx context.Context, key string, hard bool) error {
 }
 
 // compressedReader returns a reader wrapped in a decompressor or compressor as needed.
-func compressedReader(r io.ReadCloser, needCompression, isCompressed bool) (io.ReadCloser, bool, error) {
+func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed bool) (io.ReadCloser, bool, error) {
 	if needCompression == isCompressed {
 		return r, false, nil // stream back bytes directly
 	} else if isCompressed {
-		zr, err := zstd.NewReader(r)
-		if err != nil {
-			return nil, false, err
-		}
+		zr := s.decompressorPool.Get().(*zstd.Decoder)
+		defer s.decompressorPool.Put(zr)
+		zr.Reset(r)
 		return &doubleCloser{c: r, r: ioutil.NopCloser(zr)}, false, nil
 	}
 	return r, true, nil
