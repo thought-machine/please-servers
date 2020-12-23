@@ -16,8 +16,8 @@ import (
 	"github.com/peterebden/go-cli-init/v2"
 
 	flags "github.com/thought-machine/please-servers/cli"
-	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/purity/gc"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 var log = cli.MustGetLogger()
@@ -76,15 +76,7 @@ func main() {
 		}
 		return
 	}
-	client, err := client.NewClient(context.Background(), opts.Storage.InstanceName, client.DialParams{
-		Service:            opts.Storage.Storage,
-		NoSecurity:         !opts.Storage.TLS,
-		TransportCredsOnly: opts.Storage.TLS,
-		DialOpts:           grpcutil.DialOptions(""),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
-	if err != nil {
-		log.Fatalf("Failed to contact CAS server: %s", err)
-	}
+	client := rexclient.MustNew(opts.Storage.InstanceName, opts.Storage.Storage, opts.Storage.TLS, "")
 	if cmd == "diff" {
 		diff(client)
 	} else {

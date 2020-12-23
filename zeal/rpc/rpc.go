@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 var log = cli.MustGetLogger()
@@ -50,15 +51,7 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parallelism int) {
-	client, err := client.NewClient(context.Background(), "mettle", client.DialParams{
-		Service:            storage,
-		NoSecurity:         !secureStorage,
-		TransportCredsOnly: secureStorage,
-		DialOpts:           grpcutil.DialOptions(opts.TokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(1024))
-	if err != nil {
-		log.Fatalf("Failed to connect to storage backend: %s", err)
-	}
+	client := rexclient.MustNew("mettle", storage, secureStorage, opts.TokenFile)
 	srv := &server{
 		client:        retryablehttp.NewClient(),
 		storageClient: client,
