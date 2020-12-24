@@ -281,8 +281,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 			continue // Ignore the empty blob.
 		}
 		go func(d *pb.Digest) {
-			key := s.key("cas", d)
-			if !s.blobExists(ctx, key) {
+			if !s.blobExists(ctx, s.key("cas", d)) && !s.blobExists(ctx, s.compressedKey("cas", d, true)) {
 				mutex.Lock()
 				resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
 				mutex.Unlock()
@@ -353,7 +352,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if len(r.Data) != int(r.Digest.SizeBytes) && !compressed {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
-			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
+			} else if s.blobExists(ctx, s.compressedKey("cas", r.Digest, compressed)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
 				rr.Status.Code = int32(status.Code(err))
