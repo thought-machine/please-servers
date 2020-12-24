@@ -452,7 +452,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
-	r, needCompression, err := s.readCompressed(ctx, "cas", digest, false, true, compressed, req.ReadOffset, req.ReadLimit)
+	r, needCompression, err := s.readCompressed(ctx, "cas", digest, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
 	}
@@ -476,7 +476,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	return nil
 }
 
-func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, streamed, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
+func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
 	if prefix != "cas" {
 		if compressed {
 			return nil, false, fmt.Errorf("Attempted to do a compressed read for non-CAS prefix %s", prefix) // This is a programming error and shouldn't happen.
@@ -487,12 +487,12 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
 	if err != nil {
 		if r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit); err == nil {
-			blobsServed.WithLabelValues(batchLabel(batched, streamed), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
+			blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
 			return s.compressedReader(r, compressed, !compressed)
 		}
 		return nil, false, err
 	}
-	blobsServed.WithLabelValues(batchLabel(batched, streamed), compressorLabel(compressed), compressorLabel(compressed)).Inc()
+	blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
 	return s.compressedReader(r, compressed, compressed)
 }
 
