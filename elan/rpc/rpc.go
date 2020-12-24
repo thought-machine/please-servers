@@ -156,6 +156,14 @@ func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCach
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		compressor:     enc,
 		decompressor:   dec,
+		compressorPool: &sync.Pool{New: func() interface{} {
+			w, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+			return w
+		}},
+		decompressorPool: &sync.Pool{New: func() interface{} {
+			r, _ := zstd.NewReader(nil)
+			return r
+		}},
 	}
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -191,6 +199,8 @@ type server struct {
 	dirCache, knownBlobCache *ristretto.Cache
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
+	compressorPool           *sync.Pool
+	decompressorPool         *sync.Pool
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -449,13 +459,15 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	defer r.Close()
 	var w io.Writer = &bytestreamWriter{stream: srv}
+	bw := bufio.NewWriterSize(w, 65536)
+	defer bw.Flush()
+	w = bw
 	if needCompression {
-		zw, err := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
-		if err != nil {
-			return err
-		}
-		defer zw.Close()
+		zw := s.compressorPool.Get().(*zstd.Encoder)
+		defer s.compressorPool.Put(zw)
+		zw.Reset(w)
 		w = zw
+		defer zw.Close()
 	}
 	n, err := io.Copy(w, r)
 	if err != nil {
@@ -477,12 +489,12 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	if err != nil {
 		if r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit); err == nil {
 			blobsServed.WithLabelValues(batchLabel(batched, streamed), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
-			return compressedReader(r, compressed, !compressed)
+			return s.compressedReader(r, compressed, !compressed)
 		}
 		return nil, false, err
 	}
 	blobsServed.WithLabelValues(batchLabel(batched, streamed), compressorLabel(compressed), compressorLabel(compressed)).Inc()
-	return compressedReader(r, compressed, compressed)
+	return s.compressedReader(r, compressed, compressed)
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
@@ -608,11 +620,9 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	r = tr
 	h := sha256.New()
 	if compressed {
-		zr, err := zstd.NewReader(tr)
-		if err != nil {
-			return err
-		}
-		defer zr.Close()
+		zr := s.decompressorPool.Get().(*zstd.Decoder)
+		defer s.decompressorPool.Put(zr)
+		zr.Reset(r)
 		r = zr
 	}
 	if _, err := io.Copy(h, r); err != nil {
