@@ -16,6 +16,7 @@ type bucket interface {
 	NewRangeReader(ctx context.Context, key string, offset, length int64, opts *blob.ReaderOptions) (io.ReadCloser, error)
 	NewWriter(ctx context.Context, key string, opts *blob.WriterOptions) (io.WriteCloser, error)
 	WriteAll(ctx context.Context, key string, data []byte) error
+	ReadAll(ctx context.Context, key string) ([]byte, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	List(opts *blob.ListOptions) *blob.ListIterator
 	Delete(ctx context.Context, key string, hard bool) error
@@ -43,6 +44,10 @@ func (a *adapter) NewWriter(ctx context.Context, key string, opts *blob.WriterOp
 
 func (a *adapter) WriteAll(ctx context.Context, key string, data []byte) error {
 	return a.bucket.WriteAll(ctx, key, data, nil)
+}
+
+func (a *adapter) ReadAll(ctx context.Context, key string) ([]byte, error) {
+	return a.bucket.ReadAll(ctx, key)
 }
 
 func (a *adapter) Exists(ctx context.Context, key string) (bool, error) {
