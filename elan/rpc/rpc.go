@@ -161,7 +161,7 @@ func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCach
 			return w
 		}},
 		decompressorPool: &sync.Pool{New: func() interface{} {
-			r, _ := zstd.NewReader(nil)
+			r, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(4))
 			return r
 		}},
 	}
