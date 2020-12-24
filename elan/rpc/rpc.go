@@ -161,7 +161,7 @@ func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCach
 			return w
 		}},
 		decompressorPool: &sync.Pool{New: func() interface{} {
-			r, _ := zstd.NewReader(nil)
+			r, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(4))
 			return r
 		}},
 	}
@@ -238,7 +238,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		// The docs say that the server MAY omit inlining, even if asked. Hence we assume that if we can't find it here
 		// we might be in a sharded setup where we don't have the stdout digest, and it's better to return what we can
 		// (the client can still request the actual blob themselves).
-		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest, false, false, false); err == nil {
+		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest, false, false); err == nil {
 			ar.StdoutRaw = b
 		}
 	}
@@ -281,8 +281,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 			continue // Ignore the empty blob.
 		}
 		go func(d *pb.Digest) {
-			key := s.key("cas", d)
-			if !s.blobExists(ctx, key) {
+			if !s.blobExists(ctx, s.key("cas", d)) && !s.blobExists(ctx, s.compressedKey("cas", d, true)) {
 				mutex.Lock()
 				resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
 				mutex.Unlock()
@@ -353,7 +352,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if len(r.Data) != int(r.Digest.SizeBytes) && !compressed {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
-			} else if s.blobExists(ctx, s.key("cas", r.Digest)) {
+			} else if s.blobExists(ctx, s.compressedKey("cas", r.Digest, compressed)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
 				rr.Status.Code = int32(status.Code(err))
@@ -407,7 +406,7 @@ func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsReques
 		Digest: req.Digest,
 	}
 	compressed := req.Compressor == pb.Compressor_ZSTD
-	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, false, compressed); err != nil {
+	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, compressed); err != nil {
 		r.Status.Code = int32(status.Code(err))
 		r.Status.Message = err.Error()
 	} else {
@@ -539,16 +538,13 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 	defer func() { readLatencies.Observe(time.Since(start).Seconds()) }()
 	r, err := s.bucket.NewRangeReader(ctx, key, offset, length, nil)
 	if err != nil {
-		if gcerrors.Code(err) == gcerrors.NotFound {
-			return nil, status.Errorf(codes.NotFound, "Blob %s not found", key)
-		}
-		return nil, err
+		return nil, handleNotFound(err, key)
 	}
 	s.markKnownBlob(key)
 	return r, nil
 }
 
-func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, batched, streamed, compressed bool) ([]byte, error) {
+func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
 	if len(digest.Hash) < 2 {
 		return nil, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
 	} else if s.isEmpty(digest) {
@@ -558,20 +554,32 @@ func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Dige
 	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	r, needCompression, err := s.readCompressed(ctx, prefix, digest, batched, streamed, compressed, 0, -1)
+	if b, err := s.bucket.ReadAll(ctx, s.compressedKey(prefix, digest, compressed)); err == nil {
+		blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), compressorLabel(compressed)).Inc()
+		return b, nil
+	} else if prefix != "cas" {
+		return nil, handleNotFound(err, digest.Hash) // No point going on, the AC is never compressed.
+	}
+	// If we get here, it failed, so we need to check the compressed / non-compressed version.
+	b, err := s.bucket.ReadAll(ctx, s.compressedKey(prefix, digest, !compressed))
+	if err != nil {
+		return nil, handleNotFound(err, digest.Hash)
+	}
+	// We now need to either compress or decompress the payload, since we read the other version.
+	buf := make([]byte, 0, digest.SizeBytes)
+	if compressed {
+		return s.compressor.EncodeAll(b, buf), nil
+	}
+	b, err = s.decompressor.DecodeAll(b, buf)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
-	data, err := ioutil.ReadAll(r)
-	if err != nil || !needCompression {
-		return data, err
-	}
-	return s.compressor.EncodeAll(data, make([]byte, 0, digest.SizeBytes)), nil
+	blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
+	return b, nil
 }
 
 func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
-	if b, err := s.readAllBlob(ctx, prefix, digest, false, false, false); err != nil {
+	if b, err := s.readAllBlob(ctx, prefix, digest, false, false); err != nil {
 		return err
 	} else if err := proto.Unmarshal(b, message); err != nil {
 		return status.Errorf(codes.Unknown, "%s", err)
@@ -741,4 +749,12 @@ func batchLabel(batched, streamed bool) string {
 		return "batched"
 	}
 	return "single"
+}
+
+// handleNotFound converts an error from a gocloud error to a gRPC one for NotFound errors.
+func handleNotFound(err error, key string) error {
+	if gcerrors.Code(err) == gcerrors.NotFound {
+		return status.Errorf(codes.NotFound, "Blob %s not found", key)
+	}
+	return err
 }
