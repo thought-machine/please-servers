@@ -220,10 +220,14 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
-	blobs := map[*trie.Server][]*pb.Digest{}
+	blobs := map[*trie.Server][]*pb.BatchReadBlobsRequest_Request{}
 	for _, d := range req.Digests {
 		s := s.replicator.Trie.Get(d.Hash)
-		blobs[s] = append(blobs[s], d)
+		blobs[s] = append(blobs[s], &pb.BatchReadBlobsRequest_Request{Digest: d})
+	}
+	for _, r := range req.Requests {
+		s := s.replicator.Trie.Get(r.Digest.Hash)
+		blobs[s] = append(blobs[s], r)
 	}
 	resp := &pb.BatchReadBlobsResponse{}
 	var g errgroup.Group
@@ -250,7 +254,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 				defer cancel()
 				r, err := s2.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 					InstanceName: req.InstanceName,
-					Digests:      d,
+					Requests:     d,
 				})
 				if err != nil {
 					return false, err
