@@ -41,7 +41,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 		replicator:      casReplicator,
 		assetReplicator: assetReplicator,
 		exeReplicator:   executorReplicator,
-		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?blobs/([0-9a-f]+)/([0-9]+)"),
+		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		timeout:         timeout,
 	}
 	lis, s := grpcutil.NewServer(opts)
@@ -465,7 +465,7 @@ func (s *server) bytestreamBlobName(bytestream string) (string, error) {
 	if matches == nil {
 		return "", status.Errorf(codes.InvalidArgument, "invalid ResourceName: %s", bytestream)
 	}
-	return matches[1], nil
+	return matches[2], nil
 }
 
 func (s *server) FetchDirectory(ctx context.Context, req *apb.FetchDirectoryRequest) (resp *apb.FetchDirectoryResponse, err error) {
