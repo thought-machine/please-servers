@@ -24,11 +24,11 @@ func ServeForever(lis net.Listener, s *grpc.Server) {
 func handleSignals(ch chan os.Signal, s *grpc.Server) {
 	sig := <-ch
 	log.Warning("Received signal %s, gracefully shutting down server", sig)
-	go func() {	s.GracefulStop() }()
+	go func() { s.GracefulStop() }()
 	select {
 	case sig := <-ch:
 		log.Warning("Received signal %s, less politely shutting down", sig)
-	case <-time.After(5 * time.Minute):  // This is quite long, but most of our servers can have long-running RPCs.
+	case <-time.After(30 * time.Second): // This is quite long, but most of our servers can have long-running RPCs.
 		log.Warning("Graceful stop not terminated, escalating to impolite shutdown")
 	}
 	go func() { s.Stop() }()
