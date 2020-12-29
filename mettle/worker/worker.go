@@ -31,14 +31,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
+	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
-	"github.com/thought-machine/please-servers/rexclient"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
+	"github.com/thought-machine/please-servers/rexclient"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 	bbru "github.com/thought-machine/please-servers/third_party/proto/resourceusage"
 )
@@ -750,7 +751,20 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 	body, _ := proto.Marshal(op)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	return w.responses.Send(ctx, &pubsub.Message{Body: body})
+	return w.responses.Send(ctx, &pubsub.Message{Body: body, BeforeSend: w.setOrderingKey})
+}
+
+// setOrderingKey is a callback used to set an ordering key on pubsub messages if
+// the driver supports it (i.e. only if it's GCP Pub/Sub).
+func (w *worker) setOrderingKey(asFunc func(interface{}) bool) error {
+	var message *pspb.PubsubMessage
+	if asFunc(message) {
+		// Use the worker name as the key. Theoretically the task id is better, but in practice
+		// the driver might batch messages, and we are supposed to use the same key for all messages
+		// in a request.
+		message.OrderingKey = w.name
+	}
+	return nil
 }
 
 // readBlobToProto reads an entire blob and deserialises it into a message.

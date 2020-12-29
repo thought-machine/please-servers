@@ -5,6 +5,7 @@ go_library(
         "//grpcutil",
         "//proto:lucidity",
         "//third_party/go/gocloud",
+        "//third_party/go/gocloud:genproto",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
         "//third_party/go:copyfile",
