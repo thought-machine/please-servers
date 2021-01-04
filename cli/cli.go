@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/peterebden/go-cli-init/v2"
+	"github.com/peterebden/go-cli-init/v3"
 )
 
 var log = cli.MustGetLogger()

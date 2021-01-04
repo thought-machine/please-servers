@@ -4,7 +4,7 @@ package main
 import (
 	"time"
 
-	"github.com/peterebden/go-cli-init/v2"
+	"github.com/peterebden/go-cli-init/v3"
 	"github.com/thought-machine/http-admin"
 	"google.golang.org/grpc"
 

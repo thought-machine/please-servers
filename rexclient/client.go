@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
-	"github.com/peterebden/go-cli-init/v2"
+	"github.com/peterebden/go-cli-init/v3"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 )

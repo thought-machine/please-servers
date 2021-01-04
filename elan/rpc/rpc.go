@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
 	"github.com/klauspost/compress/zstd"
-	"github.com/peterebden/go-cli-init/v2"
+	"github.com/peterebden/go-cli-init/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"

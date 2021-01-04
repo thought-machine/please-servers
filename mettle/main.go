@@ -8,7 +8,7 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v2"
+	"github.com/peterebden/go-cli-init/v3"
 	"github.com/thought-machine/http-admin"
 
 	flags "github.com/thought-machine/please-servers/cli"
