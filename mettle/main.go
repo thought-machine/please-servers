@@ -6,7 +6,6 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
-	"time"
 
 	"github.com/peterebden/go-cli-init/v3"
 
@@ -51,7 +50,7 @@ var opts = struct {
 		Browser         string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
 		Lucidity        string       `long:"lucidity" description:"URL of Lucidity server to report to"`
 		Sandbox         string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout         cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		Timeout         cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace    cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64      `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		Cache           CacheOpts    `group:"Options controlling caching"`
@@ -69,7 +68,7 @@ var opts = struct {
 		Browser         string        `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
 		Lucidity        string        `long:"lucidity" description:"URL of Lucidity server to report to"`
 		Sandbox         string        `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout         cli.Duration  `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		Timeout         cli.Duration  `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace    cli.ByteSize  `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64       `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		Cache           CacheOpts     `group:"Options controlling caching"`
@@ -84,7 +83,7 @@ var opts = struct {
 		} `positional-args:"true"`
 		Dir         string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		Sandbox     string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		Timeout     cli.Duration `long:"timeout" default:"3m" description:"Timeout for individual RPCs"`
+		Timeout     cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		ProfileFile string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 		Cache       CacheOpts    `group:"Options controlling caching"`
 		Storage     StorageOpts  `group:"Options controlling communication with the CAS server"`
@@ -143,11 +142,11 @@ func main() {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, time.Duration(opts.Dual.Timeout), int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), opts.Dual.Storage.Storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, time.Duration(opts.Worker.Timeout), int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold)
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold)
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
 	} else {
@@ -170,7 +169,7 @@ func one() error {
 		defer pprof.StopCPUProfile()
 	}
 	for _, action := range opts.One.Args.Actions {
-		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, false, opts.One.Storage.TLS, time.Duration(opts.One.Timeout), action.ToProto()); err != nil {
+		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, false, opts.One.Storage.TLS, action.ToProto()); err != nil {
 			return err
 		}
 	}
