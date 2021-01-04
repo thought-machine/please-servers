@@ -2,27 +2,21 @@
 package main
 
 import (
-	"github.com/peterebden/go-cli-init/v3"
-	"github.com/thought-machine/http-admin"
-
+	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/zeal/rpc"
 )
 
 var opts = struct {
-	Usage   string
-	Logging struct {
-		Verbosity     cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
-		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
-		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
-	} `group:"Options controlling logging output"`
-	GRPC        grpcutil.Opts `group:"Options controlling the gRPC server"`
-	Parallelism int           `long:"parallelism" default:"4" description:"Max parallel download tasks to run"`
+	Usage       string
+	Logging     flags.LoggingOpts `group:"Options controlling logging output"`
+	GRPC        grpcutil.Opts     `group:"Options controlling the gRPC server"`
+	Parallelism int               `long:"parallelism" default:"4" description:"Max parallel download tasks to run"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling communication with the CAS server"`
-	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Zeal is a partial implementation of the Remote Asset API.
@@ -45,10 +39,6 @@ for the Paladin skill in Diablo II since its job is to bang things down as fast 
 }
 
 func main() {
-	cli.ParseFlagsOrDie("Zeal", &opts)
-	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-	opts.Admin.LogInfo = info
-	go admin.Serve(opts.Admin)
+	flags.ParseFlagsOrDie("Zeal", &opts)
 	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism)
 }

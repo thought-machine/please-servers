@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/peterebden/go-cli-init/v3"
-	admin "github.com/thought-machine/http-admin"
 
 	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
@@ -17,12 +16,8 @@ var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
-	Logging struct {
-		Verbosity     cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
-		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
-		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
-	} `group:"Options controlling logging output"`
-	GC struct {
+	Logging flags.LoggingOpts `group:"Options controlling logging output"`
+	GC      struct {
 		URL          string `short:"u" long:"url" required:"true" description:"URL for the storage server"`
 		InstanceName string `short:"i" long:"instance_name" default:"purity-gc" description:"Name of this execution instance"`
 		TokenFile    string `long:"token_file" description:"File containing token to authenticate gRPC requests with"`

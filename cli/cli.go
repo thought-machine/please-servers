@@ -3,17 +3,47 @@ package cli
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/peterebden/go-cli-init/v3"
+	"github.com/thought-machine/http-admin"
 )
 
 var log = cli.MustGetLogger()
 
 var actionRe = regexp.MustCompile("([0-9a-fA-F]+)/([0-9]+)/?")
 var shortActionRe = regexp.MustCompile("([0-9a-fA-F]+)")
+
+// LoggingOpts are a common set of logging options that we use across the repo.
+type LoggingOpts struct {
+	Verbosity     cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
+	FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
+	LogFile       string        `long:"log_file" description:"File to additionally log output to"`
+	Structured    bool          `long:"structured_logs" env:"STRUCTURED_LOGS" description:"Output logs in structured (JSON) format"`
+}
+
+// AdminOpts is a re-export of the admin type so servers don't need to import it directly.
+type AdminOpts = admin.Opts
+
+// ParseFlagsOrDie parses incoming flags and sets up logging etc.
+func ParseFlagsOrDie(name string, opts interface{}) string {
+	cmd := cli.ParseFlagsOrDie(name, opts)
+
+	// Using reflection here is a bit icky but avoids some pitfalls around passing these by name.
+	v := reflect.ValueOf(opts).Elem()
+	loggingOpts := v.FieldByName("Logging").Interface().(LoggingOpts)
+	info := cli.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
+
+	adminOpts := v.FieldByName("Admin").Interface().(admin.Opts)
+	adminOpts.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	adminOpts.LogInfo = info
+	go admin.Serve(adminOpts)
+
+	return cmd
+}
 
 // An Action represents a combined hash / size pair written like
 // ff17a4efe382e245491d6a9f1ac6bf3adce454f7e4a5559a3579c3856edf1381/122

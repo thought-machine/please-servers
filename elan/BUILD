@@ -2,10 +2,10 @@ go_binary(
     name = "elan",
     srcs = ["main.go"],
     deps = [
+        "//cli",
         "//elan/rpc",
         "//grpcutil",
         "//third_party/go:cli-init",
-        "//third_party/go:http-admin",
         "//third_party/go/gocloud",
     ],
 )
