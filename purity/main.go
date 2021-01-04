@@ -6,8 +6,7 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v2"
-	admin "github.com/thought-machine/http-admin"
+	"github.com/peterebden/go-cli-init/v3"
 
 	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
@@ -17,12 +16,8 @@ var log = cli.MustGetLogger()
 
 var opts = struct {
 	Usage   string
-	Logging struct {
-		Verbosity     cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
-		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
-		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
-	} `group:"Options controlling logging output"`
-	GC struct {
+	Logging flags.LoggingOpts `group:"Options controlling logging output"`
+	GC      struct {
 		URL          string `short:"u" long:"url" required:"true" description:"URL for the storage server"`
 		InstanceName string `short:"i" long:"instance_name" default:"purity-gc" description:"Name of this execution instance"`
 		TokenFile    string `long:"token_file" description:"File containing token to authenticate gRPC requests with"`
@@ -50,8 +45,8 @@ var opts = struct {
 		ReplicationFactor int  `long:"replication_factor" required:"true" description:"Min number of replicas to expect for a blob"`
 		DryRun            bool `long:"dry_run" description:"Don't actually do anything, just log what we'd do"`
 	} `command:"replicate" description:"Re-replicates any underreplicated blobs"`
-	Admin       admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
-	ProfileFile string     `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
+	Admin       flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	ProfileFile string          `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 }{
 	Usage: `
 Purity is a service to implement GC logic for Elan.
@@ -66,10 +61,10 @@ retains the "personal characteristics" theme.
 }
 
 func main() {
-	cmd := cli.ParseFlagsOrDie("Purity", &opts)
-	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
-	opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-	opts.Admin.LogInfo = info
+	cmd, info := flags.ParseFlagsOrDie("Purity", &opts, &opts.Logging)
+	if cmd == "periodic" {
+		go flags.ServeAdmin(opts.Admin, info)
+	}
 	if err := run(cmd); err != nil {
 		log.Fatalf("Failed: %s", err)
 	}
@@ -90,7 +85,6 @@ func run(cmd string) error {
 	if cmd == "one" {
 		return gc.Run(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.One.MinAge), opts.One.ReplicationFactor, opts.One.DryRun)
 	} else if cmd == "periodic" {
-		go admin.Serve(opts.Admin)
 		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.Periodic.MinAge), time.Duration(opts.Periodic.Frequency), opts.One.ReplicationFactor)
 	} else if cmd == "delete" {
 		return gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, flags.AllToProto(opts.Delete.Args.Actions))

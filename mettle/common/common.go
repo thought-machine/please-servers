@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v2"
+	"github.com/peterebden/go-cli-init/v3"
 	"gocloud.dev/pubsub"
 
 	// Must import the schemes we want to use.

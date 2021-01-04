@@ -8,8 +8,7 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v2"
-	"github.com/thought-machine/http-admin"
+	"github.com/peterebden/go-cli-init/v3"
 
 	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"
@@ -33,13 +32,9 @@ type CacheOpts struct {
 }
 
 var opts = struct {
-	Usage   string
-	Logging struct {
-		Verbosity     cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
-		FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
-		LogFile       string        `long:"log_file" description:"File to additionally log output to"`
-	} `group:"Options controlling logging output"`
-	InstanceName string `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
+	Usage        string
+	Logging      flags.LoggingOpts `group:"Options controlling logging output"`
+	InstanceName string            `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API          struct {
 		GRPC   grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
@@ -94,7 +89,7 @@ var opts = struct {
 		Cache       CacheOpts    `group:"Options controlling caching"`
 		Storage     StorageOpts  `group:"Options controlling communication with the CAS server"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
-	Admin admin.Opts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Mettle is an implementation of the execution service of the Remote Execution API.
@@ -135,13 +130,11 @@ func main() {
 	const requests = "mem://requests"
 	const responses = "mem://responses"
 
-	cmd := cli.ParseFlagsOrDie("Mettle", &opts)
-	info := cli.MustInitFileLogging(opts.Logging.Verbosity, opts.Logging.FileVerbosity, opts.Logging.LogFile)
+	cmd, info := flags.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
 	if cmd != "one" {
-		opts.Admin.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-		opts.Admin.LogInfo = info
-		go admin.Serve(opts.Admin)
+		go flags.ServeAdmin(opts.Admin, info)
 	}
+
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(requests)

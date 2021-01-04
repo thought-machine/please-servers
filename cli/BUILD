@@ -1,11 +1,12 @@
 go_library(
     name = "cli",
     srcs = ["cli.go"],
+    visibility = ["PUBLIC"],
     deps = [
         "//third_party/go:cli-init",
+        "//third_party/go:http-admin",
         "//third_party/go:remote-apis",
     ],
-    visibility = ["PUBLIC"],
 )
 
 go_test(
