@@ -100,17 +100,17 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64, memoryThreshold float64) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, timeout, maxCacheSize, minDiskSpace, memoryThreshold); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
 // RunOne runs one single request, returning any error received.
-func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, digest *pb.Digest) error {
+func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile string, cachePrefix []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, timeout, 0, math.MaxInt64, 100.0)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, 0, math.MaxInt64, 100.0)
 	if err != nil {
 		return err
 	}
@@ -121,10 +121,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 			InstanceName: instanceName,
 			ActionDigest: digest,
 		})
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 		log.Notice("Sending request to build %s...", digest.Hash)
-		if err := topic.Send(ctx, &pubsub.Message{Body: b}); err != nil {
+		if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
 			log.Fatalf("Failed to submit job to internal queue: %s", err)
 		}
 		log.Notice("Sent request to build %s", digest.Hash)
@@ -139,8 +137,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64, memoryThreshold float64) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, timeout, maxCacheSize, minDiskSpace, memoryThreshold)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold)
 	if err != nil {
 		return err
 	}
@@ -176,7 +174,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, timeout time.Duration, maxCacheSize, minDiskSpace int64, memoryThreshold float64) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -241,7 +239,6 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		limiter:          make(chan struct{}, downloadParallelism),
 		iolimiter:        make(chan struct{}, ioParallelism),
 		browserURL:       browserURL,
-		timeout:          timeout,
 		startTime:        time.Now(),
 		diskSpace:        minDiskSpace,
 		memoryThreshold:  memoryThreshold,
@@ -290,7 +287,6 @@ type worker struct {
 	clean            bool
 	disabled         bool
 	batchCompression bool
-	timeout          time.Duration
 	fileCache        *cache
 	startTime        time.Time
 	diskSpace        int64
@@ -483,10 +479,8 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	execDuration := execEnd.Sub(start).Seconds()
 	executeDurations.Observe(execDuration)
 	// Regardless of the result, upload stdout / stderr.
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	stdoutDigest, _ := w.client.WriteBlob(ctx, w.stdout.Bytes())
-	stderrDigest, _ := w.client.WriteBlob(ctx, w.stderr.Bytes())
+	stdoutDigest, _ := w.client.WriteBlob(context.Background(), w.stdout.Bytes())
+	stderrDigest, _ := w.client.WriteBlob(context.Background(), w.stderr.Bytes())
 	ar := &pb.ActionResult{
 		ExitCode:          int32(cmd.ProcessState.ExitCode()),
 		StdoutDigest:      stdoutDigest.ToProto(),
@@ -519,9 +513,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	uploadDurations.Observe(uploadDuration.Seconds())
 	log.Info("Outputs uploaded in %s", uploadDuration)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
-	ctx, cancel = context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	ar, err = w.client.UpdateActionResult(ctx, &pb.UpdateActionResultRequest{
+	ar, err = w.client.UpdateActionResult(context.Background(), &pb.UpdateActionResultRequest{
 		InstanceName: w.client.InstanceName,
 		ActionDigest: w.actionDigest,
 		ActionResult: ar,
@@ -595,9 +587,7 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 	if w.browserURL == "" {
 		return ""
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	digest, err := w.client.WriteProto(ctx, &bbcas.UncachedActionResult{
+	digest, err := w.client.WriteProto(context.Background(), &bbcas.UncachedActionResult{
 		ActionDigest: w.actionDigest,
 		ExecuteResponse: &pb.ExecuteResponse{
 			Status: status(codes.Unknown, msg),
@@ -722,9 +712,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		e.Compressor = w.compressor(e.Path, e.Digest.Size)
 		entries = append(entries, e)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	_, _, err = w.client.UploadIfMissing(ctx, entries...)
+	_, _, err = w.client.UploadIfMissing(context.Background(), entries...)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories
@@ -748,16 +736,14 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 		op.Result = &longrunning.Operation_Response{Response: any}
 	}
 	body, _ := proto.Marshal(op)
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash)
 }
 
 // readBlobToProto reads an entire blob and deserialises it into a message.
 func (w *worker) readBlobToProto(digest *pb.Digest, msg proto.Message) error {
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	return w.client.ReadProto(ctx, sdkdigest.NewFromProtoUnvalidated(digest), msg)
+	return w.client.ReadProto(context.Background(), sdkdigest.NewFromProtoUnvalidated(digest), msg)
 }
 
 func status(code codes.Code, msg string, args ...interface{}) *rpcstatus.Status {

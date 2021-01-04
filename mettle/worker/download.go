@@ -36,9 +36,7 @@ const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	ts1 := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	dirs, err := w.client.GetDirectoryTree(ctx, digest)
+	dirs, err := w.client.GetDirectoryTree(context.Background(), digest)
 	if err != nil {
 		return err
 	}
@@ -173,9 +171,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 		}
 		digestToFilenames[d.Hash] = append(filenames, f)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	responses, err := w.client.BatchDownloadCompressedBlobs(ctx, digests, compressors)
+	responses, err := w.client.BatchDownloadCompressedBlobs(context.Background(), digests, compressors)
 	if err != nil {
 		return err
 	}
@@ -198,9 +194,7 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	defer func() { <-w.limiter }()
 
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
-	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
-	defer cancel()
-	if _, err := w.readBlobToFile(ctx, sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
+	if _, err := w.readBlobToFile(context.Background(), sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
