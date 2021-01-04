@@ -11,6 +11,7 @@ import (
 
 	"github.com/peterebden/go-cli-init/v2"
 	"gocloud.dev/pubsub"
+	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 
 	// Must import the schemes we want to use.
 	_ "gocloud.dev/pubsub/gcppubsub"
@@ -71,4 +72,19 @@ func handleSignals(cancel context.CancelFunc, s Shutdownable) {
 
 type Shutdownable interface {
 	Shutdown(context.Context) error
+}
+
+// PublishWithOrderingKey publishes a message and sets the ordering key if possible
+// (i.e. if it is a GCP Pub/Sub message, otherwise no).
+func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byte, key string) error {
+	return topic.Send(ctx, &pubsub.Message{
+		Body: body,
+		BeforeSend: func(asFunc func(interface{}) bool) error {
+			var message *pspb.PubsubMessage
+			if asFunc(message) {
+				message.OrderingKey = key
+			}
+			return nil
+		},
+	})
 }
