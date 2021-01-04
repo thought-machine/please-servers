@@ -37,8 +37,8 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
-	"github.com/thought-machine/please-servers/rexclient"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
+	"github.com/thought-machine/please-servers/rexclient"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 	bbru "github.com/thought-machine/please-servers/third_party/proto/resourceusage"
 )
@@ -750,7 +750,7 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 	body, _ := proto.Marshal(op)
 	ctx, cancel := context.WithTimeout(context.Background(), w.timeout)
 	defer cancel()
-	return w.responses.Send(ctx, &pubsub.Message{Body: body})
+	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash)
 }
 
 // readBlobToProto reads an entire blob and deserialises it into a message.

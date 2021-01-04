@@ -133,7 +133,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := s.preResponses.Send(ctx, &pubsub.Message{Body: b}); err != nil {
+	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash); err != nil {
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
 	b, _ = proto.Marshal(req)
