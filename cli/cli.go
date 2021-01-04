@@ -3,7 +3,6 @@ package cli
 
 import (
 	"fmt"
-	"reflect"
 	"regexp"
 	"strconv"
 
@@ -29,20 +28,17 @@ type LoggingOpts struct {
 type AdminOpts = admin.Opts
 
 // ParseFlagsOrDie parses incoming flags and sets up logging etc.
-func ParseFlagsOrDie(name string, opts interface{}) string {
+func ParseFlagsOrDie(name string, opts interface{}, loggingOpts *LoggingOpts) (string, cli.LogLevelInfo) {
 	cmd := cli.ParseFlagsOrDie(name, opts)
+	return cmd, cli.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
+}
 
-	// Using reflection here is a bit icky but avoids some pitfalls around passing these by name.
-	v := reflect.ValueOf(opts).Elem()
-	loggingOpts := v.FieldByName("Logging").Interface().(LoggingOpts)
-	info := cli.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
-
-	adminOpts := v.FieldByName("Admin").Interface().(admin.Opts)
-	adminOpts.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-	adminOpts.LogInfo = info
-	go admin.Serve(adminOpts)
-
-	return cmd
+// ServeAdmin starts the admin HTTP server.
+// It will block forever so the caller may well want to use a goroutine.
+func ServeAdmin(opts AdminOpts, info cli.LogLevelInfo) {
+	opts.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	opts.LogInfo = info
+	go admin.Serve(opts)
 }
 
 // An Action represents a combined hash / size pair written like

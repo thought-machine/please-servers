@@ -32,6 +32,7 @@ modes are intended for testing only.
 }
 
 func main() {
-	flags.ParseFlagsOrDie("Elan", &opts)
+	_, info := flags.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
+	go flags.ServeAdmin(opts.Admin, info)
 	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize))
 }

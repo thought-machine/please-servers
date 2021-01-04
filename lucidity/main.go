@@ -38,6 +38,6 @@ to go along with Zeal, then it could refer to the GTA Lucidity in FreeSpace 2.
 }
 
 func main() {
-	flags.ParseFlagsOrDie("Lucidity", &opts)
+	flags.ParseFlagsOrDie("Lucidity", &opts, &opts.Logging)
 	rpc.ServeForever(opts.GRPC, opts.HTTPPort, time.Duration(opts.MaxAge), opts.IAP.Audience, opts.IAP.Users)
 }

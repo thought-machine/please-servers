@@ -130,7 +130,11 @@ func main() {
 	const requests = "mem://requests"
 	const responses = "mem://responses"
 
-	cmd := flags.ParseFlagsOrDie("Mettle", &opts)
+	cmd, info := flags.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
+	if cmd != "one" {
+		go flags.ServeAdmin(opts.Admin, info)
+	}
+
 	if cmd == "dual" {
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(requests)

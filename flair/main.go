@@ -44,7 +44,8 @@ want to have more than the minimum number of instances of it (hopefully more tha
 }
 
 func main() {
-	flags.ParseFlagsOrDie("Flair", &opts)
+	_, info := flags.ParseFlagsOrDie("Flair", &opts, &opts.Logging)
+	go flags.ServeAdmin(opts.Admin, info)
 	cr := newReplicator(opts.Geometry, opts.Replicas)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
 	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)

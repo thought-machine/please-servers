@@ -39,6 +39,7 @@ for the Paladin skill in Diablo II since its job is to bang things down as fast 
 }
 
 func main() {
-	flags.ParseFlagsOrDie("Zeal", &opts)
+	_, info := flags.ParseFlagsOrDie("Zeal", &opts, &opts.Logging)
+	go flags.ServeAdmin(opts.Admin, info)
 	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism)
 }
