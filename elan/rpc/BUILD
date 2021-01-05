@@ -11,6 +11,7 @@ go_library(
         "//rexclient",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
+        "//third_party/go:errgroup",
         "//third_party/go:go-multierror",
         "//third_party/go:grpc",
         "//third_party/go:longrunning",

@@ -65,3 +65,13 @@ func MustNew(instanceName, url string, tls bool, tokenFile string) *client.Clien
 	}
 	return client
 }
+
+// Uninitialised returns an uninitialised client that's not suitable for making remote requests
+// with (but can still be useful for all-local logic like ComputeOutputsToUpload)
+func Uninitialised() *client.Client {
+	c := &client.Client{}
+	o := client.TreeSymlinkOpts{Preserved: true}
+	o.Apply(c)
+	client.CompressedBytestreamThreshold(compressionThreshold).Apply(c)
+	return c
+}
