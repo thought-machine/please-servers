@@ -269,7 +269,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
-	log.Debug("Initialised with settings: cache dir: %s max cache size: %d", cacheDir, maxCacheSize)
+	log.Notice("Initialised with settings: CAS: %s cache dir: %s max cache size: %d", storage, cacheDir, maxCacheSize)
 	return w, nil
 }
 
