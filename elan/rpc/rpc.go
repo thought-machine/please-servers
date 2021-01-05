@@ -143,10 +143,10 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 	grpcutil.ServeForever(lis, s)
 }
 
-func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
+func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	srv := &server{
+	return &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:    strings.TrimPrefix(storage, "file://"),
 		isFileStorage:  strings.HasPrefix(storage, "file://"),
@@ -165,6 +165,10 @@ func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCach
 			return r
 		}},
 	}
+}
+
+func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
+	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
