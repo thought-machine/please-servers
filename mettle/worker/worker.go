@@ -35,10 +35,10 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	elan "github.com/thought-machine/please-servers/elan/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
-	"github.com/thought-machine/please-servers/rexclient"
 	bbcas "github.com/thought-machine/please-servers/third_party/proto/cas"
 	bbru "github.com/thought-machine/please-servers/third_party/proto/resourceusage"
 )
@@ -213,7 +213,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 			return nil, fmt.Errorf("Error checking sandbox tool: %s", err)
 		}
 	}
-	client, err := rexclient.New(instanceName, storage, secureStorage, tokenFile)
+	client, err := elan.New(storage, secureStorage, tokenFile)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,6 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		startTime:        time.Now(),
 		diskSpace:        minDiskSpace,
 		memoryThreshold:  memoryThreshold,
-		batchCompression: client.CompressedBytestreamThreshold >= 0,
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix)
@@ -275,7 +274,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 type worker struct {
 	requests         *pubsub.Subscription
 	responses        *pubsub.Topic
-	client           *client.Client
+	client           elan.Client
 	lucidity         lpb.LucidityClient
 	lucidChan        chan *lpb.UpdateRequest
 	cache            *ristretto.Cache

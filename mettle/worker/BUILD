@@ -2,6 +2,7 @@ go_library(
     name = "worker",
     srcs = glob(["*.go"]),
     deps = [
+        "//elan/rpc",
         "//grpcutil",
         "//proto:lucidity",
         "//third_party/go/gocloud",

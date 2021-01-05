@@ -4,7 +4,10 @@ go_library(
         ["*.go"],
         exclude = ["*_test.go"],
     ),
-    visibility = ["//elan/..."],
+    visibility = [
+        "//elan/...",
+        "//mettle/worker/...",
+    ],
     deps = [
         "//grpcutil",
         "//proto:purity",
