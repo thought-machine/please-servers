@@ -15,3 +15,7 @@ func (r *remoteClient) WriteBlob(b []byte) (*pb.Digest, error) {
 	dg, err := r.c.WriteBlob(context.Background(), b)
 	return dg.ToProto(), err
 }
+
+func (r *remoteClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
+	return r.c.UpdateActionResult(context.Background(), req)
+}

@@ -12,6 +12,7 @@ const compressionThreshold = 1024
 
 type elanClient struct{
 	s *server
+	timeout time.Duration
 }
 
 func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
@@ -21,7 +22,13 @@ func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
 		compressed = true
 		b = e.s.compressor.EncodeAll(b, make([]byte, 0, len(b)))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
 	return dg, e.s.bucket.WriteAll(ctx, e.s.compressedKey("cas", dg, compressed), b)
+}
+
+func (e *elanClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
+	defer cancel()
+	return e.s.UpdateActionResult(ctx, req)
 }
