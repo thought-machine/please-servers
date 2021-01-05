@@ -106,3 +106,31 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	e.s.markKnownBlob(key)
 	return nil
 }
+
+func (e *elanClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+	m := make(map[digest.Digest][]byte, len(digests))
+	for i, dg := range digests {
+		d, compressed, err := e.downloadOne(dg.ToProto(), compressors[i] != pb.Compressor_IDENTITY)
+		if err != nil {
+			return nil, err
+		}
+		if compressed {
+			d, err = e.s.decompressor.DecodeAll(d, make([]byte, 0, dg.Size))
+			if err != nil {
+				return nil, err
+			}
+		}
+		m[dg] = d
+	}
+	return m, nil
+}
+
+func (e *elanClient) downloadOne(dg *pb.Digest, compressed bool) ([]byte, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
+	defer cancel()
+	if data, err := e.s.readAllBlob(ctx, "cas", dg, true, compressed); err != nil {
+		return data, compressed, nil
+	}
+	data, err := e.s.readAllBlob(ctx, "cas", dg, true, !compressed)
+	return data, !compressed, err
+}

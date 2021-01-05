@@ -7,6 +7,7 @@ import (
 	"github.com/thought-machine/please-servers/rexclient"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 )
 
 // New creates a new Client based on the given URL.
@@ -31,4 +32,5 @@ type Client interface{
 	WriteBlob([]byte) (*pb.Digest, error)
 	UpdateActionResult(*pb.UpdateActionResultRequest) (*pb.ActionResult, error)
 	UploadIfMissing([]*uploadinfo.Entry) error
+	BatchDownload([]digest.Digest, []pb.Compressor_Value) (map[digest.Digest][]byte, error)
 }

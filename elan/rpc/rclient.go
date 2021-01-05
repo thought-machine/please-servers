@@ -32,3 +32,7 @@ func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	_, _, err := r.c.UploadIfMissing(context.Background(), entries...)
 	return err
 }
+
+func (r *remoteClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+	return r.c.BatchDownloadCompressedBlobs(context.Background(), digests, compressors)
+}
