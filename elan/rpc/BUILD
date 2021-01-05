@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//grpcutil",
         "//proto:purity",
+        "//rexclient",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
         "//third_party/go:go-multierror",
