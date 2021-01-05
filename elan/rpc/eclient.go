@@ -151,3 +151,7 @@ func (e *elanClient) ReadToFile(dg digest.Digest, filename string, compressed bo
 	_, err = io.Copy(f, r)
 	return err
 }
+
+func (e *elanClient) GetDirectoryTree(dg *pb.Digest) ([]*pb.Directory, error) {
+	return e.s.getTree(dg)
+}

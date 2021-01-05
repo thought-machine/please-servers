@@ -45,3 +45,7 @@ func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed 
 	_, err := r.c.ReadBlobToFile(context.Background(), dg, filename)
 	return err
 }
+
+func (r *remoteClient) GetDirectoryTree(dg *pb.Digest) ([]*pb.Directory, error) {
+	return r.c.GetDirectoryTree(context.Background(), dg)
+}
