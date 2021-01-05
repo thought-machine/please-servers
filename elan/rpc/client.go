@@ -33,4 +33,5 @@ type Client interface{
 	UpdateActionResult(*pb.UpdateActionResultRequest) (*pb.ActionResult, error)
 	UploadIfMissing([]*uploadinfo.Entry) error
 	BatchDownload([]digest.Digest, []pb.Compressor_Value) (map[digest.Digest][]byte, error)
+	ReadToFile(digest.Digest, string, bool) error
 }

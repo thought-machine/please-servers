@@ -36,3 +36,12 @@ func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 func (r *remoteClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
 	return r.c.BatchDownloadCompressedBlobs(context.Background(), digests, compressors)
 }
+
+func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
+	if !compressed {
+		_, err := r.c.ReadBlobToFileUncompressed(context.Background(), dg, filename)
+		return err
+	}
+	_, err := r.c.ReadBlobToFile(context.Background(), dg, filename)
+	return err
+}

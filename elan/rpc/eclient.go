@@ -134,3 +134,20 @@ func (e *elanClient) downloadOne(dg *pb.Digest, compressed bool) ([]byte, bool, 
 	data, err := e.s.readAllBlob(ctx, "cas", dg, true, !compressed)
 	return data, !compressed, err
 }
+
+func (e *elanClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
+	defer cancel()
+	r, _, err := e.s.readCompressed(ctx, "cas", dg.ToProto(), false, 0, -1)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	_, err = io.Copy(f, r)
+	return err
+}
