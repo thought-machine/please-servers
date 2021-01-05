@@ -170,13 +170,13 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	if s.shouldSkipCompression(blob) {
 		digest, err := s.storageClient.WriteBlobUncompressed(ctx, blob)
 		if err == nil {
-			log.Info("Wrote %s as compressed blob %s", url, digest.Hash)
+			log.Info("Wrote %s as uncompressed blob %s", url, digest.Hash)
 		}
 		return digest.ToProto(), err
 	}
 	digest, err := s.storageClient.WriteBlob(ctx, blob)
 	if err == nil {
-		log.Info("Wrote %s as uncompressed blob %s", url, digest.Hash)
+		log.Info("Wrote %s as compressed blob %s", url, digest.Hash)
 	}
 	return digest.ToProto(), err
 }

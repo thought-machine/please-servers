@@ -74,6 +74,9 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	defer func() { <-e.s.limiter }()
 	compressed := entry.Compressor != pb.Compressor_IDENTITY
 	key := e.s.compressedKey("cas", entry.Digest.ToProto(), compressed)
+	if compressed {
+		entry.Contents = e.s.compressor.EncodeAll(entry.Contents, make([]byte, 0, entry.Digest.Size))
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
 	if len(entry.Contents) > 0 {
@@ -89,7 +92,8 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	if err != nil {
 		return err
 	}
-	var w io.Writer = wr
+	defer wr.Close()
+	var w io.WriteCloser = wr
 	if compressed {
 		zw := e.s.compressorPool.Get().(*zstd.Encoder)
 		defer e.s.compressorPool.Put(zw)
@@ -98,9 +102,11 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 		defer zw.Close()
 	}
 	if _, err := io.Copy(w, f); err != nil {
+		cancel()
 		return err
 	}
-	if err := wr.Close(); err != nil {
+	if err := w.Close(); err != nil {
+		cancel()
 		return err
 	}
 	e.s.markKnownBlob(key)

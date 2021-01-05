@@ -641,9 +641,11 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		cancel() // ensure this happens before w.Close()
 		return err
 	} else if actual := hex.EncodeToString(h.Sum(nil)); actual != digest.Hash {
+		cancel()
 		return fmt.Errorf("Rejecting write of %s; actual received digest was %s", digest.Hash, actual)
 	}
 	if err := w.Close(); err != nil {
+		cancel()
 		return err
 	}
 	s.markKnownBlob(key)
