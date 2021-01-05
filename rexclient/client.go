@@ -13,12 +13,12 @@ import (
 
 var log = cli.MustGetLogger()
 
-// compressionThreshold is the minimum size (in bytes) for the client to consider any blob
+// CompressionThreshold is the minimum size (in bytes) for the client to consider any blob
 // for compression. Empirical evidence suggests zstd typically makes it worse at sizes under
 // a few hundred bytes and gains are minimal until approaching a kilobyte.
 // TODO(peterebden): Look into dictionary compression which is designed to improve compression
 //                   of small items.
-const compressionThreshold = 1024
+const CompressionThreshold = 1024
 
 // New creates a new remote execution client.
 // It automatically handles some things like compression.
@@ -29,7 +29,7 @@ func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, 
 		NoSecurity:         !tls,
 		TransportCredsOnly: tls,
 		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(compressionThreshold))
+	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold))
 	if err != nil {
 		log.Error("Error initialising remote execution client: %s", err)
 		return nil, err
@@ -72,6 +72,6 @@ func Uninitialised() *client.Client {
 	c := &client.Client{}
 	o := client.TreeSymlinkOpts{Preserved: true}
 	o.Apply(c)
-	client.CompressedBytestreamThreshold(compressionThreshold).Apply(c)
+	client.CompressedBytestreamThreshold(CompressionThreshold).Apply(c)
 	return c
 }

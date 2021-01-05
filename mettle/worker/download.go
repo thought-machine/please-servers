@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -17,6 +16,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -36,7 +37,7 @@ const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	ts1 := time.Now()
-	dirs, err := w.client.GetDirectoryTree(context.Background(), digest)
+	dirs, err := w.client.GetDirectoryTree(digest)
 	if err != nil {
 		return err
 	}
@@ -171,7 +172,7 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 		}
 		digestToFilenames[d.Hash] = append(filenames, f)
 	}
-	responses, err := w.client.BatchDownloadCompressedBlobs(context.Background(), digests, compressors)
+	responses, err := w.client.BatchDownload(digests, compressors)
 	if err != nil {
 		return err
 	}
@@ -194,21 +195,13 @@ func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
 	defer func() { <-w.limiter }()
 
 	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
-	if _, err := w.readBlobToFile(context.Background(), sdkdigest.NewFromProtoUnvalidated(file.Digest), filename); err != nil {
+	if err := w.client.ReadToFile(sdkdigest.NewFromProtoUnvalidated(file.Digest), filename, w.compressor(filename, file.Digest.SizeBytes) != pb.Compressor_ZSTD); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
 	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
 	}
 	w.fileCache.Store(w.dir, filename, file.Digest.Hash)
 	return nil
-}
-
-// readBlobToFile wraps around the SDK's ReadBlobToFile(Uncompressed) methods.
-func (w *worker) readBlobToFile(ctx context.Context, dg sdkdigest.Digest, filename string) (int64, error) {
-	if shouldCompress(filename) {
-		return w.client.ReadBlobToFile(ctx, dg, filename)
-	}
-	return w.client.ReadBlobToFileUncompressed(ctx, dg, filename)
 }
 
 // writeFile writes a blob to disk.
@@ -262,10 +255,7 @@ func fileMode(isExecutable bool) os.FileMode {
 
 // compressor returns the compressor to use for a given filename
 func (w *worker) compressor(filename string, size int64) pb.Compressor_Value {
-	threshold := int64(w.client.CompressedBytestreamThreshold)
-	if threshold < 0 || !w.batchCompression {
-		return pb.Compressor_IDENTITY
-	} else if size >= threshold && shouldCompress(filename) {
+	if size >= rexclient.CompressionThreshold && shouldCompress(filename) {
 		return pb.Compressor_ZSTD
 	}
 	return pb.Compressor_IDENTITY
