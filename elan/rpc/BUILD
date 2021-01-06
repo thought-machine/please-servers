@@ -4,12 +4,17 @@ go_library(
         ["*.go"],
         exclude = ["*_test.go"],
     ),
-    visibility = ["//elan/..."],
+    visibility = [
+        "//elan/...",
+        "//mettle/worker/...",
+    ],
     deps = [
         "//grpcutil",
         "//proto:purity",
+        "//rexclient",
         "//third_party/go:bytestream",
         "//third_party/go:cli-init",
+        "//third_party/go:errgroup",
         "//third_party/go:go-multierror",
         "//third_party/go:grpc",
         "//third_party/go:longrunning",

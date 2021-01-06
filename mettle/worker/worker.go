@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
-	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	elan "github.com/thought-machine/please-servers/elan/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
 	lpb "github.com/thought-machine/please-servers/proto/lucidity"
@@ -213,7 +213,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 			return nil, fmt.Errorf("Error checking sandbox tool: %s", err)
 		}
 	}
-	client, err := rexclient.New(instanceName, storage, secureStorage, tokenFile)
+	client, err := elan.New(storage, secureStorage, tokenFile)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +231,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		requests:         common.MustOpenSubscription(requestQueue),
 		responses:        common.MustOpenTopic(responseQueue),
 		client:           client,
+		rclient:          rexclient.Uninitialised(),
 		rootDir:          abspath,
 		clean:            clean,
 		home:             home,
@@ -242,7 +243,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		startTime:        time.Now(),
 		diskSpace:        minDiskSpace,
 		memoryThreshold:  memoryThreshold,
-		batchCompression: client.CompressedBytestreamThreshold >= 0,
+		instanceName:     instanceName,
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix)
@@ -268,17 +269,19 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
-	log.Notice("Initialised with settings: max batch size: %d max batch count: %d chunk max size: %d cache dir: %s max cache size: %d batch compression: %v", client.MaxBatchSize, client.MaxBatchDigests, client.ChunkMaxSize, cacheDir, maxCacheSize, w.batchCompression)
+	log.Notice("Initialised with settings: CAS: %s cache dir: %s max cache size: %d", storage, cacheDir, maxCacheSize)
 	return w, nil
 }
 
 type worker struct {
 	requests         *pubsub.Subscription
 	responses        *pubsub.Topic
-	client           *client.Client
+	client           elan.Client
+	rclient          *client.Client
 	lucidity         lpb.LucidityClient
 	lucidChan        chan *lpb.UpdateRequest
 	cache            *ristretto.Cache
+	instanceName     string
 	dir, rootDir     string
 	home             string
 	name             string
@@ -479,12 +482,12 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	execDuration := execEnd.Sub(start).Seconds()
 	executeDurations.Observe(execDuration)
 	// Regardless of the result, upload stdout / stderr.
-	stdoutDigest, _ := w.client.WriteBlob(context.Background(), w.stdout.Bytes())
-	stderrDigest, _ := w.client.WriteBlob(context.Background(), w.stderr.Bytes())
+	stdoutDigest, _ := w.client.WriteBlob(w.stdout.Bytes())
+	stderrDigest, _ := w.client.WriteBlob(w.stderr.Bytes())
 	ar := &pb.ActionResult{
 		ExitCode:          int32(cmd.ProcessState.ExitCode()),
-		StdoutDigest:      stdoutDigest.ToProto(),
-		StderrDigest:      stderrDigest.ToProto(),
+		StdoutDigest:      stdoutDigest,
+		StderrDigest:      stderrDigest,
 		ExecutionMetadata: w.metadata,
 	}
 	log.Info("Uploading outputs for %s", w.actionDigest.Hash)
@@ -513,8 +516,8 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	uploadDurations.Observe(uploadDuration.Seconds())
 	log.Info("Outputs uploaded in %s", uploadDuration)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
-	ar, err = w.client.UpdateActionResult(context.Background(), &pb.UpdateActionResultRequest{
-		InstanceName: w.client.InstanceName,
+	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
+		InstanceName: w.instanceName,
 		ActionDigest: w.actionDigest,
 		ActionResult: ar,
 	})
@@ -587,18 +590,19 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 	if w.browserURL == "" {
 		return ""
 	}
-	digest, err := w.client.WriteProto(context.Background(), &bbcas.UncachedActionResult{
+	b, _ := proto.Marshal(&bbcas.UncachedActionResult{
 		ActionDigest: w.actionDigest,
 		ExecuteResponse: &pb.ExecuteResponse{
 			Status: status(codes.Unknown, msg),
 			Result: ar,
 		},
 	})
+	digest, err := w.client.WriteBlob(b)
 	if err != nil {
 		log.Warning("Failed to save uncached action result: %s", err)
 		return ""
 	}
-	w.lastURL = fmt.Sprintf("%s/uncached_action_result/%s/%s/%d/", w.browserURL, w.client.InstanceName, digest.Hash, digest.Size)
+	w.lastURL = fmt.Sprintf("%s/uncached_action_result/%s/%s/%d/", w.browserURL, w.instanceName, digest.Hash, digest.SizeBytes)
 	return "\nFailed action details: " + w.lastURL + "\n      Original action: " + w.actionURL()
 }
 
@@ -607,7 +611,7 @@ func (w *worker) actionURL() string {
 	if w.browserURL == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/action/%s/%s/%d/", w.browserURL, w.client.InstanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
+	return fmt.Sprintf("%s/action/%s/%s/%d/", w.browserURL, w.instanceName, w.actionDigest.Hash, w.actionDigest.SizeBytes)
 }
 
 // shouldSandbox returns true if we should sandbox execution of the given command.
@@ -703,7 +707,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		}
 	}
 
-	m, ar2, err := w.client.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, filemetadata.NewNoopCache())
+	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, filemetadata.NewNoopCache())
 	if err != nil {
 		return err
 	}
@@ -712,7 +716,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		e.Compressor = w.compressor(e.Path, e.Digest.Size)
 		entries = append(entries, e)
 	}
-	_, _, err = w.client.UploadIfMissing(context.Background(), entries...)
+	err = w.client.UploadIfMissing(entries)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories
@@ -743,7 +747,11 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 
 // readBlobToProto reads an entire blob and deserialises it into a message.
 func (w *worker) readBlobToProto(digest *pb.Digest, msg proto.Message) error {
-	return w.client.ReadProto(context.Background(), sdkdigest.NewFromProtoUnvalidated(digest), msg)
+	b, err := w.client.ReadBlob(digest)
+	if err != nil {
+		return err
+	}
+	return proto.Unmarshal(b, msg)
 }
 
 func status(code codes.Code, msg string, args ...interface{}) *rpcstatus.Status {
