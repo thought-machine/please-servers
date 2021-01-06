@@ -99,7 +99,6 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 		defer e.s.compressorPool.Put(zw)
 		zw.Reset(w)
 		w = zw
-		defer zw.Close()
 	}
 	if _, err := io.Copy(w, f); err != nil {
 		cancel()
