@@ -400,7 +400,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 		}(i, r)
 	}
 	wg.Wait()
-	log.Debug("Served BatchReadBlobs request of %d blobs, total %d bytes in %s", len(req.Digests), size, time.Since(start))
+	log.Debug("Served BatchReadBlobs request of %d blobs, total %d bytes in %s", len(resp.Responses), size, time.Since(start))
 	return resp, nil
 }
 

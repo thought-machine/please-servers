@@ -176,6 +176,9 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 	if err != nil {
 		return err
 	}
+	if len(responses) != len(digests) {
+		return grpcstatus.Errorf(codes.InvalidArgument, "Unexpected response, requested %d blobs, got %d", len(digests), len(responses))
+	}
 	for dg, data := range responses {
 		if filenames, present := digestToFilenames[dg.Hash]; !present {
 			return grpcstatus.Errorf(codes.InvalidArgument, "Unknown digest %s in response", dg.Hash)
