@@ -74,12 +74,12 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	defer func() { <-e.s.limiter }()
 	compressed := entry.Compressor != pb.Compressor_IDENTITY
 	key := e.s.compressedKey("cas", entry.Digest.ToProto(), compressed)
-	if compressed {
-		entry.Contents = e.s.compressor.EncodeAll(entry.Contents, make([]byte, 0, entry.Digest.Size))
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
 	if len(entry.Contents) > 0 {
+		if compressed {
+			entry.Contents = e.s.compressor.EncodeAll(entry.Contents, make([]byte, 0, entry.Digest.Size))
+		}
 		return e.s.bucket.WriteAll(ctx, key, entry.Contents)
 	}
 	// OK it's in a file, stream it across.
