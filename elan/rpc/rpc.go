@@ -34,6 +34,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v3"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/hashicorp/go-multierror"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	"google.golang.org/api/googleapi"
@@ -489,15 +490,22 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 		return r, false, err
 	}
 	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
-	if err != nil {
-		if r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit); err == nil {
-			blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
-			return s.compressedReader(r, compressed, !compressed)
-		}
+	if err == nil {
+		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
+		return s.compressedReader(r, compressed, compressed)
+	}
+	r, err2 := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit)
+	if err2 == nil {
+		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
+		return s.compressedReader(r, compressed, !compressed)
+	}
+	// Bit of fiddling around to provide the most interesting error.
+	if isNotFound(err) {
+		return nil, false, err2
+	} else if isNotFound(err2) {
 		return nil, false, err
 	}
-	blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
-	return s.compressedReader(r, compressed, compressed)
+	return nil, false, multierror.Append(err, err2)
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
@@ -759,8 +767,13 @@ func batchLabel(batched, streamed bool) string {
 
 // handleNotFound converts an error from a gocloud error to a gRPC one for NotFound errors.
 func handleNotFound(err error, key string) error {
-	if gcerrors.Code(err) == gcerrors.NotFound {
+	if isNotFound(err) {
 		return status.Errorf(codes.NotFound, "Blob %s not found", key)
 	}
 	return err
+}
+
+// isNotFound returns true if the given error is for a blob not being found.
+func isNotFound(err error) bool {
+	return gcerrors.Code(err) == gcerrors.NotFound
 }
