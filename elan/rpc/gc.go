@@ -34,6 +34,13 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 		}
 		return err
 	})
+	g.Go(func() error {
+		ar, err := s.list(ctx, "zstd_cas", req.Prefix)
+		for _, a := range ar {
+			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes, Replicas: 1})
+		}
+		return err
+	})
 	return resp, g.Wait().ErrorOrNil()
 }
 
@@ -53,7 +60,7 @@ func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.Actio
 		} else if hash := path.Base(obj.Key); !strings.HasPrefix(hash, "tmp") {
 			ret = append(ret, &ppb.ActionResult{
 				Hash:         hash,
-				SizeBytes:    obj.Size,
+				SizeBytes:    obj.Size,  // Note that this might not be accurate for compressed blobs. For GC it is unlikely to matter deeply.
 				LastAccessed: obj.ModTime.Unix(),
 				Replicas:     1,
 			})
@@ -64,9 +71,13 @@ func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.Actio
 
 func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.DeleteResponse, error) {
 	log.Notice("Delete request for %d action results, %d blobs", len(req.ActionResults), len(req.Blobs))
+	// Note that we don't differentiate between compressed and uncompressed blobs in the request
+	// (the fact they're stored differently is an implementation detail). This is a _little_
+	// inefficient since we have to check all of them twice, but c'est la vie.
 	var g multierror.Group
 	g.Go(func() error { return s.deleteAll(ctx, "ac", req.ActionResults, req.Hard) })
 	g.Go(func() error { return s.deleteAll(ctx, "cas", req.Blobs, req.Hard) })
+	g.Go(func() error { return s.deleteAll(ctx, "zstd_cas", req.Blobs, req.Hard) })
 	return &ppb.DeleteResponse{}, g.Wait().ErrorOrNil()
 }
 
