@@ -448,12 +448,8 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	if req.ReadOffset < 0 || req.ReadOffset > digest.SizeBytes {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
-	} else if req.ReadLimit == 0 {
+	} else if req.ReadLimit == 0 || req.ReadOffset+req.ReadLimit >= digest.SizeBytes {
 		req.ReadLimit = -1
-		bytesServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(digest.SizeBytes - req.ReadOffset))
-	} else if req.ReadOffset+req.ReadLimit > digest.SizeBytes {
-		req.ReadLimit = digest.SizeBytes - req.ReadOffset
-		bytesServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(req.ReadLimit))
 	}
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
@@ -477,6 +473,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if err != nil {
 		return err
 	}
+	bytesServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(n))
 	log.Debug("Completed ByteStream.Read request of %d bytes (starting at %d) for %s in %s", n, req.ReadOffset, digest.Hash, time.Since(start))
 	return nil
 }
