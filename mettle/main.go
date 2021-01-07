@@ -73,8 +73,7 @@ var opts = struct {
 		MemoryThreshold float64       `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		Cache           CacheOpts     `group:"Options controlling caching"`
 		Storage         struct {
-			Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			Storage2 string `short:"2" long:"storage2" description:"URL to connect to the CAS server on, for every second worker"`
+			Storage []string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
@@ -142,14 +141,9 @@ func main() {
 		if opts.Dual.NumWorkers == 0 {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}
-		storage := func(i int) string {
-			if i % 2 == 0 || opts.Dual.Storage.Storage2 == "" {
-				return opts.Dual.Storage.Storage
-			}
-			return opts.Dual.Storage.Storage2
-		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage(i), opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
+			storage := opts.Dual.Storage.Storage[i % len(opts.Dual.Storage.Storage)]
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
 	} else if cmd == "worker" {

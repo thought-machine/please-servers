@@ -14,5 +14,5 @@ go_binary(
 sh_cmd(
     name = "run_local",
     srcs = [":mettle"],
-    cmd = "mkdir -p plz-out/elan && exec $(out_location :mettle) dual --host 127.0.0.1 --port 7778 -s 127.0.0.1:7777 -2 file://\\\\$PWD/plz-out/elan -d plz-out/mettle --log_file plz-out/log/mettle.log --browser http://127.0.0.1:7779 --sandbox ~/.please/please_sandbox --admin_host 127.0.0.1 --token_file grpcutil/token.txt --lucidity grpc://127.0.0.1:7774 --cache_dir plz-out/mettle-cache --cache_prefix third_party --memory_threshold 95.0",
+    cmd = "mkdir -p plz-out/elan && exec $(out_location :mettle) dual --host 127.0.0.1 --port 7778 -s 127.0.0.1:7777 -s file://\\\\$PWD/plz-out/elan -s 127.0.0.1:7772 -d plz-out/mettle --log_file plz-out/log/mettle.log --browser http://127.0.0.1:7779 --sandbox ~/.please/please_sandbox --admin_host 127.0.0.1 --token_file grpcutil/token.txt --lucidity grpc://127.0.0.1:7774 --cache_dir plz-out/mettle-cache --cache_prefix third_party --memory_threshold 95.0",
 )
