@@ -495,7 +495,7 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
 		return s.compressedReader(r, compressed, compressed, offset)
 	}
-	r, err2 := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), bucketOffset(compressed, offset), limit)
+	r, err2 := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), bucketOffset(!compressed, offset), limit)
 	if err2 == nil {
 		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
 		return s.compressedReader(r, compressed, !compressed, offset)
