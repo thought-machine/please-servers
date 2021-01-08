@@ -448,6 +448,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	}
 	if req.ReadOffset < 0 || req.ReadOffset > digest.SizeBytes {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
+	} else if req.ReadOffset == digest.SizeBytes {
+		// We know there is nothing left to read, just return immediately.
+		log.Debug("Completed ByteStream.Read request immediately at final byte %d of %s", digest.SizeBytes, digest.Hash)
+		return nil
 	} else if req.ReadLimit == 0 || req.ReadOffset+req.ReadLimit >= digest.SizeBytes {
 		req.ReadLimit = -1
 	}
