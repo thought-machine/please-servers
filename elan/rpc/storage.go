@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"io"
+	"io/ioutil"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -63,33 +64,46 @@ func (a *adapter) Delete(ctx context.Context, key string, hard bool) error {
 }
 
 // compressedReader returns a reader wrapped in a decompressor or compressor as needed.
-func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed bool) (io.ReadCloser, bool, error) {
+func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed bool, offset int64) (io.ReadCloser, bool, error) {
 	if needCompression == isCompressed {
-		return r, false, nil // stream back bytes directly
+		// Just stream the bytes back directly. This is not in line with the API (which says that offsets
+		// always refer to the uncompressed stream) but (more relevantly to us right now) does match what
+		// the SDK does (which currently just counts bytes it's read off the remote, regardless of mode).
+		return r, false, nil
+	} else if isCompressed && offset != 0 {
+		// Offsets refer into the uncompressed blob, we have to handle that ourselves.
+		r = s.decompressReader(r)
+		_, err := io.CopyN(ioutil.Discard, r, offset)
+		return r, false, err
 	} else if isCompressed {
-		zr := s.decompressorPool.Get().(*zstd.Decoder)
-		zr.Reset(r)
-		return &readerCloser{c: r, r: zr, p: s.decompressorPool}, false, nil
+		return s.decompressReader(r), false, nil
 	}
 	return r, true, nil
 }
 
-// A readerCloser takes all reads from a reader but closes a different closer, and re-adds
+// decompressReader wraps a reader in zstd decompression.
+func (s *server) decompressReader(r io.ReadCloser) io.ReadCloser {
+	zr := s.decompressorPool.Get().(*zstd.Decoder)
+	zr.Reset(r)
+	return &zstdCloser{c: r, r: zr, p: s.decompressorPool}
+}
+
+// A zstdCloser takes all reads from a reader but closes a different closer, and re-adds
 // the decoder to a pool after.
 // This is because we don't want to close the zstd readers (we reset them instead) but we do
 // want to close the underlying reader into the storage bucket, and make sure they are
 // returned to the pool.
-type readerCloser struct {
+type zstdCloser struct {
 	c io.Closer
 	r *zstd.Decoder
 	p *sync.Pool
 }
 
-func (c *readerCloser) Read(p []byte) (int, error) {
+func (c *zstdCloser) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-func (c *readerCloser) Close() error {
+func (c *zstdCloser) Close() error {
 	err := c.c.Close()
 	c.p.Put(c.r)
 	return err

@@ -493,12 +493,12 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
 	if err == nil {
 		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
-		return s.compressedReader(r, compressed, compressed)
+		return s.compressedReader(r, compressed, compressed, offset)
 	}
-	r, err2 := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), offset, limit)
+	r, err2 := s.readBlob(ctx, s.compressedKey(prefix, digest, !compressed), bucketOffset(compressed, offset), limit)
 	if err2 == nil {
 		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
-		return s.compressedReader(r, compressed, !compressed)
+		return s.compressedReader(r, compressed, !compressed, offset)
 	}
 	// Bit of fiddling around to provide the most interesting error.
 	if isNotFound(err) {
@@ -777,4 +777,12 @@ func handleNotFound(err error, key string) error {
 // isNotFound returns true if the given error is for a blob not being found.
 func isNotFound(err error) bool {
 	return gcerrors.Code(err) == gcerrors.NotFound
+}
+
+// bucketOffset returns the offset we'd use into the underlying bucket (which may be zero if compressed)
+func bucketOffset(compressed bool, offset int64) int64 {
+	if compressed {
+		return 0
+	}
+	return offset
 }
