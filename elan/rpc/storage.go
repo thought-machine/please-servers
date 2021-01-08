@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"io"
+	"io/ioutil"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -63,15 +64,25 @@ func (a *adapter) Delete(ctx context.Context, key string, hard bool) error {
 }
 
 // compressedReader returns a reader wrapped in a decompressor or compressor as needed.
-func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed bool) (io.ReadCloser, bool, error) {
-	if needCompression == isCompressed {
+func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed bool, offset int64) (io.ReadCloser, bool, error) {
+	if isCompressed && offset != 0 {
+		// Offsets refer into the uncompressed blob, we have to handle that ourselves.
+		r = s.decompressReader(r)
+		_, err := io.CopyN(ioutil.Discard, r, offset)
+		return r, true, err
+	} else if needCompression == isCompressed {
 		return r, false, nil // stream back bytes directly
 	} else if isCompressed {
-		zr := s.decompressorPool.Get().(*zstd.Decoder)
-		zr.Reset(r)
-		return &zstdCloser{c: r, r: zr, p: s.decompressorPool}, false, nil
+		return s.decompressReader(r), false, nil
 	}
 	return r, true, nil
+}
+
+// decompressReader wraps a reader in zstd decompression.
+func (s *server) decompressReader(r io.ReadCloser) io.ReadCloser {
+	zr := s.decompressorPool.Get().(*zstd.Decoder)
+	zr.Reset(r)
+	return &zstdCloser{c: r, r: zr, p: s.decompressorPool}
 }
 
 // A zstdCloser takes all reads from a reader but closes a different closer, and re-adds
@@ -93,18 +104,4 @@ func (c *zstdCloser) Close() error {
 	err := c.c.Close()
 	c.p.Put(c.r)
 	return err
-}
-
-// A readerCloser wraps a reader and a closer, sending all the reads to the reader but closes the closer.
-type readerCloser struct {
-	c io.Closer
-	r io.Reader
-}
-
-func (rc *readerCloser) Read(p []byte) (int, error) {
-	return rc.r.Read(p)
-}
-
-func (rc *readerCloser) Close() error {
-	return rc.c.Close()
 }
