@@ -482,8 +482,14 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	execDuration := execEnd.Sub(start).Seconds()
 	executeDurations.Observe(execDuration)
 	// Regardless of the result, upload stdout / stderr.
-	stdoutDigest, _ := w.client.WriteBlob(w.stdout.Bytes())
-	stderrDigest, _ := w.client.WriteBlob(w.stderr.Bytes())
+	stdoutDigest, err := w.client.WriteBlob(w.stdout.Bytes())
+	if err != nil {
+		log.Warning("Failed to upload stdout: %s", err)
+	}
+	stderrDigest, err := w.client.WriteBlob(w.stderr.Bytes())
+	if err != nil {
+		log.Warning("Failed to upload stderr: %s", err)
+	}
 	ar := &pb.ActionResult{
 		ExitCode:          int32(cmd.ProcessState.ExitCode()),
 		StdoutDigest:      stdoutDigest,

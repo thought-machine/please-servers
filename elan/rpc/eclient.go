@@ -30,14 +30,21 @@ func (e *elanClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 
 func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
 	dg := digest.NewFromBlob(b).ToProto()
+	if dg.Hash == digest.Empty.Hash {
+		return dg, nil
+	}
 	compressed := false
 	if len(b) >= compressionThreshold {
 		compressed = true
 		b = e.s.compressor.EncodeAll(b, make([]byte, 0, len(b)))
 	}
+	key := e.s.compressedKey("cas", dg, compressed)
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
-	return dg, e.s.bucket.WriteAll(ctx, e.s.compressedKey("cas", dg, compressed), b)
+	if e.s.blobExists(ctx, key) {
+		return dg, nil
+	}
+	return dg, e.s.bucket.WriteAll(ctx, key, b)
 }
 
 func (e *elanClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
