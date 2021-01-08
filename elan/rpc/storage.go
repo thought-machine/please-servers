@@ -65,13 +65,16 @@ func (a *adapter) Delete(ctx context.Context, key string, hard bool) error {
 
 // compressedReader returns a reader wrapped in a decompressor or compressor as needed.
 func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed bool, offset int64) (io.ReadCloser, bool, error) {
-	if isCompressed && offset != 0 {
+	if needCompression == isCompressed {
+		// Just stream the bytes back directly. This is not in line with the API (which says that offsets
+		// always refer to the uncompressed stream) but (more relevantly to us right now) does match what
+		// the SDK does (which currently just counts bytes it's read off the remote, regardless of mode).
+		return r, false, nil
+	} else if isCompressed && offset != 0 {
 		// Offsets refer into the uncompressed blob, we have to handle that ourselves.
 		r = s.decompressReader(r)
 		_, err := io.CopyN(ioutil.Discard, r, offset)
-		return r, true, err
-	} else if needCompression == isCompressed {
-		return r, false, nil // stream back bytes directly
+		return r, false, err
 	} else if isCompressed {
 		return s.decompressReader(r), false, nil
 	}
