@@ -69,28 +69,42 @@ func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed
 	} else if isCompressed {
 		zr := s.decompressorPool.Get().(*zstd.Decoder)
 		zr.Reset(r)
-		return &readerCloser{c: r, r: zr, p: s.decompressorPool}, false, nil
+		return &zstdCloser{c: r, r: zr, p: s.decompressorPool}, false, nil
 	}
 	return r, true, nil
 }
 
-// A readerCloser takes all reads from a reader but closes a different closer, and re-adds
+// A zstdCloser takes all reads from a reader but closes a different closer, and re-adds
 // the decoder to a pool after.
 // This is because we don't want to close the zstd readers (we reset them instead) but we do
 // want to close the underlying reader into the storage bucket, and make sure they are
 // returned to the pool.
-type readerCloser struct {
+type zstdCloser struct {
 	c io.Closer
 	r *zstd.Decoder
 	p *sync.Pool
 }
 
-func (c *readerCloser) Read(p []byte) (int, error) {
+func (c *zstdCloser) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-func (c *readerCloser) Close() error {
+func (c *zstdCloser) Close() error {
 	err := c.c.Close()
 	c.p.Put(c.r)
 	return err
+}
+
+// A readerCloser wraps a reader and a closer, sending all the reads to the reader but closes the closer.
+type readerCloser struct {
+	c io.Closer
+	r io.Reader
+}
+
+func (rc *readerCloser) Read(p []byte) (int, error) {
+	return rc.r.Read(p)
+}
+
+func (rc *readerCloser) Close() error {
+	return rc.c.Close()
 }

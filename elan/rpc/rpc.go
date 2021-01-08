@@ -490,6 +490,25 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 		r, err := s.readBlob(ctx, s.key(prefix, digest), offset, limit)
 		return r, false, err
 	}
+	if compressed && (offset != 0 || limit != -1) {
+		// Offsets refer into the uncompressed blob, we can't handle that through the GCS API unfortunately.
+		r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, false), 0, -1)
+		if err != nil {
+			return nil, false, err
+		}
+		if limit != -1 {
+			r = &readerCloser{
+				r: &io.LimitedReader{R: r, N: limit},
+				c: r,
+			}
+		}
+		if offset != 0 {
+			if _, err := io.CopyN(ioutil.Discard, r, offset); err != nil {
+				return nil, false, err
+			}
+		}
+		return r, true, nil
+	}
 	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
 	if err == nil {
 		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
