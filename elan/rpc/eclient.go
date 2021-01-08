@@ -77,12 +77,18 @@ func (e *elanClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 }
 
 func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
+	if entry.Digest.Hash == digest.Empty.Hash {
+		return nil
+	}
 	e.s.limiter <- struct{}{}
 	defer func() { <-e.s.limiter }()
 	compressed := entry.Compressor != pb.Compressor_IDENTITY
 	key := e.s.compressedKey("cas", entry.Digest.ToProto(), compressed)
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
+	if e.s.blobExists(ctx, key) {
+		return nil
+	}
 	if len(entry.Contents) > 0 {
 		if compressed {
 			entry.Contents = e.s.compressor.EncodeAll(entry.Contents, make([]byte, 0, entry.Digest.Size))
@@ -143,6 +149,9 @@ func (e *elanClient) ReadToFile(dg digest.Digest, filename string, compressed bo
 		return err
 	}
 	defer f.Close()
+	if dg == digest.Empty {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
 	r, _, err := e.s.readCompressed(ctx, "cas", dg.ToProto(), false, 0, -1)
