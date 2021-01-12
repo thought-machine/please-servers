@@ -481,19 +481,10 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	w.metadata.OutputUploadStartTimestamp = w.metadata.ExecutionCompletedTimestamp
 	execDuration := execEnd.Sub(start).Seconds()
 	executeDurations.Observe(execDuration)
-	// Regardless of the result, upload stdout / stderr.
-	stdoutDigest, err := w.client.WriteBlob(w.stdout.Bytes())
-	if err != nil {
-		log.Warning("Failed to upload stdout: %s", err)
-	}
-	stderrDigest, err := w.client.WriteBlob(w.stderr.Bytes())
-	if err != nil {
-		log.Warning("Failed to upload stderr: %s", err)
-	}
 	ar := &pb.ActionResult{
 		ExitCode:          int32(cmd.ProcessState.ExitCode()),
-		StdoutDigest:      stdoutDigest,
-		StderrDigest:      stderrDigest,
+		StdoutDigest:      w.writeBlob(w.stdout.Bytes(), "stdout"),
+		StderrDigest:      w.writeBlob(w.stderr.Bytes(), "stderr"),
 		ExecutionMetadata: w.metadata,
 	}
 	log.Info("Uploading outputs for %s", w.actionDigest.Hash)
@@ -539,6 +530,15 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
 	}
+}
+
+// writeBlob attempts to write a blob to the CAS. It may return nil if it fails.
+func (w *worker) writeBlob(data []byte, name string) *pb.Digest {
+	dg, err := w.client.WriteBlob(data)
+	if err != nil {
+		log.Warning("Failed to upload %s: %s", name, err)
+	}
+	return dg
 }
 
 // runCommand runs a command with a timeout, terminating it in a sensible manner.
