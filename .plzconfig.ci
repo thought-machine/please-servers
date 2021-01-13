@@ -11,3 +11,6 @@ defaultstatic = true
 
 [proto]
 protoctool = protoc
+
+[display]
+systemstats = false

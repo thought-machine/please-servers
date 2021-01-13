@@ -21,6 +21,7 @@ var opts struct {
 }
 
 func Main() error {
+	log.Notice("Building servers...")
 	outputFlag := "-p"
 	if opts.Interactive {
 		outputFlag = "--interactive_output"
@@ -34,12 +35,13 @@ func Main() error {
 	}
 
 	// Start the servers in the background and keep them running as we go
+	log.Notice("Running servers...")
 	f, err := os.Create("plz-out/log/mettle_test.log")
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	servers := exec.Command("./pleasew", "runlocal")
+	servers := exec.Command("./pleasew", outputFlag, "runlocal")
 	servers.Stdout = f
 	servers.Stderr = f
 	if err := servers.Start(); err != nil {
@@ -55,6 +57,7 @@ func Main() error {
 	// TODO(peterebden): This is awful, we likely need to build some retrying into plz around this RPC.
 	time.Sleep(3 * time.Second)
 
+	log.Notice("Running tests...")
 	plz = exec.Command(opts.Plz, "--profile", "localremote", "test", "//tests/...", outputFlag, "-v", "notice", "--log_file", "plz-out/log/tests.log", "-o", "cache.dir:")
 	plz.Stdout = os.Stdout
 	plz.Stderr = os.Stderr
