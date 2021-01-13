@@ -9,3 +9,9 @@ genrule(
     outs = ["out_dir"],
     cmd = "mkdir $OUTS && ln -s $SRCS $OUTS/out_file",
 )
+
+sh_test(
+    name = "link_outside_output_test",
+    src = "link_outside_output_test.sh",
+    data = [":link_outside_output"],
+)
