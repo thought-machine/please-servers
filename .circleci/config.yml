@@ -13,9 +13,6 @@ jobs:
        - run:
            name: Test
            command: ./pleasew test -p -v 2 --exclude //tests/...
-       - run:
-           name: Integrashone Tests
-           command: ./pleasew run //tests:test_runner
        - store_test_results:
            path: plz-out/results
        - run:
