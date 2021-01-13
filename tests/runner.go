@@ -34,7 +34,14 @@ func Main() error {
 	}
 
 	// Start the servers in the background and keep them running as we go
+	f, err := os.Create("plz-out/log/mettle_test.log")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 	servers := exec.Command("./pleasew", "runlocal")
+	servers.Stdout = f
+	servers.Stderr = f
 	if err := servers.Start(); err != nil {
 		return err
 	}
