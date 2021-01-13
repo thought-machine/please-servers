@@ -6,19 +6,19 @@ import (
 	"os"
 	"time"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
+	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/klauspost/compress/zstd"
 	"gocloud.dev/blob"
 	"golang.org/x/sync/errgroup"
-	"github.com/klauspost/compress/zstd"
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
-	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 )
 
 const compressionThreshold = 1024
 
 // This is the implementation backed by Elan in-process.
-type elanClient struct{
-	s *server
+type elanClient struct {
+	s       *server
 	timeout time.Duration
 }
 
@@ -80,8 +80,6 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	if entry.Digest.Hash == digest.Empty.Hash {
 		return nil
 	}
-	e.s.limiter <- struct{}{}
-	defer func() { <-e.s.limiter }()
 	compressed := entry.Compressor != pb.Compressor_IDENTITY
 	key := e.s.compressedKey("cas", entry.Digest.ToProto(), compressed)
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
@@ -89,6 +87,8 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	if e.s.blobExists(ctx, key) {
 		return nil
 	}
+	e.s.limiter <- struct{}{}
+	defer func() { <-e.s.limiter }()
 	if len(entry.Contents) > 0 {
 		if compressed {
 			entry.Contents = e.s.compressor.EncodeAll(entry.Contents, make([]byte, 0, entry.Digest.Size))

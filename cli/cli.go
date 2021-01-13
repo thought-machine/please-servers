@@ -93,3 +93,6 @@ func AllToProto(actions []Action) []*pb.Digest {
 	}
 	return ret
 }
+
+// MustGetLogger is a re-export of the same function from the CLI library.
+var MustGetLogger = cli.MustGetLogger

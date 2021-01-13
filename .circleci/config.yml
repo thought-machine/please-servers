@@ -4,13 +4,18 @@ jobs:
      working_directory: ~/please
      docker:
        - image: thoughtmachine/please-servers:20200828
+     environment:
+       PLZ_CONFIG_PROFILE: "ci"
      steps:
        - checkout
        - restore_cache:
            key: go-linux-main-v5-{{ checksum "third_party/go/BUILD" }}
        - run:
            name: Test
-           command: ./pleasew test -p --profile ci -v 2
+           command: ./pleasew test -p -v 2 --exclude //tests/...
+       - run:
+           name: Integrashone Tests
+           command: ./pleasew run //tests:test_runner
        - store_test_results:
            path: plz-out/results
        - run:

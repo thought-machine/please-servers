@@ -1,5 +1,8 @@
 [please]
-version = >=15.10.0
+version = >=15.12.0
+
+[build]
+path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
 [go]
 importpath = github.com/thought-machine/please-servers
@@ -15,3 +18,11 @@ language = go
 
 [alias "runlocal"]
 cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local
+desc = Runs an instance of each server for local development
+
+[alias "buildlocal"]
+cmd = build //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local
+desc = Builds (but doesn't run) all the servers
+
+[featureflags]
+RemovePleasings = true
