@@ -12,6 +12,14 @@ import (
 )
 
 func Main() error {
+	// Build the servers first (so we don't wait for ports to open while we're actually compiling)
+	plz := exec.Command("./pleasew", "buildlocal", "-p", "-v", "notice")
+	plz.Stdout = os.Stdout
+	plz.Stderr = os.Stderr
+	if err := plz.Run(); err != nil {
+		return err
+	}
+
 	// Start the servers in the background and keep them running as we go
 	servers := exec.Command("./pleasew", "runlocal")
 	if err := servers.Start(); err != nil {
@@ -23,7 +31,7 @@ func Main() error {
 		return err
 	}
 
-	plz := exec.Command("./pleasew", "--profile", "localremote", "test", "//tests/...")
+	plz = exec.Command("./pleasew", "--profile", "localremote", "test", "//tests/...", "-p", "-v", "notice")
 	plz.Stdout = os.Stdout
 	plz.Stderr = os.Stderr
 	return plz.Run()

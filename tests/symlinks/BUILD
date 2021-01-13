@@ -7,7 +7,7 @@ genrule(
     name = "link_outside_output",
     srcs = [":input"],
     outs = ["out_dir"],
-    cmd = "mkdir $OUTS && ln -s $SRCS $OUTS/out_file",
+    cmd = "mkdir $OUTS && ln -s ../input.txt $OUTS/out_file",
 )
 
 sh_test(
