@@ -228,22 +228,22 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	}
 
 	w := &worker{
-		requests:         common.MustOpenSubscription(requestQueue),
-		responses:        common.MustOpenTopic(responseQueue),
-		client:           client,
-		rclient:          rexclient.Uninitialised(),
-		rootDir:          abspath,
-		clean:            clean,
-		home:             home,
-		name:             name,
-		sandbox:          sandbox,
-		limiter:          make(chan struct{}, downloadParallelism),
-		iolimiter:        make(chan struct{}, ioParallelism),
-		browserURL:       browserURL,
-		startTime:        time.Now(),
-		diskSpace:        minDiskSpace,
-		memoryThreshold:  memoryThreshold,
-		instanceName:     instanceName,
+		requests:        common.MustOpenSubscription(requestQueue),
+		responses:       common.MustOpenTopic(responseQueue),
+		client:          client,
+		rclient:         rexclient.Uninitialised(),
+		rootDir:         abspath,
+		clean:           clean,
+		home:            home,
+		name:            name,
+		sandbox:         sandbox,
+		limiter:         make(chan struct{}, downloadParallelism),
+		iolimiter:       make(chan struct{}, ioParallelism),
+		browserURL:      browserURL,
+		startTime:       time.Now(),
+		diskSpace:       minDiskSpace,
+		memoryThreshold: memoryThreshold,
+		instanceName:    instanceName,
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix)
@@ -441,7 +441,8 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 
 // execute runs the actual commands once the inputs are prepared.
 func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResponse {
-	log.Notice("Beginning execution for %s: %s", w.actionDigest.Hash, command.Arguments)
+	log.Notice("Beginning execution for %s", w.actionDigest.Hash)
+	log.Debug("Executing %s: %s", w.actionDigest.Hash, command.Arguments)
 	if w.clean {
 		defer func() {
 			if err := os.RemoveAll(w.dir); err != nil {
@@ -509,9 +510,8 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	}
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
-	uploadDuration := end.Sub(execEnd)
-	uploadDurations.Observe(uploadDuration.Seconds())
-	log.Info("Outputs uploaded in %s", uploadDuration)
+	uploadDurations.Observe(end.Sub(execEnd).Seconds())
+	log.Notice("Uploaded outputs for %s", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
 		InstanceName: w.instanceName,
@@ -525,7 +525,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 			Result: ar,
 		}
 	}
-	log.Info("Uploaded action for %s", w.actionDigest.Hash)
+	log.Notice("Uploaded action result for %s", w.actionDigest.Hash)
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
