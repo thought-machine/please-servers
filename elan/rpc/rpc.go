@@ -31,10 +31,10 @@ import (
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/dgraph-io/ristretto"
 	"github.com/golang/protobuf/proto"
+	"github.com/hashicorp/go-multierror"
 	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/hashicorp/go-multierror"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	"google.golang.org/api/googleapi"
@@ -489,6 +489,9 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 		}
 		r, err := s.readBlob(ctx, s.key(prefix, digest), offset, limit)
 		return r, false, err
+	}
+	if s.isEmpty(digest) {
+		return ioutil.NopCloser(bytes.NewReader(nil)), compressed, nil
 	}
 	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
 	if err == nil {
