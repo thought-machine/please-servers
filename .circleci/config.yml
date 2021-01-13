@@ -12,7 +12,7 @@ jobs:
            key: go-linux-main-v5-{{ checksum "third_party/go/BUILD" }}
        - run:
            name: Test
-           command: ./pleasew test -p -v 2
+           command: ./pleasew test -p -v 2 --exclude //tests/...
        - run:
            name: Integrashone Tests
            command: ./pleasew run //tests:test_runner
