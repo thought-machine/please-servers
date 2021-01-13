@@ -27,7 +27,7 @@ func Main() error {
 		outputFlag = "--interactive_output"
 	}
 	// Build the servers first (so we don't wait for ports to open while we're actually compiling)
-	plz := exec.Command(opts.Plz, "buildlocal", outputFlag, "-v", "notice")
+	plz := exec.Command(opts.Plz, outputFlag, "-v", "notice", "buildlocal")
 	plz.Stdout = os.Stdout
 	plz.Stderr = os.Stderr
 	if err := plz.Run(); err != nil {
@@ -41,7 +41,7 @@ func Main() error {
 		return err
 	}
 	defer f.Close()
-	servers := exec.Command("./pleasew", outputFlag, "runlocal")
+	servers := exec.Command(opts.Plz, outputFlag, "runlocal")
 	servers.Stdout = f
 	servers.Stderr = f
 	if err := servers.Start(); err != nil {
