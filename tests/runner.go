@@ -49,7 +49,11 @@ func Main() error {
 
 	if err := checkPort("7772"); err != nil {
 		return err
+	} else if err := checkPort("7776"); err != nil {
+		return err
 	}
+	// TODO(peterebden): This is awful, we likely need to build some retrying into plz around this RPC.
+	time.Sleep(3 * time.Second)
 
 	plz = exec.Command(opts.Plz, "--profile", "localremote", "test", "//tests/...", outputFlag, "-v", "notice", "--log_file", "plz-out/log/tests.log", "-o", "cache.dir:")
 	plz.Stdout = os.Stdout
