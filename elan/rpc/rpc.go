@@ -504,10 +504,10 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 		return s.compressedReader(r, compressed, !compressed, offset)
 	}
 	// Bit of fiddling around to provide the most interesting error.
-	if isNotFound(err) {
-		return nil, false, err2
-	} else if isNotFound(err2) {
+	if isNotFound(err2) {
 		return nil, false, err
+	} else if isNotFound(err) {
+		return nil, false, err2
 	}
 	return nil, false, multierror.Append(err, err2)
 }
@@ -779,7 +779,7 @@ func handleNotFound(err error, key string) error {
 
 // isNotFound returns true if the given error is for a blob not being found.
 func isNotFound(err error) bool {
-	return gcerrors.Code(err) == gcerrors.NotFound
+	return gcerrors.Code(err) == gcerrors.NotFound || status.Code(err) == codes.NotFound
 }
 
 // bucketOffset returns the offset we'd use into the underlying bucket (which may be zero if compressed)
