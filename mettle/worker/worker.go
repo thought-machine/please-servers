@@ -127,9 +127,10 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 		}
 		log.Notice("Sent request to build %s", digest.Hash)
 	}()
-	response, err := w.RunTask(context.Background())
-	if err != nil {
+	if response, err := w.RunTask(context.Background()); err != nil {
 		return fmt.Errorf("Failed to run task: %s", err)
+	} else if response.Result == nil {
+		return fmt.Errorf("Execution unsuccessful: %s", response.Status)
 	} else if response.Result.ExitCode != 0 {
 		return fmt.Errorf("Execution failed: %s", response.Message)
 	}
