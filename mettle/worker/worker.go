@@ -409,11 +409,9 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 		w.metadata.InputFetchCompletedTimestamp = toTimestamp(time.Now())
 	}()
 	w.update(pb.ExecutionStage_EXECUTING, nil)
-	dir, err := ioutil.TempDir(w.rootDir, "mettle")
-	if err != nil {
+	if err := w.createTempDir(); err != nil {
 		return status(codes.Internal, "Failed to create temp dir: %s", err)
 	}
-	w.dir = dir
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
@@ -438,6 +436,28 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	}
 	log.Notice("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
 	return nil
+}
+
+// createTempDir creates the temporary workdir.
+func (w *worker) createTempDir() error {
+	dir := path.Join(w.rootDir, "mettle_"+w.actionDigest.Hash[:10])
+	err := os.Mkdir(dir, os.ModeDir|0755)
+	if err == nil {
+		w.dir = dir
+		return nil
+	} else if os.IsExist(err) {
+		// Attempt to remove and try again
+		if err := os.RemoveAll(dir); err == nil {
+			if err := os.Mkdir(dir, os.ModeDir|0755); err == nil {
+				w.dir = dir
+				return nil
+			}
+		}
+	}
+	log.Warning("Failed to create work dir: %s. Falling back to temp dir", err)
+	dir, err = ioutil.TempDir(w.rootDir, "mettle_")
+	w.dir = dir
+	return err
 }
 
 // execute runs the actual commands once the inputs are prepared.
