@@ -74,7 +74,7 @@ var opts = struct {
 		Cache           CacheOpts     `group:"Options controlling caching"`
 		Storage         struct {
 			Storage []string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
-			TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
+			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	One struct {
@@ -85,6 +85,7 @@ var opts = struct {
 		Sandbox     string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
 		Timeout     cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		ProfileFile string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
+		MemProfile  string       `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
 		Cache       CacheOpts    `group:"Options controlling caching"`
 		Storage     StorageOpts  `group:"Options controlling communication with the CAS server"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
@@ -142,7 +143,7 @@ func main() {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
-			storage := opts.Dual.Storage.Storage[i % len(opts.Dual.Storage.Storage)]
+			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
 			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold)
 		}
 		api.ServeForever(opts.Dual.GRPC, requests, responses, responses)
@@ -168,6 +169,14 @@ func one() error {
 		}
 		defer f.Close()
 		defer pprof.StopCPUProfile()
+	}
+	if opts.One.MemProfile != "" {
+		f, err := os.Create(opts.One.MemProfile)
+		if err != nil {
+			log.Fatalf("Failed to open memory profile file: %s", err)
+		}
+		defer f.Close()
+		defer pprof.WriteHeapProfile(f)
 	}
 	for _, action := range opts.One.Args.Actions {
 		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, false, opts.One.Storage.TLS, action.ToProto()); err != nil {
