@@ -301,6 +301,7 @@ type worker struct {
 	metadata        *pb.ExecutedActionMetadata
 	downloadedBytes int64
 	cachedBytes     int64
+	taskStartTime   time.Time
 	metadataFetch   time.Duration
 	dirCreation     time.Duration
 	fileDownload    time.Duration
@@ -324,7 +325,9 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	w.cachedBytes = 0
 	response := w.runTask(msg.Body)
 	msg.Ack()
-	return response, w.update(pb.ExecutionStage_COMPLETED, response)
+	err = w.update(pb.ExecutionStage_COMPLETED, response)
+	w.actionDigest = nil
+	return response, err
 }
 
 // receiveTask receives a task off the queue.
@@ -357,6 +360,7 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 		Worker:               w.name,
 		WorkerStartTimestamp: ptypes.TimestampNow(),
 	}
+	w.taskStartTime = time.Now()
 	req, action, command, status := w.readRequest(msg)
 	if req != nil {
 		w.actionDigest = req.ActionDigest
@@ -371,7 +375,6 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
 	w.actionDigest = req.ActionDigest
 	w.lastURL = w.actionURL()
-	w.Report(true, true, true, "Hard at work...")
 	if status := w.prepareDir(action, command); status != nil {
 		log.Warning("Failed to prepare directory for action digest %s: %s", w.actionDigest.Hash, status)
 		ar := &pb.ActionResult{
@@ -754,6 +757,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 
 // update sends an update on the response channel
 func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteResponse) error {
+	w.Report(true, stage == pb.ExecutionStage_EXECUTING, true, stage.String())
 	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 		Stage:        stage,
 		ActionDigest: w.actionDigest,

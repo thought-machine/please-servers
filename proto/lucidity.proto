@@ -29,6 +29,10 @@ message UpdateRequest {
   string last_task = 8;
   // Server-side only; indicates whether this server has been shut down.
   bool disabled = 9;
+  // ID of the currently executing task, if there is one.
+  string current_task = 10;
+  // The time the current task was started at.
+  int64 task_start_time = 11;
 }
 
 message UpdateResponse {
