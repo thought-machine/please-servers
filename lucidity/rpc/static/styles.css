@@ -76,3 +76,7 @@ th {
 .tick {
   text-align: center !important;
 }
+
+.idcol {
+  font-family: monospace;
+}

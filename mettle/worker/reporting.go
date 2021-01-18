@@ -17,15 +17,25 @@ import (
 func (w *worker) Report(healthy, busy, alive bool, status string, args ...interface{}) {
 	if w.lucidChan != nil {
 		w.lucidChan <- &lpb.UpdateRequest{
-			Name:      w.name,
-			StartTime: w.startTime.Unix(),
-			Healthy:   healthy,
-			Busy:      busy,
-			Alive:     alive,
-			Status:    fmt.Sprintf(status, args...),
-			LastTask:  w.lastURL,
+			Name:          w.name,
+			StartTime:     w.startTime.Unix(),
+			Healthy:       healthy,
+			Busy:          busy,
+			Alive:         alive,
+			Status:        fmt.Sprintf(status, args...),
+			LastTask:      w.lastURL,
+			CurrentTask:   w.currentTaskID(),
+			TaskStartTime: w.taskStartTime.Unix(),
 		}
 	}
+}
+
+// currentTaskID returns the ID of the currently executing task, if there is one.
+func (w *worker) currentTaskID() string {
+	if w.actionDigest != nil {
+		return w.actionDigest.Hash
+	}
+	return ""
 }
 
 // sendReports sends reports to Lucidity indefinitely.
