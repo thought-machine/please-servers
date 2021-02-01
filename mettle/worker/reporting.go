@@ -121,7 +121,7 @@ func (w *worker) checkFreeMemory() bool {
 		return false
 	} else if vm.UsedPercent > w.memoryThreshold {
 		log.Warning("Memory usage %0.1f%% is over healthy threshold %0.1f%%, will not accept new jobs until it decreases", vm.UsedPercent, w.memoryThreshold)
-		w.Report(false, false, true, "Low disk space: %0.1f%% free", vm.UsedPercent)
+		w.Report(false, false, true, "High memory usage: %0.1f%% used", vm.UsedPercent)
 		return false
 	}
 	log.Debug("Memory usage %0.1f%% is under healthy threshold %0.1f%%", vm.UsedPercent, w.memoryThreshold)
