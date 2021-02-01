@@ -108,8 +108,14 @@ func (s *server) updateMap(m map[string]struct{}, key string, in bool) float64 {
 
 func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 	workers := &pb.Workers{}
+	minHealthy := time.Now().Add(-10 * time.Minute).Unix()
 	s.workers.Range(func(k, v interface{}) bool {
-		workers.Workers = append(workers.Workers, v.(*pb.UpdateRequest))
+		r := v.(*pb.UpdateRequest)
+		if r.Healthy && r.UpdateTime < minHealthy {
+			r.Healthy = false
+			r.Status = "Too long since last update"
+		}
+		workers.Workers = append(workers.Workers, r)
 		return true
 	})
 	m := jsonpb.Marshaler{
