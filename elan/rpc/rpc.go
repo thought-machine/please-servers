@@ -665,6 +665,8 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 }
 
 func (s *server) writeAll(ctx context.Context, digest *pb.Digest, data []byte, compressed bool) error {
+	s.limiter <- struct{}{}
+	defer func() { <-s.limiter }()
 	canonical := data
 	if compressed {
 		decompressed, err := s.decompressor.DecodeAll(canonical, make([]byte, 0, digest.SizeBytes))
