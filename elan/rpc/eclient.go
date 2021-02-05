@@ -108,9 +108,8 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	defer wr.Close()
 	var w io.WriteCloser = wr
 	if compressed {
-		zw := e.s.compressorPool.Get().(*zstd.Encoder)
-		defer e.s.compressorPool.Put(zw)
-		zw.Reset(w)
+		zw, _ := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		defer zw.Close()
 		w = zw
 	}
 	if _, err := io.Copy(w, f); err != nil {

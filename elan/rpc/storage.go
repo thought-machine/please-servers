@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"io/ioutil"
-	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	"gocloud.dev/blob"
@@ -83,20 +82,15 @@ func (s *server) compressedReader(r io.ReadCloser, needCompression, isCompressed
 
 // decompressReader wraps a reader in zstd decompression.
 func (s *server) decompressReader(r io.ReadCloser) io.ReadCloser {
-	zr := s.decompressorPool.Get().(*zstd.Decoder)
-	zr.Reset(r)
-	return &zstdCloser{c: r, r: zr, p: s.decompressorPool}
+	zr, _ := zstd.NewReader(r)
+	return &zstdCloser{c: r, r: zr}
 }
 
-// A zstdCloser takes all reads from a reader but closes a different closer, and re-adds
-// the decoder to a pool after.
-// This is because we don't want to close the zstd readers (we reset them instead) but we do
-// want to close the underlying reader into the storage bucket, and make sure they are
-// returned to the pool.
+// A zstdCloser takes all reads from a reader but closes a different closer, because
+// zstd doesn't call through to the underlying closer.
 type zstdCloser struct {
 	c io.Closer
 	r *zstd.Decoder
-	p *sync.Pool
 }
 
 func (c *zstdCloser) Read(p []byte) (int, error) {
@@ -104,7 +98,6 @@ func (c *zstdCloser) Read(p []byte) (int, error) {
 }
 
 func (c *zstdCloser) Close() error {
-	err := c.c.Close()
-	c.p.Put(c.r)
-	return err
+	c.r.Close()
+	return c.c.Close()
 }
