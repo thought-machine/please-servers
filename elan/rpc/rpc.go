@@ -157,14 +157,6 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		compressor:     enc,
 		decompressor:   dec,
-		compressorPool: &sync.Pool{New: func() interface{} {
-			w, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-			return w
-		}},
-		decompressorPool: &sync.Pool{New: func() interface{} {
-			r, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(4))
-			return r
-		}},
 	}
 }
 
@@ -204,8 +196,6 @@ type server struct {
 	dirCache, knownBlobCache *ristretto.Cache
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
-	compressorPool           *sync.Pool
-	decompressorPool         *sync.Pool
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -462,17 +452,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		return err
 	}
 	defer r.Close()
-	var w io.Writer = &bytestreamWriter{stream: srv}
-	bw := bufio.NewWriterSize(w, 65536)
+	bw := bufio.NewWriterSize(&bytestreamWriter{stream: srv}, 65536)
 	defer bw.Flush()
-	w = bw
-	if needCompression {
-		zw := s.compressorPool.Get().(*zstd.Encoder)
-		defer s.compressorPool.Put(zw)
-		zw.Reset(w)
-		w = zw
-		defer zw.Close()
-	}
+	w := s.compressWriter(bw, needCompression)
+	defer w.Close()
 	n, err := io.Copy(w, r)
 	if err != nil {
 		return err
@@ -644,9 +627,11 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	r = tr
 	h := sha256.New()
 	if compressed {
-		zr := s.decompressorPool.Get().(*zstd.Decoder)
-		defer s.decompressorPool.Put(zr)
-		zr.Reset(r)
+		zr, err := zstd.NewReader(r)
+		if err != nil {
+			return err
+		}
+		defer zr.Close()
 		r = zr
 	}
 	if _, err := io.Copy(h, r); err != nil {

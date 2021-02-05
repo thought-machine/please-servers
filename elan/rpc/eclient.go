@@ -9,7 +9,6 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/klauspost/compress/zstd"
 	"gocloud.dev/blob"
 	"golang.org/x/sync/errgroup"
 )
@@ -106,13 +105,7 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 		return err
 	}
 	defer wr.Close()
-	var w io.WriteCloser = wr
-	if compressed {
-		zw := e.s.compressorPool.Get().(*zstd.Encoder)
-		defer e.s.compressorPool.Put(zw)
-		zw.Reset(w)
-		w = zw
-	}
+	w := e.s.compressWriter(wr, compressed)
 	if _, err := io.Copy(w, f); err != nil {
 		cancel()
 		return err
