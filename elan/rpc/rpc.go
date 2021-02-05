@@ -452,15 +452,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		return err
 	}
 	defer r.Close()
-	var w io.Writer = &bytestreamWriter{stream: srv}
-	bw := bufio.NewWriterSize(w, 65536)
+	bw := bufio.NewWriterSize(&bytestreamWriter{stream: srv}, 65536)
 	defer bw.Flush()
-	w = bw
-	if needCompression {
-		zw, _ := zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
-		defer zw.Close()
-		w = zw
-	}
+	w := s.compressWriter(bw, needCompression)
+	defer w.Close()
 	n, err := io.Copy(w, r)
 	if err != nil {
 		return err
