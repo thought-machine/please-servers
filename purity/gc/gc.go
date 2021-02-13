@@ -261,6 +261,10 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
 	}
+	if result.ExitCode != 0 {
+		log.Debug("Found failed action result %s: exit code %d", ar.Hash, result.ExitCode)
+		c.markBroken(ar.Hash, ar.SizeBytes)
+	}
 	size := ar.SizeBytes
 	digests := []*pb.Digest{}
 	for _, d := range result.OutputDirectories {
