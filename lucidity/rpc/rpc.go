@@ -55,14 +55,7 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, minProportion float64, audience string, allowedUsers []string) {
-	srv := &server{
-		liveWorkers:      map[string]struct{}{},
-		deadWorkers:      map[string]struct{}{},
-		healthyWorkers:   map[string]struct{}{},
-		unhealthyWorkers: map[string]struct{}{},
-		busyWorkers:      map[string]struct{}{},
-		minProportion:    minProportion,
-	}
+	srv := newServer(minProportion)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterLucidityServer(s, srv)
 
@@ -84,6 +77,17 @@ type server struct {
 	minProportion                                                           float64
 }
 
+func newServer(minProportion float64) *server {
+	return &server{
+		liveWorkers:      map[string]struct{}{},
+		deadWorkers:      map[string]struct{}{},
+		healthyWorkers:   map[string]struct{}{},
+		unhealthyWorkers: map[string]struct{}{},
+		busyWorkers:      map[string]struct{}{},
+		minProportion:    minProportion,
+	}
+}
+
 func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	req.UpdateTime = time.Now().Unix()
 	v, ok := s.workers.Load(req.Name)
@@ -92,7 +96,7 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 	if !ok || v.(*pb.UpdateRequest).Version != req.Version {
 		s.recalculateValidVersions()
 	}
-	_, validVersion := s.validVersions.Load(req.Version)
+	validVersion := s.IsValidVersion(req.Version)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	liveWorkers.Set(s.updateMap(s.liveWorkers, req.Name, req.Alive))
@@ -120,6 +124,9 @@ func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 		if r.Healthy && r.UpdateTime < minHealthy {
 			r.Healthy = false
 			r.Status = "Too long since last update"
+		} else if !s.IsValidVersion(r.Version) {
+			r.Healthy = false
+			r.Status = "Invalid version"
 		}
 		workers.Workers = append(workers.Workers, r)
 		return true
@@ -220,4 +227,10 @@ func (s *server) recalculateValidVersions() {
 		}
 		return true
 	})
+}
+
+// IsValidVersion returns true if this version is currently live.
+func (s *server) IsValidVersion(v string) bool {
+	_, valid := s.validVersions.Load(v)
+	return valid
 }

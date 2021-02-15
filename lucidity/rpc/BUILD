@@ -23,3 +23,13 @@ go_library(
     ],
     visibility = ["//lucidity/..."],
 )
+
+go_test(
+    name = "rpc_test",
+    srcs = ["rpc_test.go"],
+    deps = [
+        ":rpc",
+        "//proto:lucidity",
+        "//third_party/go:testify",
+    ],
+)
