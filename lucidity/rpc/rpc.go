@@ -191,7 +191,9 @@ func (s *server) removeWorker(key string) {
 	delete(s.busyWorkers, key)
 }
 
+// recalculateValidVersions runs through all the workers and calculates the new set of versions we'll allow to be active.
 func (s *server) recalculateValidVersions() {
+	// Collect counts of all known versions
 	counts := map[string]int{}
 	n := 0
 	s.workers.Range(func(k, v interface{}) bool {
@@ -199,6 +201,7 @@ func (s *server) recalculateValidVersions() {
 		n++
 		return true
 	})
+	// Now add any of those over the threshold to the set of valid versions
 	min := int(s.minProportion * float64(n))
 	log.Notice("Updating valid versions, total workers: %d, min threshold: %d", n, min)
 	for k, v := range counts {
@@ -209,7 +212,7 @@ func (s *server) recalculateValidVersions() {
 			s.validVersions.Store(k, v)
 		}
 	}
-	// Delete any old versions
+	// Delete any old versions that were valid but are no longer.
 	s.validVersions.Range(func(k, v interface{}) bool {
 		if counts[k.(string)] < min {
 			log.Notice("Disabling version %s", k)
