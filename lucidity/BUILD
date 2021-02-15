@@ -12,5 +12,5 @@ go_binary(
 sh_cmd(
     name = "run_local",
     srcs = [":lucidity"],
-    cmd = "exec $(out_location :lucidity) --host 127.0.0.1 --port 7774 --admin_disabled",
+    cmd = "exec $(out_location :lucidity) --host 127.0.0.1 --port 7774 --http_port 7773 --admin_disabled",
 )
