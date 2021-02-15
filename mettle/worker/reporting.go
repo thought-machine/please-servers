@@ -18,6 +18,7 @@ func (w *worker) Report(healthy, busy, alive bool, status string, args ...interf
 	if w.lucidChan != nil {
 		w.lucidChan <- &lpb.UpdateRequest{
 			Name:          w.name,
+			Version:       w.version,
 			StartTime:     w.startTime.Unix(),
 			Healthy:       healthy,
 			Busy:          busy,

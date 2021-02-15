@@ -18,6 +18,7 @@ var opts = struct {
 	Logging  flags.LoggingOpts `group:"Options controlling logging output"`
 	HTTPPort int               `long:"http_port" default:"7773" description:"Port to serve HTTP on"`
 	MaxAge   cli.Duration      `long:"max_age" description:"Forget results from any workers older than this"`
+	MinProportion float64      `long:"min_proportion" default:"0.2" description:"Min proportion of workers at a particular version before it's enabled"`
 	IAP      struct {
 		Audience string   `long:"audience" description:"Expected audience for the IAP tokens"`
 		Users    []string `short:"u" long:"user" env:"LUCIDITY_IAP_USERS" env-delim:"," description:"Users allowed to make mutating actions on the server"`
@@ -39,5 +40,5 @@ to go along with Zeal, then it could refer to the GTA Lucidity in FreeSpace 2.
 
 func main() {
 	flags.ParseFlagsOrDie("Lucidity", &opts, &opts.Logging)
-	rpc.ServeForever(opts.GRPC, opts.HTTPPort, time.Duration(opts.MaxAge), opts.IAP.Audience, opts.IAP.Users)
+	rpc.ServeForever(opts.GRPC, opts.HTTPPort, time.Duration(opts.MaxAge), opts.MinProportion, opts.IAP.Audience, opts.IAP.Users)
 }

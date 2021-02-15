@@ -4,6 +4,7 @@ google.charts.setOnLoadCallback(drawTable);
 function drawTable() {
     var dt = new google.visualization.DataTable();
     dt.addColumn('string', 'Name');
+    dt.addColumn('string', 'Version');
     dt.addColumn('boolean', 'Alive');
     dt.addColumn('boolean', 'Healthy');
     dt.addColumn('boolean', 'Free');
@@ -22,6 +23,7 @@ function drawTable() {
     $.get('/workers', function(data) {
         dt.addRows(data.workers.map(w => [
             w.name,
+            w.version,
             w.alive,
             w.healthy,
             w.healthy && !w.busy,

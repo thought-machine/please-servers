@@ -54,14 +54,8 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, audience string, allowedUsers []string) {
-	srv := &server{
-		liveWorkers:      map[string]struct{}{},
-		deadWorkers:      map[string]struct{}{},
-		healthyWorkers:   map[string]struct{}{},
-		unhealthyWorkers: map[string]struct{}{},
-		busyWorkers:      map[string]struct{}{},
-	}
+func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, minProportion float64, audience string, allowedUsers []string) {
+	srv := newServer(minProportion)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterLucidityServer(s, srv)
 
@@ -77,9 +71,21 @@ func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, audien
 }
 
 type server struct {
-	workers                                                                 sync.Map
+	workers, validVersions                                                  sync.Map
 	mutex                                                                   sync.Mutex
 	liveWorkers, deadWorkers, healthyWorkers, unhealthyWorkers, busyWorkers map[string]struct{}
+	minProportion                                                           float64
+}
+
+func newServer(minProportion float64) *server {
+	return &server{
+		liveWorkers:      map[string]struct{}{},
+		deadWorkers:      map[string]struct{}{},
+		healthyWorkers:   map[string]struct{}{},
+		unhealthyWorkers: map[string]struct{}{},
+		busyWorkers:      map[string]struct{}{},
+		minProportion:    minProportion,
+	}
 }
 
 func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
@@ -87,6 +93,10 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 	v, ok := s.workers.Load(req.Name)
 	req.Disabled = ok && v.(*pb.UpdateRequest).Disabled
 	s.workers.Store(req.Name, req)
+	if !ok || v.(*pb.UpdateRequest).Version != req.Version {
+		s.recalculateValidVersions()
+	}
+	validVersion := s.IsValidVersion(req.Version)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	liveWorkers.Set(s.updateMap(s.liveWorkers, req.Name, req.Alive))
@@ -94,7 +104,7 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 	healthyWorkers.Set(s.updateMap(s.healthyWorkers, req.Name, req.Healthy))
 	unhealthyWorkers.Set(s.updateMap(s.unhealthyWorkers, req.Name, !req.Healthy))
 	busyWorkers.Set(s.updateMap(s.busyWorkers, req.Name, req.Busy))
-	return &pb.UpdateResponse{ShouldDisable: req.Disabled}, nil
+	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !validVersion}, nil
 }
 
 func (s *server) updateMap(m map[string]struct{}, key string, in bool) float64 {
@@ -114,6 +124,9 @@ func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 		if r.Healthy && r.UpdateTime < minHealthy {
 			r.Healthy = false
 			r.Status = "Too long since last update"
+		} else if !s.IsValidVersion(r.Version) {
+			r.Healthy = false
+			r.Status = "Invalid version"
 		}
 		workers.Workers = append(workers.Workers, r)
 		return true
@@ -183,4 +196,41 @@ func (s *server) removeWorker(key string) {
 	delete(s.healthyWorkers, key)
 	delete(s.unhealthyWorkers, key)
 	delete(s.busyWorkers, key)
+}
+
+// recalculateValidVersions runs through all the workers and calculates the new set of versions we'll allow to be active.
+func (s *server) recalculateValidVersions() {
+	// Collect counts of all known versions
+	counts := map[string]int{}
+	n := 0
+	s.workers.Range(func(k, v interface{}) bool {
+		counts[v.(*pb.UpdateRequest).Version]++
+		n++
+		return true
+	})
+	// Now add any of those over the threshold to the set of valid versions
+	min := int(s.minProportion * float64(n))
+	log.Notice("Updating valid versions, total workers: %d, min threshold: %d", n, min)
+	for k, v := range counts {
+		if v < min {
+			log.Info("  %s: %d (invalid)", k, v)
+		} else {
+			log.Info("  %s: %d", k, v)
+			s.validVersions.Store(k, v)
+		}
+	}
+	// Delete any old versions that were valid but are no longer.
+	s.validVersions.Range(func(k, v interface{}) bool {
+		if counts[k.(string)] < min {
+			log.Notice("Disabling version %s", k)
+			s.validVersions.Delete(k)
+		}
+		return true
+	})
+}
+
+// IsValidVersion returns true if this version is currently live.
+func (s *server) IsValidVersion(v string) bool {
+	_, valid := s.validVersions.Load(v)
+	return valid
 }
