@@ -18,7 +18,7 @@ var opts = struct {
 	Logging  flags.LoggingOpts `group:"Options controlling logging output"`
 	HTTPPort int               `long:"http_port" default:"7773" description:"Port to serve HTTP on"`
 	MaxAge   cli.Duration      `long:"max_age" description:"Forget results from any workers older than this"`
-	MinProportion float64      `long:"min_proportion" description:"Min proportion of workers at a particular version before it's enabled"`
+	MinProportion float64      `long:"min_proportion" default:"0.2" description:"Min proportion of workers at a particular version before it's enabled"`
 	IAP      struct {
 		Audience string   `long:"audience" description:"Expected audience for the IAP tokens"`
 		Users    []string `short:"u" long:"user" env:"LUCIDITY_IAP_USERS" env-delim:"," description:"Users allowed to make mutating actions on the server"`
