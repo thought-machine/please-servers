@@ -12,6 +12,8 @@ service Lucidity {
 message UpdateRequest {
   // The name of this worker.
   string name = 1;
+  // The version this worker is currently at
+  string version = 12;
   // The time the worker started at (as a Unix timestamp)
   int64 start_time = 2;
   // The time the server is reporting in at (the server may overwrite this)

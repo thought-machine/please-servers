@@ -100,8 +100,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -110,7 +110,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile string, cachePrefix []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, 0, math.MaxInt64, 100.0)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, "", tokenFile, cachePrefix, clean, secureStorage, 0, math.MaxInt64, 100.0, "")
 	if err != nil {
 		return err
 	}
@@ -138,8 +138,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, tokenFile strin
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile, cachePrefix, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, lucidity, tokenFile string, cachePrefix []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -260,6 +260,14 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		}
 		w.cache = c
 	}
+	// Load the version file if given
+	if versionFile != "" {
+		if b, err := ioutil.ReadFile(versionFile); err != nil {
+			log.Errorf("Failed to read version file: %s", err)
+		} else {
+			w.version = strings.TrimSpace(string(b))
+		}
+	}
 	if lucidity != "" {
 		w.lucidChan = make(chan *lpb.UpdateRequest, 100)
 		log.Notice("Dialling Lucidity...")
@@ -286,6 +294,7 @@ type worker struct {
 	dir, rootDir     string
 	home             string
 	name             string
+	version          string
 	browserURL       string
 	sandbox          string
 	clean            bool
