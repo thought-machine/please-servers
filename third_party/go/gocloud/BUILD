@@ -25,9 +25,8 @@ go_module(
         "pubsub/gcppubsub",
         "pubsub/mempubsub",
     ],
-    patch = "batch_size.patch",
-    repo = "github.com/google/go-cloud",
-    version = "v0.17.0",
+    please_go_install = True,
+    download = ":gocloud_download",
     visibility = ["PUBLIC"],
     deps = [
         ":gax-go",
@@ -38,6 +37,12 @@ go_module(
         "//third_party/go:grpc",
         "//third_party/go:oauth2",
     ],
+)
+
+go_mod_download(
+    name = "gocloud_download",
+    module = "github.com/peterebden/go-cloud",
+    version = "6e9f62655df4f037f0007f5d4f1bd4efbb869d96",
 )
 
 go_module(
@@ -53,7 +58,6 @@ go_module(
         "pubsub/apiv1",
         "storage",
     ],
-    repo = "github.com/googleapis/google-cloud-go",
     version = "v0.46.3",
     deps = [
         ":api",
@@ -98,7 +102,6 @@ go_module(
         "container/v1",
         "drive/v3",
     ],
-    repo = "https://github.com/googleapis/google-api-go-client",
     version = "v0.27.0",
     deps = [
         ":gax-go",
