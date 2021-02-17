@@ -69,12 +69,6 @@ go_module(
 )
 
 go_module(
-    name = "semaphore",
-    module = "golang.org/x/sync/semaphore",
-    version = "112230192c580c3556b8cee6403af37a4fc5f28c",
-)
-
-go_module(
     name = "api",
     module = "google.golang.org/api",
     install = [
@@ -106,8 +100,8 @@ go_module(
     deps = [
         ":gax-go",
         ":go.opencensus.io",
-        ":semaphore",
         "//third_party/go:bytestream",
+        "//third_party/go:errgroup",
         "//third_party/go:grpc",
         "//third_party/go:oauth2",
     ],

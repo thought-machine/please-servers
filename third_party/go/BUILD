@@ -129,7 +129,7 @@ go_module(
     download = ":protobuf_download",
     install = ["protoc-gen-go"],
     module = "github.com/golang/protobuf",
-    deps = [":protobuf-go"],
+    deps = [":protobuf"],
 )
 
 go_module(
@@ -196,15 +196,10 @@ go_module(
 go_module(
     name = "errgroup",
     module = "golang.org/x/sync",
-    install = ["errgroup"],
-    version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
-    deps = [":net"],
-)
-
-go_module(
-    name = "semaphore",
-    module = "golang.org/x/sync",
-    install = ["semaphore"],
+    install = [
+        "errgroup",
+        "semaphore",
+    ],
     version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
@@ -247,12 +242,12 @@ go_module(
         ":grpc",
         ":longrunning",
         ":protobuf",
-        ":rpcstatus",
+        ":rpc",
     ],
 )
 
 go_module(
-    name = "remote-apis_download",
+    name = "remote-apis-download",
     module = "github.com/peterebden/remote-apis",
     version = "5306a2d66a1b879350f1a474cc639d569953fb48",
 )
@@ -276,8 +271,7 @@ go_module(
         ":pborman_uuid",
         ":protobuf",
         ":remote-apis",
-        ":rpcstatus",
-        ":semaphore",
+        ":rpc",
         ":zstd",
     ],
 )
@@ -349,7 +343,7 @@ go_module(
     name = "annotations",
     module = "google.golang.org/genproto/googleapis",
     install = ["googleapis/annotations"],
-    download = [":genproto_download"],
+    download = ":genproto_download",
     deps = [
         ":grpc",
         ":protobuf",
@@ -360,7 +354,7 @@ go_module(
     name = "longrunning",
     module = "google.golang.org/genproto/googleapis",
     install = ["googleapis/longrunning"],
-    download = [":genproto_download"],
+    download = ":genproto_download",
     deps = [
         ":annotations",
         ":grpc",
@@ -372,7 +366,7 @@ go_module(
     name = "bytestream",
     module = "google.golang.org/genproto/googleapis",
     install = ["googleapis/bytestream"],
-    download = [":genproto_download"],
+    download = ":genproto_download",
     deps = [
         ":annotations",
         ":grpc",
@@ -403,7 +397,7 @@ go_module(
 
 go_module(
     name = "xxhash",
-    module = "github.com/cespare/xxhash",
+    module = "github.com/cespare/xxhash/v2",
     version = "v2.1.1",
 )
 
@@ -466,13 +460,21 @@ go_module(
 )
 
 go_module(
+    name = "colorable",
+    module = "github.com/mattn/go-colorable",
+    version = "v0.1.8",
+    deps = [
+        ":isatty",
+    ],
+)
+
+go_module(
     name = "color",
     module = "github.com/fatih/color",
-    install = [
-        "",
-        "vendor/github.com/mattn/go-isatty",
-        "vendor/github.com/mattn/go-colorable",
-        "vendor/golang.org/x/sys/unix",
+    deps = [
+        ":colorable",
+        ":isatty",
+        ":unix",
     ],
     version = "v1.9.0",
 )
@@ -522,7 +524,7 @@ go_module(
 
 go_module(
     name = "psutil",
-    module = "github.com/shirou/gopsutil",
+    module = "github.com/shirou/gopsutil/v2",
     install = [
         "internal/common",
         "mem",

@@ -22,7 +22,7 @@ go_library(
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:ristretto",
-        "//third_party/go:rpcstatus",
+        "//third_party/go:rpc",
         "//third_party/proto:cas",
         "//third_party/proto:resourceusage",
         "//mettle/common",
