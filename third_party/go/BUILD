@@ -8,14 +8,16 @@ go_module(
 
 go_module(
     name = "terminal",
-    module = "golang.org/x/crypto/ssh/terminal",
+    module = "golang.org/x/crypto",
+    install = ["ssh/terminal"],
     version = "7b85b097bf7527677d54d3220065e966a0e3b613",
 )
 
 go_module(
     name = "go-bindata",
     binary = True,
-    module = "github.com/kevinburke/go-bindata/...",
+    module = "github.com/kevinburke/go-bindata",
+    install = ["..."],
     version = "46eb4c183bfc1ebb527d9d19bcded39476302eb8",
     strip = ["testdata"],
 )
@@ -31,7 +33,8 @@ go_module(
 
 go_module(
     name = "net",
-    module = "golang.org/x/net/...",
+    module = "golang.org/x/net",
+    install = ["..."],
     version = "136a25c244d3019482a795d728110278d6ba09a4",
     deps = [
         ":terminal",
@@ -50,7 +53,8 @@ go_module(
 
 go_module(
     name = "text",
-    module = "golang.org/x/text/...",
+    module = "golang.org/x/text",
+    install = ["..."],
     version = "4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1",
     deps = [
         ":tools",
@@ -97,24 +101,25 @@ go_module(
         ":cmp",
         ":oauth2",
         ":protobuf",
-        ":rpccode",
-        ":rpcstatus",
+        ":rpc",
         ":unix",
     ],
 )
 
-#TODO: build from the actual proto.
-go_module(
-    name = "rpcstatus",
-    module = "google.golang.org/genproto/googleapis/rpc/status",
+go_mod_download(
+    name = "genproto_download",
+    module = "google.golang.org/genproto",
     version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
-    deps = [":protobuf"],
 )
 
 go_module(
-    name = "rpccode",
-    module = "google.golang.org/genproto/googleapis/rpc/code",
-    version = "2b5a72b8730b0b16380010cfe5286c42108d88e7",
+    name = "rpc",
+    module = "google.golang.org/genproto",
+    install = [
+        "rpc/code",
+        "rpc/status",
+    ],
+    download = ":genproto_download",
     deps = [":protobuf"],
 )
 
@@ -132,7 +137,8 @@ go_module(
     exported_deps = [
         ":golang-protobuf",
     ],
-    module = "github.com/golang/protobuf/...",
+    module = "github.com/golang/protobuf",
+    install = ["..."],
     download = ":protobuf_download",
     strip = [
         "proto/proto3_proto",
@@ -151,7 +157,8 @@ go_mod_download(
 
 go_module(
     name = "spew",
-    module = "github.com/davecgh/go-spew/spew",
+    module = "github.com/davecgh/go-spew",
+    install = ["spew"],
     version = "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
 )
 
@@ -188,14 +195,16 @@ go_module(
 
 go_module(
     name = "errgroup",
-    module = "golang.org/x/sync/errgroup",
+    module = "golang.org/x/sync",
+    install = ["errgroup"],
     version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
 
 go_module(
     name = "semaphore",
-    module = "golang.org/x/sync/semaphore",
+    module = "golang.org/x/sync",
+    install = ["semaphore"],
     version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
@@ -217,14 +226,8 @@ go_module(
 )
 
 go_module(
-    name = "skylark",
-    module = "github.com/google/skylark/syntax",
-    version = "a5f7082aabed29c0e429c722292c66ec8ecf9591",
-)
-
-go_module(
     name = "cli-init",
-    module = "github.com/peterebden/go-cli-init/v3",
+    module = "github.com/peterebden/go-cli-init",
     version = "v3.1.1",
     deps = [
         ":go-flags",
@@ -236,7 +239,8 @@ go_module(
 
 go_module(
     name = "remote-apis",
-    module = "github.com/bazelbuild/remote-apis/build/...",
+    module = "github.com/bazelbuild/remote-apis/",
+    install = ["build/..."],
     download = ":remote-apis-download",
     deps = [
         ":annotations",
@@ -255,7 +259,8 @@ go_module(
 
 go_module(
     name = "remote-apis-sdks",
-    module = "github.com/bazelbuild/remote-apis-sdks/go/...",
+    module = "github.com/bazelbuild/remote-apis-sdks",
+    install = ["go/..."],
     download = ":remote-apis-sdks_download",
     deps = [
         ":annotations",
@@ -285,7 +290,8 @@ go_module(
 
 go_module(
     name = "golang-protobuf",
-    module = "google.golang.org/protobuf/...",
+    module = "google.golang.org/protobuf",
+    install = ["..."],
     version = "v1.25.0",
     deps = [
         ":cmp",
@@ -294,7 +300,8 @@ go_module(
 
 go_module(
     name = "cmp",
-    module = "github.com/google/go-cmp/cmp/...",
+    module = "github.com/google/go-cmp",
+    install = ["cmp/..."],
     version = "b1c9c4891a6525d98001fea424c8926c6d77bb56",
 )
 
@@ -313,7 +320,8 @@ go_mod_download(
 
 go_module(
     name = "metadata",
-    module = "cloud.google.com/go/compute/metadata",
+    module = "cloud.google.com/go",
+    install = ["compute/metadata"],
     version = "v0.46.3",
 )
 
@@ -339,8 +347,9 @@ go_module(
 #                   a hack. Replace once we have a better way of describing Go modules.
 go_module(
     name = "annotations",
-    module = "google.golang.org/genproto/googleapis/api/annotations",
-    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis",
+    install = ["googleapis/annotations"],
+    download = [":genproto_download"],
     deps = [
         ":grpc",
         ":protobuf",
@@ -349,8 +358,9 @@ go_module(
 
 go_module(
     name = "longrunning",
-    module = "google.golang.org/genproto/googleapis/longrunning",
-    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis",
+    install = ["googleapis/longrunning"],
+    download = [":genproto_download"],
     deps = [
         ":annotations",
         ":grpc",
@@ -360,8 +370,9 @@ go_module(
 
 go_module(
     name = "bytestream",
-    module = "google.golang.org/genproto/googleapis/bytestream",
-    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis",
+    install = ["googleapis/bytestream"],
+    download = [":genproto_download"],
     deps = [
         ":annotations",
         ":grpc",
@@ -384,7 +395,8 @@ go_module(
 
 go_module(
     name = "ristretto",
-    module = "github.com/dgraph-io/ristretto/...",
+    module = "github.com/dgraph-io/ristretto",
+    install = ["..."],
     version = "v0.0.1",
     deps = [":xxhash"],
 )
@@ -533,7 +545,8 @@ go_module(
 
 go_module(
     name = "go-grpc-compression",
-    module = "github.com/mostynb/go-grpc-compression/zstd",
+    module = "github.com/mostynb/go-grpc-compression",
+    install = ["zstd"],
     version = "v1.1.2",
     deps = [
         ":grpc",

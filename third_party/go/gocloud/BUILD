@@ -76,7 +76,7 @@ go_module(
 
 go_module(
     name = "api",
-    module = "google.golang.org/api/...",
+    module = "google.golang.org/api",
     install = [
         "calendar/v3",
         "googleapi",
@@ -128,7 +128,8 @@ go_module(
 
 go_module(
     name = "go.opencensus.io",
-    module = "go.opencensus.io/...",
+    module = "go.opencensus.io",
+    install = ["..."],
     version = "v0.22.1",
     deps = [
         ":groupcache",
@@ -165,7 +166,8 @@ go_module(
 
 go_module(
     name = "x_errors",
-    module = "golang.org/x/xerrors/...",
+    module = "golang.org/x/xerrors",
+    install = ["..."],
     version = "a5947ffaace3e882f334c1750858b4a6a7e52422",
     deps = ["//third_party/go:unix"],
 )

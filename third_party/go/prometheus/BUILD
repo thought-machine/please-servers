@@ -21,7 +21,8 @@ go_module(
 
 go_module(
     name = "grpc-prometheus",
-    module = "github.com/grpc-ecosystem/go-grpc-prometheus/...",
+    module = "github.com/grpc-ecosystem/go-grpc-prometheus",
+    install = ["..."],
     version = "6af20e3a5340d5e6bde20c8a7a78699efe19ac0a",
     deps = [
         ":prometheus",
@@ -32,7 +33,8 @@ go_module(
 
 go_module(
     name = "procfs",
-    module = "github.com/prometheus/procfs/...",
+    module = "github.com/prometheus/procfs",
+    install = ["..."],
     version = "v0.0.5",
     deps = [
         "//third_party/go:errgroup",
@@ -41,13 +43,15 @@ go_module(
 
 go_module(
     name = "perks",
-    module = "github.com/beorn7/perks/...",
+    module = "github.com/beorn7/perks",
+    install = ["..."],
     version = "v1.0.1",
 )
 
 go_module(
     name = "client_model",
-    module = "github.com/prometheus/client_model/...",
+    module = "github.com/prometheus/client_model",
+    install = ["..."],
     version = "14fe0d1b01d4d5fc031dd4bec1823bd3ebbe8016",
     deps = [
         "//third_party/go:protobuf",
@@ -72,7 +76,8 @@ go_module(
 
 go_module(
     name = "golang_protobuf_extensions",
-    module = "github.com/matttproud/golang_protobuf_extensions/...",
+    module = "github.com/matttproud/golang_protobuf_extensions",
+    install = ["..."],
     version = "v1.0.1",
     deps = [
         "//third_party/go:protobuf",
