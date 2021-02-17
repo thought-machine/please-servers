@@ -1,8 +1,8 @@
 package(default_visibility = ["PUBLIC"])
 
-go_get(
+go_module(
     name = "gocloud",
-    get = "gocloud.dev",
+    module = "gocloud.dev",
     install = [
         # This is an awkward lot but necessary so we don't have to pull in transitive
         # dependencies for the providers for aws, azure etc.
@@ -27,7 +27,7 @@ go_get(
     ],
     patch = "batch_size.patch",
     repo = "github.com/google/go-cloud",
-    revision = "v0.17.0",
+    version = "v0.17.0",
     visibility = ["PUBLIC"],
     deps = [
         ":gax-go",
@@ -40,9 +40,9 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "google-cloud-go",
-    get = "cloud.google.com/go",
+    module = "cloud.google.com/go",
     install = [
         "iam",
         "internal",
@@ -54,7 +54,7 @@ go_get(
         "storage",
     ],
     repo = "github.com/googleapis/google-cloud-go",
-    revision = "v0.46.3",
+    version = "v0.46.3",
     deps = [
         ":api",
         ":gax-go",
@@ -64,15 +64,15 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "semaphore",
-    get = "golang.org/x/sync/semaphore",
-    revision = "112230192c580c3556b8cee6403af37a4fc5f28c",
+    module = "golang.org/x/sync/semaphore",
+    version = "112230192c580c3556b8cee6403af37a4fc5f28c",
 )
 
-go_get(
+go_module(
     name = "api",
-    get = "google.golang.org/api/...",
+    module = "google.golang.org/api/...",
     install = [
         "calendar/v3",
         "googleapi",
@@ -99,7 +99,7 @@ go_get(
         "drive/v3",
     ],
     repo = "https://github.com/googleapis/google-api-go-client",
-    revision = "v0.27.0",
+    version = "v0.27.0",
     deps = [
         ":gax-go",
         ":go.opencensus.io",
@@ -110,23 +110,23 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "gax-go",
-    get = "github.com/googleapis/gax-go",
+    module = "github.com/googleapis/gax-go",
     install = [
         "",
         "v2",
     ],
-    revision = "4f559a1e5fd0a1cac6a74c886f1c87917e23ac94",
+    version = "4f559a1e5fd0a1cac6a74c886f1c87917e23ac94",
     deps = [
         "//third_party/go:grpc",
     ],
 )
 
-go_get(
+go_module(
     name = "go.opencensus.io",
-    get = "go.opencensus.io/...",
-    revision = "v0.22.1",
+    module = "go.opencensus.io/...",
+    version = "v0.22.1",
     deps = [
         ":groupcache",
         "//third_party/go:grpc",
@@ -134,19 +134,19 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "groupcache",
-    get = "github.com/golang/groupcache",
+    module = "github.com/golang/groupcache",
     install = [
         "lru",
     ],
-    revision = "404acd9df4cc9859d64fb9eed42e5c026187287a",
+    version = "404acd9df4cc9859d64fb9eed42e5c026187287a",
 )
 
-go_get(
+go_module(
     name = "genproto",
-    get = "google.golang.org/genproto/...",
-    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/...",
+    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         "//third_party/go:grpc",
         "//third_party/go:net",
@@ -154,15 +154,15 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "wire",
-    get = "github.com/google/wire",
-    revision = "v0.3.0",
+    module = "github.com/google/wire",
+    version = "v0.3.0",
 )
 
-go_get(
+go_module(
     name = "x_errors",
-    get = "golang.org/x/xerrors/...",
-    revision = "a5947ffaace3e882f334c1750858b4a6a7e52422",
+    module = "golang.org/x/xerrors/...",
+    version = "a5947ffaace3e882f334c1750858b4a6a7e52422",
     deps = ["//third_party/go:unix"],
 )

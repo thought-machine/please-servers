@@ -1,66 +1,66 @@
 package(default_visibility = ["PUBLIC"])
 
-go_get(
+go_module(
     name = "logging",
-    get = "gopkg.in/op/go-logging.v1",
-    revision = "b2cb9fa56473e98db8caba80237377e83fe44db5",
+    module = "gopkg.in/op/go-logging.v1",
+    version = "b2cb9fa56473e98db8caba80237377e83fe44db5",
 )
 
-go_get(
+go_module(
     name = "terminal",
-    get = "golang.org/x/crypto/ssh/terminal",
-    revision = "7b85b097bf7527677d54d3220065e966a0e3b613",
+    module = "golang.org/x/crypto/ssh/terminal",
+    version = "7b85b097bf7527677d54d3220065e966a0e3b613",
 )
 
-go_get(
+go_module(
     name = "go-bindata",
     binary = True,
-    get = "github.com/kevinburke/go-bindata/...",
-    revision = "46eb4c183bfc1ebb527d9d19bcded39476302eb8",
+    module = "github.com/kevinburke/go-bindata/...",
+    version = "46eb4c183bfc1ebb527d9d19bcded39476302eb8",
     strip = ["testdata"],
 )
 
-go_get(
+go_module(
     name = "go-flags",
-    get = "github.com/thought-machine/go-flags",
-    revision = "v1.5.0",
+    module = "github.com/thought-machine/go-flags",
+    version = "v1.5.0",
     deps = [
         ":unix",
     ],
 )
 
-go_get(
+go_module(
     name = "net",
-    get = "golang.org/x/net/...",
-    revision = "136a25c244d3019482a795d728110278d6ba09a4",
+    module = "golang.org/x/net/...",
+    version = "136a25c244d3019482a795d728110278d6ba09a4",
     deps = [
         ":terminal",
         ":text",
     ],
 )
 
-go_get(
+go_module(
     name = "tools",
-    get = "golang.org/x/tools",
+    module = "golang.org/x/tools",
     install = [
         "cover",
     ],
-    revision = "2ae76fd1560b622911f444c1e66b70a857e1de67",
+    version = "2ae76fd1560b622911f444c1e66b70a857e1de67",
 )
 
-go_get(
+go_module(
     name = "text",
-    get = "golang.org/x/text/...",
-    revision = "4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1",
+    module = "golang.org/x/text/...",
+    version = "4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1",
     deps = [
         ":tools",
     ],
 )
 
-go_get(
+go_module(
     name = "grpc",
     exported_deps = [":net"],
-    get = "google.golang.org/grpc",
+    module = "google.golang.org/grpc",
     install = [
         "",
         "attributes",
@@ -93,7 +93,7 @@ go_get(
         "tap",
     ],
     repo = "github.com/grpc/grpc-go",
-    revision = "v1.31.1",
+    version = "v1.31.1",
     deps = [
         ":cmp",
         ":oauth2",
@@ -105,37 +105,37 @@ go_get(
 )
 
 #TODO: build from the actual proto.
-go_get(
+go_module(
     name = "rpcstatus",
-    get = "google.golang.org/genproto/googleapis/rpc/status",
-    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis/rpc/status",
+    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [":protobuf"],
 )
 
-go_get(
+go_module(
     name = "rpccode",
-    get = "google.golang.org/genproto/googleapis/rpc/code",
-    revision = "2b5a72b8730b0b16380010cfe5286c42108d88e7",
+    module = "google.golang.org/genproto/googleapis/rpc/code",
+    version = "2b5a72b8730b0b16380010cfe5286c42108d88e7",
     deps = [":protobuf"],
 )
 
-go_get(
+go_module(
     name = "protoc-gen-go",
     binary = True,
-    get = [],
+    module = [],
     install = ["github.com/golang/protobuf/protoc-gen-go"],
     deps = [
         ":protobuf",
     ],
 )
 
-go_get(
+go_module(
     name = "protobuf",
     exported_deps = [
         ":golang-protobuf",
     ],
-    get = "github.com/golang/protobuf/...",
-    revision = "v1.4.2",
+    module = "github.com/golang/protobuf/...",
+    version = "v1.4.2",
     strip = [
         "proto/proto3_proto",
         "conformance",
@@ -145,28 +145,28 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "spew",
-    get = "github.com/davecgh/go-spew/spew",
-    revision = "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
+    module = "github.com/davecgh/go-spew/spew",
+    version = "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
 )
 
-go_get(
+go_module(
     name = "testify",
-    get = "github.com/stretchr/testify",
+    module = "github.com/stretchr/testify",
     install = [
         "assert",
         "require",
         "vendor/github.com/davecgh/go-spew/spew",
         "vendor/github.com/pmezard/go-difflib/difflib",
     ],
-    revision = "f390dcf405f7b83c997eac1b06768bb9f44dec18",
+    version = "f390dcf405f7b83c997eac1b06768bb9f44dec18",
     deps = [":spew"],
 )
 
-go_get(
+go_module(
     name = "grpc-middleware",
-    get = "github.com/grpc-ecosystem/go-grpc-middleware",
+    module = "github.com/grpc-ecosystem/go-grpc-middleware",
     install = [
         "",
         "recovery",
@@ -174,7 +174,7 @@ go_get(
         "util/metautils",
         "util/backoffutils",
     ],
-    revision = "fa8fef87dcecac0bda02d36abb3c790ab9e0030b",
+    version = "fa8fef87dcecac0bda02d36abb3c790ab9e0030b",
     deps = [
         ":grpc",
         ":net",
@@ -182,67 +182,67 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "errgroup",
-    get = "golang.org/x/sync/errgroup",
-    revision = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
+    module = "golang.org/x/sync/errgroup",
+    version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
 
-go_get(
+go_module(
     name = "semaphore",
-    get = "golang.org/x/sync/semaphore",
-    revision = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
+    module = "golang.org/x/sync/semaphore",
+    version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
 
-go_get(
+go_module(
     name = "unix",
-    get = "golang.org/x/sys",
+    module = "golang.org/x/sys",
     install = [
         "internal/unsafeheader",
         "unix",
     ],
-    revision = "ddb9806d33aed8dbaac1cd6f1cba58952e87f933",
+    version = "ddb9806d33aed8dbaac1cd6f1cba58952e87f933",
 )
 
-go_get(
+go_module(
     name = "errors",
-    get = "github.com/pkg/errors",
-    revision = "30136e27e2ac8d167177e8a583aa4c3fea5be833",
+    module = "github.com/pkg/errors",
+    version = "30136e27e2ac8d167177e8a583aa4c3fea5be833",
 )
 
-go_get(
+go_module(
     name = "skylark",
-    get = "github.com/google/skylark/syntax",
-    revision = "a5f7082aabed29c0e429c722292c66ec8ecf9591",
+    module = "github.com/google/skylark/syntax",
+    version = "a5f7082aabed29c0e429c722292c66ec8ecf9591",
 )
 
-go_get(
+go_module(
     name = "buildtools",
-    get = "github.com/bazelbuild/buildtools/...",
-    revision = "0.19.2",
+    module = "github.com/bazelbuild/buildtools/...",
+    version = "0.19.2",
     deps = [
         ":protobuf",
         ":skylark",
     ],
 )
 
-go_get(
+go_module(
     name = "buildifier",
     binary = True,
-    get = [],
+    module = [],
     install = ["github.com/bazelbuild/buildtools/buildifier"],
     deps = [
         ":buildtools",
     ],
 )
 
-go_get(
+go_module(
     name = "cli-init",
-    get = "github.com/peterebden/go-cli-init/v3",
+    module = "github.com/peterebden/go-cli-init/v3",
     module_major_version = "v3",
-    revision = "v3.1.1",
+    version = "v3.1.1",
     deps = [
         ":go-flags",
         ":humanize",
@@ -251,11 +251,11 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "remote-apis",
-    get = "github.com/bazelbuild/remote-apis/build/...",
+    module = "github.com/bazelbuild/remote-apis/build/...",
     repo = "github.com/peterebden/remote-apis",
-    revision = "5306a2d66a1b879350f1a474cc639d569953fb48",
+    version = "5306a2d66a1b879350f1a474cc639d569953fb48",
     deps = [
         ":annotations",
         ":grpc",
@@ -265,11 +265,11 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "remote-apis-sdks",
-    get = "github.com/bazelbuild/remote-apis-sdks/go/...",
+    module = "github.com/bazelbuild/remote-apis-sdks/go/...",
     repo = "github.com/peterebden/remote-apis-sdks",
-    revision = "5e7b88ce7342f4b3a53c29b6e6962f29e0522d12",
+    version = "5e7b88ce7342f4b3a53c29b6e6962f29e0522d12",
     deps = [
         ":annotations",
         ":bytestream",
@@ -290,37 +290,37 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "golang-protobuf",
-    get = "google.golang.org/protobuf/...",
-    revision = "v1.25.0",
+    module = "google.golang.org/protobuf/...",
+    version = "v1.25.0",
     deps = [
         ":cmp",
     ],
 )
 
-go_get(
+go_module(
     name = "cmp",
-    get = "github.com/google/go-cmp/cmp/...",
-    revision = "b1c9c4891a6525d98001fea424c8926c6d77bb56",
+    module = "github.com/google/go-cmp/cmp/...",
+    version = "b1c9c4891a6525d98001fea424c8926c6d77bb56",
 )
 
-go_get(
+go_module(
     name = "glog",
-    get = "github.com/golang/glog",
+    module = "github.com/golang/glog",
     patch = "glog_disable.patch",
-    revision = "23def4e6c14b4da8ac2ed8007337bc5eb5007998",
+    version = "23def4e6c14b4da8ac2ed8007337bc5eb5007998",
 )
 
-go_get(
+go_module(
     name = "metadata",
-    get = "cloud.google.com/go/compute/metadata",
-    revision = "v0.46.3",
+    module = "cloud.google.com/go/compute/metadata",
+    version = "v0.46.3",
 )
 
-go_get(
+go_module(
     name = "oauth2",
-    get = "golang.org/x/oauth2",
+    module = "golang.org/x/oauth2",
     install = [
         "",
         "google",
@@ -328,7 +328,7 @@ go_get(
         "jws",
         "jwt",
     ],
-    revision = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
+    version = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
     visibility = ["//third_party/go/..."],
     deps = [
         ":metadata",
@@ -338,20 +338,20 @@ go_get(
 
 # TODO(peterebden): Splitting up this & the other bits of genproto is a bit of
 #                   a hack. Replace once we have a better way of describing Go modules.
-go_get(
+go_module(
     name = "annotations",
-    get = "google.golang.org/genproto/googleapis/api/annotations",
-    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis/api/annotations",
+    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         ":grpc",
         ":protobuf",
     ],
 )
 
-go_get(
+go_module(
     name = "longrunning",
-    get = "google.golang.org/genproto/googleapis/longrunning",
-    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis/longrunning",
+    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         ":annotations",
         ":grpc",
@@ -359,10 +359,10 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "bytestream",
-    get = "google.golang.org/genproto/googleapis/bytestream",
-    revision = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    module = "google.golang.org/genproto/googleapis/bytestream",
+    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         ":annotations",
         ":grpc",
@@ -370,112 +370,112 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "uuid",
-    get = "github.com/google/uuid",
-    revision = "v1.1.1",
+    module = "github.com/google/uuid",
+    version = "v1.1.1",
 )
 
-go_get(
+go_module(
     name = "pborman_uuid",
-    get = "github.com/pborman/uuid",
-    revision = "v1.2.0",
+    module = "github.com/pborman/uuid",
+    version = "v1.2.0",
     deps = [":uuid"],
 )
 
-go_get(
+go_module(
     name = "ristretto",
-    get = "github.com/dgraph-io/ristretto/...",
-    revision = "v0.0.1",
+    module = "github.com/dgraph-io/ristretto/...",
+    version = "v0.0.1",
     deps = [":xxhash"],
 )
 
-go_get(
+go_module(
     name = "xxhash",
-    get = "github.com/cespare/xxhash",
-    revision = "v2.1.1",
+    module = "github.com/cespare/xxhash",
+    version = "v2.1.1",
 )
 
-go_get(
+go_module(
     name = "humanize",
-    get = "github.com/dustin/go-humanize",
-    revision = "v1.0.0",
+    module = "github.com/dustin/go-humanize",
+    version = "v1.0.0",
 )
 
-go_get(
+go_module(
     name = "retryablehttp",
-    get = "github.com/hashicorp/go-retryablehttp",
-    revision = "v0.6.1",
+    module = "github.com/hashicorp/go-retryablehttp",
+    version = "v0.6.1",
     deps = [
         ":cleanhttp",
         ":hclog",
     ],
 )
 
-go_get(
+go_module(
     name = "sri",
-    get = "github.com/peterebden/go-sri",
-    revision = "v1.1.1",
+    module = "github.com/peterebden/go-sri",
+    version = "v1.1.1",
 )
 
-go_get(
+go_module(
     name = "go-multierror",
-    get = "github.com/hashicorp/go-multierror",
-    revision = "v1.1.0",
+    module = "github.com/hashicorp/go-multierror",
+    version = "v1.1.0",
     deps = [":errwrap"],
 )
 
-go_get(
+go_module(
     name = "errwrap",
-    get = "github.com/hashicorp/errwrap",
-    revision = "v1.0.0",
+    module = "github.com/hashicorp/errwrap",
+    version = "v1.0.0",
 )
 
-go_get(
+go_module(
     name = "cleanhttp",
-    get = "github.com/hashicorp/go-cleanhttp",
-    revision = "v0.5.1",
+    module = "github.com/hashicorp/go-cleanhttp",
+    version = "v0.5.1",
 )
 
-go_get(
+go_module(
     name = "hclog",
-    get = "github.com/hashicorp/go-hclog",
-    revision = "v0.12.0",
+    module = "github.com/hashicorp/go-hclog",
+    version = "v0.12.0",
     deps = [
         ":color",
         ":isatty",
     ],
 )
 
-go_get(
+go_module(
     name = "isatty",
-    get = "github.com/mattn/go-isatty",
-    revision = "v0.0.12",
+    module = "github.com/mattn/go-isatty",
+    version = "v0.0.12",
     deps = [":unix"],
 )
 
-go_get(
+go_module(
     name = "color",
-    get = "github.com/fatih/color",
+    module = "github.com/fatih/color",
     install = [
         "",
         "vendor/github.com/mattn/go-isatty",
         "vendor/github.com/mattn/go-colorable",
         "vendor/golang.org/x/sys/unix",
     ],
-    revision = "v1.9.0",
+    version = "v1.9.0",
 )
 
-go_get(
+go_module(
     name = "copyfile",
-    get = "github.com/peterebden/go-copyfile",
-    revision = "bc0baf74909cb55565cf9536cb003f04da55372d",
+    module = "github.com/peterebden/go-copyfile",
+    version = "bc0baf74909cb55565cf9536cb003f04da55372d",
 )
 
-go_get(
+go_module(
     name = "godirwalk",
-    get = "github.com/karrick/godirwalk",
-    revision = "v1.7.0",
+    module = "github.com/karrick/godirwalk",
+    version = "v1.7.0",
     strip = [
         "examples",
         "testdata",
@@ -484,10 +484,10 @@ go_get(
     deps = [":errors"],
 )
 
-go_get(
+go_module(
     name = "http-admin",
-    get = "github.com/thought-machine/http-admin",
-    revision = "v1.1.0",
+    module = "github.com/thought-machine/http-admin",
+    version = "v1.1.0",
     deps = [
         ":logging",
         ":mux",
@@ -496,46 +496,46 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "mux",
-    get = "github.com/gorilla/mux",
-    revision = "v1.7.4",
+    module = "github.com/gorilla/mux",
+    version = "v1.7.4",
 )
 
-go_get(
+go_module(
     name = "xattr",
-    get = "github.com/pkg/xattr",
-    revision = "v0.4.1",
+    module = "github.com/pkg/xattr",
+    version = "v0.4.1",
     deps = [":unix"],
 )
 
-go_get(
+go_module(
     name = "psutil",
-    get = "github.com/shirou/gopsutil",
+    module = "github.com/shirou/gopsutil",
     install = [
         "internal/common",
         "mem",
     ],
-    revision = "v2.17.09",
+    version = "v2.17.09",
     deps = [":unix"],
 )
 
-go_get(
+go_module(
     name = "zstd",
-    get = "github.com/klauspost/compress",
+    module = "github.com/klauspost/compress",
     install = [
         "fse",
         "huff0",
         "snappy",
         "zstd/...",
     ],
-    revision = "v1.11.0",
+    version = "v1.11.0",
 )
 
-go_get(
+go_module(
     name = "go-grpc-compression",
-    get = "github.com/mostynb/go-grpc-compression/zstd",
-    revision = "v1.1.2",
+    module = "github.com/mostynb/go-grpc-compression/zstd",
+    version = "v1.1.2",
     deps = [
         ":grpc",
         ":zstd",

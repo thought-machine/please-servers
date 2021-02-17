@@ -1,9 +1,9 @@
 package(default_visibility = ["PUBLIC"])
 
-go_get(
+go_module(
     name = "prometheus",
-    get = "github.com/prometheus/client_golang/prometheus",
-    revision = "v1.1.0",
+    module = "github.com/prometheus/client_golang/prometheus",
+    version = "v1.1.0",
     install = [
         "",
         "internal",
@@ -19,10 +19,10 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "grpc-prometheus",
-    get = "github.com/grpc-ecosystem/go-grpc-prometheus/...",
-    revision = "6af20e3a5340d5e6bde20c8a7a78699efe19ac0a",
+    module = "github.com/grpc-ecosystem/go-grpc-prometheus/...",
+    version = "6af20e3a5340d5e6bde20c8a7a78699efe19ac0a",
     deps = [
         ":prometheus",
         "//third_party/go:grpc",
@@ -30,39 +30,39 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "procfs",
-    get = "github.com/prometheus/procfs/...",
-    revision = "v0.0.5",
+    module = "github.com/prometheus/procfs/...",
+    version = "v0.0.5",
     deps = [
         "//third_party/go:errgroup",
     ],
 )
 
-go_get(
+go_module(
     name = "perks",
-    get = "github.com/beorn7/perks/...",
-    revision = "v1.0.1",
+    module = "github.com/beorn7/perks/...",
+    version = "v1.0.1",
 )
 
-go_get(
+go_module(
     name = "client_model",
-    get = "github.com/prometheus/client_model/...",
-    revision = "14fe0d1b01d4d5fc031dd4bec1823bd3ebbe8016",
+    module = "github.com/prometheus/client_model/...",
+    version = "14fe0d1b01d4d5fc031dd4bec1823bd3ebbe8016",
     deps = [
         "//third_party/go:protobuf",
     ],
 )
 
-go_get(
+go_module(
     name = "prometheus_common",
-    get = "github.com/prometheus/common",
+    module = "github.com/prometheus/common",
     install = [
         "expfmt",
         "model",
         "internal/...",
     ],
-    revision = "v0.7.0",
+    version = "v0.7.0",
     deps = [
         ":client_model",
         ":golang_protobuf_extensions",
@@ -70,10 +70,10 @@ go_get(
     ],
 )
 
-go_get(
+go_module(
     name = "golang_protobuf_extensions",
-    get = "github.com/matttproud/golang_protobuf_extensions/...",
-    revision = "v1.0.1",
+    module = "github.com/matttproud/golang_protobuf_extensions/...",
+    version = "v1.0.1",
     deps = [
         "//third_party/go:protobuf",
     ],
