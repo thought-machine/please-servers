@@ -92,7 +92,6 @@ go_module(
         "status",
         "tap",
     ],
-    repo = "github.com/grpc/grpc-go",
     version = "v1.31.1",
     deps = [
         ":cmp",
@@ -122,11 +121,10 @@ go_module(
 go_module(
     name = "protoc-gen-go",
     binary = True,
-    module = [],
-    install = ["github.com/golang/protobuf/protoc-gen-go"],
-    deps = [
-        ":protobuf",
-    ],
+    download = ":protobuf_download",
+    install = ["protoc-gen-go"],
+    module = "github.com/golang/protobuf",
+    deps = [":protobuf-go"],
 )
 
 go_module(
@@ -135,7 +133,7 @@ go_module(
         ":golang-protobuf",
     ],
     module = "github.com/golang/protobuf/...",
-    version = "v1.4.2",
+    download = ":protobuf_download",
     strip = [
         "proto/proto3_proto",
         "conformance",
@@ -143,6 +141,12 @@ go_module(
     deps = [
         ":golang-protobuf",
     ],
+)
+
+go_mod_download(
+    name = "protobuf_download",
+    module = "github.com/golang/protobuf",
+    version = "v1.4.2",
 )
 
 go_module(
@@ -219,29 +223,8 @@ go_module(
 )
 
 go_module(
-    name = "buildtools",
-    module = "github.com/bazelbuild/buildtools/...",
-    version = "0.19.2",
-    deps = [
-        ":protobuf",
-        ":skylark",
-    ],
-)
-
-go_module(
-    name = "buildifier",
-    binary = True,
-    module = [],
-    install = ["github.com/bazelbuild/buildtools/buildifier"],
-    deps = [
-        ":buildtools",
-    ],
-)
-
-go_module(
     name = "cli-init",
     module = "github.com/peterebden/go-cli-init/v3",
-    module_major_version = "v3",
     version = "v3.1.1",
     deps = [
         ":go-flags",
@@ -254,8 +237,7 @@ go_module(
 go_module(
     name = "remote-apis",
     module = "github.com/bazelbuild/remote-apis/build/...",
-    repo = "github.com/peterebden/remote-apis",
-    version = "5306a2d66a1b879350f1a474cc639d569953fb48",
+    download = ":remote-apis-download",
     deps = [
         ":annotations",
         ":grpc",
@@ -266,10 +248,15 @@ go_module(
 )
 
 go_module(
+    name = "remote-apis_download",
+    module = "github.com/peterebden/remote-apis",
+    version = "5306a2d66a1b879350f1a474cc639d569953fb48",
+)
+
+go_module(
     name = "remote-apis-sdks",
     module = "github.com/bazelbuild/remote-apis-sdks/go/...",
-    repo = "github.com/peterebden/remote-apis-sdks",
-    version = "5e7b88ce7342f4b3a53c29b6e6962f29e0522d12",
+    download = ":remote-apis-sdks_download",
     deps = [
         ":annotations",
         ":bytestream",
@@ -291,6 +278,12 @@ go_module(
 )
 
 go_module(
+    name = "remote-apis-sdks_download",
+    module = "github.com/peterebden/remote-apis-sdks",
+    version = "5e7b88ce7342f4b3a53c29b6e6962f29e0522d12",
+)
+
+go_module(
     name = "golang-protobuf",
     module = "google.golang.org/protobuf/...",
     version = "v1.25.0",
@@ -308,8 +301,14 @@ go_module(
 go_module(
     name = "glog",
     module = "github.com/golang/glog",
-    patch = "glog_disable.patch",
-    version = "23def4e6c14b4da8ac2ed8007337bc5eb5007998",
+    download = ":glog_download",
+    please_go_install = True,
+)
+
+go_mod_download(
+    name = "glog_download",
+    module = "github.com/peterebden/glog",
+    version = "78e7b285a1f26e8ca142f6f7b584511bc551988b",
 )
 
 go_module(
