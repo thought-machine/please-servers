@@ -84,6 +84,7 @@ go_module(
         "grpclog",
         "health",
         "health/grpc_health_v1",
+        "internal",
         "internal/...",
         "keepalive",
         "metadata",
@@ -237,7 +238,9 @@ go_module(
 go_module(
     name = "remote-apis",
     module = "github.com/bazelbuild/remote-apis/",
-    install = ["build/..."],
+    install = [
+        "build/bazel/...",
+    ],
     download = ":remote-apis-download",
     deps = [
         ":annotations",
@@ -246,6 +249,7 @@ go_module(
         ":protobuf",
         ":rpc",
     ],
+    please_go_install = True,
 )
 
 go_mod_download(
@@ -276,6 +280,7 @@ go_module(
         ":rpc",
         ":zstd",
     ],
+    please_go_install = True,
 )
 
 go_mod_download(
@@ -539,9 +544,11 @@ go_module(
     name = "zstd",
     module = "github.com/klauspost/compress",
     install = [
+        ".",
         "fse",
         "huff0",
         "snappy",
+        "zstd",
         "zstd/...",
     ],
     version = "v1.11.0",
