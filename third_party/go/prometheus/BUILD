@@ -2,12 +2,12 @@ package(default_visibility = ["PUBLIC"])
 
 go_module(
     name = "prometheus",
-    module = "github.com/prometheus/client_golang/prometheus",
+    module = "github.com/prometheus/client_golang",
     version = "v1.1.0",
     install = [
-        "",
-        "internal",
-        "promhttp",
+        "prometheus",
+        "prometheus/internal",
+        "prometheus/promhttp",
     ],
     deps = [
         ":client_model",

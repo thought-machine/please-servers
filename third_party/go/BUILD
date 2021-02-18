@@ -66,7 +66,7 @@ go_module(
     exported_deps = [":net"],
     module = "google.golang.org/grpc",
     install = [
-        "",
+        ".",
         "attributes",
         "backoff",
         "balancer",
@@ -76,6 +76,7 @@ go_module(
         "binarylog/...",
         "codes",
         "connectivity",
+        "credentials",
         "credentials/...",
         "encoding",
         "encoding/gzip",
@@ -87,6 +88,7 @@ go_module(
         "keepalive",
         "metadata",
         "peer",
+        "reflection",
         "reflection/...",
         "resolver",
         "resolver/dns",
@@ -179,7 +181,7 @@ go_module(
     name = "grpc-middleware",
     module = "github.com/grpc-ecosystem/go-grpc-middleware",
     install = [
-        "",
+        ".",
         "recovery",
         "retry",
         "util/metautils",
@@ -276,7 +278,7 @@ go_module(
     ],
 )
 
-go_module(
+go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
     version = "5e7b88ce7342f4b3a53c29b6e6962f29e0522d12",
@@ -323,7 +325,7 @@ go_module(
     name = "oauth2",
     module = "golang.org/x/oauth2",
     install = [
-        "",
+        ".",
         "google",
         "internal",
         "jws",
@@ -341,8 +343,8 @@ go_module(
 #                   a hack. Replace once we have a better way of describing Go modules.
 go_module(
     name = "annotations",
-    module = "google.golang.org/genproto/googleapis",
-    install = ["googleapis/annotations"],
+    module = "google.golang.org/genproto",
+    install = ["googleapis/api/annotations"],
     download = ":genproto_download",
     deps = [
         ":grpc",
@@ -352,7 +354,7 @@ go_module(
 
 go_module(
     name = "longrunning",
-    module = "google.golang.org/genproto/googleapis",
+    module = "google.golang.org/genproto",
     install = ["googleapis/longrunning"],
     download = ":genproto_download",
     deps = [
@@ -364,7 +366,7 @@ go_module(
 
 go_module(
     name = "bytestream",
-    module = "google.golang.org/genproto/googleapis",
+    module = "google.golang.org/genproto",
     install = ["googleapis/bytestream"],
     download = ":genproto_download",
     deps = [
@@ -391,14 +393,14 @@ go_module(
     name = "ristretto",
     module = "github.com/dgraph-io/ristretto",
     install = ["..."],
-    version = "v0.0.1",
+    version = "v0.0.3",
     deps = [":xxhash"],
 )
 
 go_module(
     name = "xxhash",
-    module = "github.com/cespare/xxhash/v2",
-    version = "v2.1.1",
+    module = "github.com/cespare/xxhash",
+    version = "v1.1.0",
 )
 
 go_module(

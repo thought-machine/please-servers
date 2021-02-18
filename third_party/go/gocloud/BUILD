@@ -109,12 +109,8 @@ go_module(
 
 go_module(
     name = "gax-go",
-    module = "github.com/googleapis/gax-go",
-    install = [
-        "",
-        "v2",
-    ],
-    version = "4f559a1e5fd0a1cac6a74c886f1c87917e23ac94",
+    module = "github.com/googleapis/gax-go/v2",
+    version = "v2.0.5",
     deps = [
         "//third_party/go:grpc",
     ],
@@ -143,7 +139,11 @@ go_module(
 
 go_module(
     name = "genproto",
-    module = "google.golang.org/genproto/...",
+    module = "google.golang.org/genproto",
+    install = [
+        "googleapis/...",
+        "protobuf/...",
+    ],
     version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
     deps = [
         "//third_party/go:grpc",
