@@ -116,8 +116,8 @@ go_module(
     name = "rpc",
     module = "google.golang.org/genproto",
     install = [
-        "rpc/code",
-        "rpc/status",
+        "googleapis/rpc/code",
+        "googleapis/rpc/status",
     ],
     download = ":genproto_download",
     deps = [":protobuf"],
@@ -222,7 +222,7 @@ go_module(
 
 go_module(
     name = "cli-init",
-    module = "github.com/peterebden/go-cli-init",
+    module = "github.com/peterebden/go-cli-init/v3",
     version = "v3.1.1",
     deps = [
         ":go-flags",
@@ -246,7 +246,7 @@ go_module(
     ],
 )
 
-go_module(
+go_mod_download(
     name = "remote-apis-download",
     module = "github.com/peterebden/remote-apis",
     version = "5306a2d66a1b879350f1a474cc639d569953fb48",
@@ -524,7 +524,7 @@ go_module(
 
 go_module(
     name = "psutil",
-    module = "github.com/shirou/gopsutil/v2",
+    module = "github.com/shirou/gopsutil",
     install = [
         "internal/common",
         "mem",
