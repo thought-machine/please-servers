@@ -320,13 +320,6 @@ go_mod_download(
 )
 
 go_module(
-    name = "metadata",
-    module = "cloud.google.com/go",
-    install = ["compute/metadata"],
-    version = "v0.46.3",
-)
-
-go_module(
     name = "oauth2",
     module = "golang.org/x/oauth2",
     install = [
@@ -339,8 +332,8 @@ go_module(
     version = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
     visibility = ["//third_party/go/..."],
     deps = [
-        ":metadata",
-        "//third_party/go:net",
+        ":cloud-metadata",
+        ":net",
     ],
 )
 
@@ -562,5 +555,120 @@ go_module(
     deps = [
         ":grpc",
         ":zstd",
+    ],
+)
+
+go_mod_download(
+    name = "cloud_download",
+    module = "cloud.google.com/go",
+    version = "v0.46.3",
+)
+
+go_module(
+    name = "cloud-metadata",
+    module = "cloud.google.com/go",
+    install = ["compute/metadata"],
+    download = ":cloud_download",
+)
+
+go_module(
+    name = "google-cloud-go",
+    module = "cloud.google.com/go",
+    download = ":cloud_download",
+    install = [
+        "iam",
+        "internal",
+        "internal/optional",
+        "internal/trace",
+        "internal/version",
+        "pubsub",
+        "pubsub/apiv1",
+    ],
+    deps = [
+        ":api",
+        ":errgroup",
+        ":gax-go",
+        ":go.opencensus.io",
+    ],
+)
+
+go_module(
+    name = "cloud-storage",
+    module = "cloud.google.com/go/storage",
+    version = "v1.13.0",
+    deps = [
+        ":api",
+        ":errgroup",
+        ":gax-go",
+        ":go.opencensus.io",
+    ],
+)
+
+go_module(
+    name = "gax-go",
+    module = "github.com/googleapis/gax-go/v2",
+    version = "v2.0.5",
+    deps = [
+        ":grpc",
+    ],
+)
+
+go_module(
+    name = "go.opencensus.io",
+    module = "go.opencensus.io",
+    install = ["..."],
+    version = "v0.22.1",
+    deps = [
+        ":groupcache",
+        ":grpc",
+        ":net",
+    ],
+)
+
+go_module(
+    name = "groupcache",
+    module = "github.com/golang/groupcache",
+    install = [
+        "lru",
+    ],
+    version = "404acd9df4cc9859d64fb9eed42e5c026187287a",
+)
+
+go_module(
+    name = "api",
+    module = "google.golang.org/api",
+    install = [
+        "calendar/v3",
+        "googleapi",
+        "googleapi/transport",
+        "idtoken",
+        "internal",
+        "internal/gensupport",
+        "internal/third_party/uritemplates",
+        "iterator",
+        "option",
+        "option/internaloption",
+        "storage/v1",
+        "sheets/v4",
+        "support/bundler",
+        "transport",
+        "transport/bytestream",
+        "transport/cert",
+        "transport/grpc",
+        "transport/http",
+        "transport/http/internal/propagation",
+        "dataflow/...",
+        "compute/v1",
+        "container/v1",
+        "drive/v3",
+    ],
+    version = "v0.27.0",
+    deps = [
+        ":gax-go",
+        ":go.opencensus.io",
+        ":bytestream",
+        ":errgroup",
+        ":grpc",
+        ":oauth2",
     ],
 )
