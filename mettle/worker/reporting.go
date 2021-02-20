@@ -118,7 +118,7 @@ func (w *worker) checkFreeMemory() bool {
 	vm, err := mem.VirtualMemory()
 	if err != nil {
 		log.Error("Error getting memory usage: %s", err)
-		w.Report(false, false, true, "Filesystem has gone read-only")
+		w.Report(false, false, true, "Error getting memory usage: %s", err)
 		return false
 	} else if vm.UsedPercent > w.memoryThreshold {
 		log.Warning("Memory usage %0.1f%% is over healthy threshold %0.1f%%, will not accept new jobs until it decreases", vm.UsedPercent, w.memoryThreshold)
