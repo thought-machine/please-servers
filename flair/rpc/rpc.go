@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/flair/trie"
@@ -512,7 +513,7 @@ func (s *server) assetHash(quals []*apb.Qualifier) string {
 
 func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServer) error {
 	return s.exeReplicator.SequentialDigest(req.ActionDigest, func(srv *trie.Server) error {
-		client, err := srv.Exe.Execute(stream.Context(), req)
+		client, err := srv.Exe.Execute(s.forwardMetadata(stream.Context()), req)
 		if err != nil {
 			return err
 		}
@@ -522,7 +523,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 
 func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
 	return s.exeReplicator.Sequential(req.Name, func(srv *trie.Server) error {
-		client, err := srv.Exe.WaitExecution(stream.Context(), req)
+		client, err := srv.Exe.WaitExecution(s.forwardMetadata(stream.Context()), req)
 		if err != nil {
 			return err
 		}
@@ -541,6 +542,17 @@ func (s *server) streamExecution(client pb.Execution_ExecuteClient, server pb.Ex
 			return err
 		}
 	}
+}
+
+// forwardMetadata forwards the standard rex proto metadata.
+func (s *server) forwardMetadata(ctx context.Context) context.Context {
+	const key = "build.bazel.remote.execution.v2.requestmetadata-bin" // as defined by the proto
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if v := md.Get(key); len(v) != 0 {
+			return metadata.AppendToOutgoingContext(ctx, key, v[0])
+		}
+	}
+	return ctx
 }
 
 func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
