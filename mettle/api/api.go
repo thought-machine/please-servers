@@ -20,6 +20,7 @@ import (
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
 
@@ -115,7 +116,11 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
-	log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
+	if md := s.contextMetadata(stream.Context()); md != nil {
+		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
+	} else {
+		log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
+	}
 	// N.B. We never try a cache lookup here because Please always tells us not to; it's not
 	//      clear to me that is ever useful (because a good client will try to optimise by
 	//      not uploading sources unnecessarily, and to work out that it can not do that it
@@ -144,6 +149,23 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		return err
 	}
 	return s.streamEvents(req.ActionDigest, ch, stream)
+}
+
+// contextMetadata returns the RequestMetadata associated with a context
+func (s *server) contextMetadata(ctx context.Context) *pb.RequestMetadata {
+	const key = "build.bazel.remote.execution.v2.requestmetadata-bin" // as defined by the proto
+	msg := &pb.RequestMetadata{}
+	if md, ok := metadata.FromIncomingContext(ctx); !ok {
+		return nil
+	} else if v := md.Get(key); len(v) == 0 {
+		return nil
+	} else if err := proto.Unmarshal([]byte(v[0]), msg); err != nil {
+		log.Errorf("Invalid incoming metadata: %s", err)
+		return nil
+	} else if msg.ToolDetails == nil {
+		msg.ToolDetails = &pb.ToolDetails{} // Ensure this is non-nil, it's easier for the receiver.
+	}
+	return msg
 }
 
 func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
