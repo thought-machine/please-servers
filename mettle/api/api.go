@@ -214,7 +214,11 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	j.Streams = append(j.Streams, ch)
-	if !create && j.Current != nil {
+	if create {
+		// This request is creating a new stream, clear out any existing current job info; it is now
+		// at best irrelevant and at worst outdated.
+		j.Current = nil
+	} else if j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
 		// amount of time until we receive the next real update.
