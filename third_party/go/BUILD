@@ -47,6 +47,12 @@ go_module(
     module = "golang.org/x/tools",
     install = [
         "cover",
+        "go/...",
+    ],
+    strip = [
+        "go/loader/testdata",
+        "go/internal/gccgoimporter/testdata",
+        "go/gcimporter15/testdata",
     ],
     version = "2ae76fd1560b622911f444c1e66b70a857e1de67",
 )
@@ -71,6 +77,7 @@ go_module(
         "backoff",
         "balancer",
         "balancer/base",
+        "balancer/grpclb",
         "balancer/grpclb/...",
         "balancer/roundrobin",
         "binarylog/...",
@@ -148,6 +155,7 @@ go_module(
         "conformance",
     ],
     deps = [
+        ":cmp",
         ":golang-protobuf",
     ],
 )
@@ -300,7 +308,10 @@ go_module(
 go_module(
     name = "cmp",
     module = "github.com/google/go-cmp",
-    install = ["cmp/..."],
+    install = [
+        "cmp",
+        "cmp/...",
+    ],
     version = "b1c9c4891a6525d98001fea424c8926c6d77bb56",
 )
 
@@ -363,6 +374,30 @@ go_module(
     name = "bytestream",
     module = "google.golang.org/genproto",
     install = ["googleapis/bytestream"],
+    download = ":genproto_download",
+    deps = [
+        ":annotations",
+        ":grpc",
+        ":protobuf",
+    ],
+)
+
+go_module(
+    name = "iam",
+    module = "google.golang.org/genproto",
+    install = ["googleapis/iam/v1"],
+    download = ":genproto_download",
+    deps = [
+        ":annotations",
+        ":grpc",
+        ":protobuf",
+    ],
+)
+
+go_module(
+    name = "pubsub",
+    module = "google.golang.org/genproto",
+    install = ["googleapis/pubsub/v1"],
     download = ":genproto_download",
     deps = [
         ":annotations",
@@ -584,6 +619,7 @@ go_module(
     deps = [
         ":api",
         ":errgroup",
+        ":iam",
         ":gax-go",
         ":go.opencensus.io",
     ],

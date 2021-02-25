@@ -22,7 +22,10 @@ go_module(
 go_module(
     name = "grpc-prometheus",
     module = "github.com/grpc-ecosystem/go-grpc-prometheus",
-    install = ["..."],
+    install = [
+        ".",
+        "...",
+    ],
     version = "6af20e3a5340d5e6bde20c8a7a78699efe19ac0a",
     deps = [
         ":prometheus",
@@ -34,7 +37,10 @@ go_module(
 go_module(
     name = "procfs",
     module = "github.com/prometheus/procfs",
-    install = ["..."],
+    install = [
+        ".",
+        "...",
+    ],
     version = "v0.0.5",
     deps = [
         "//third_party/go:errgroup",

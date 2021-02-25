@@ -25,7 +25,7 @@ go_library(
         "//third_party/go:rpc",
         "//third_party/go:zstd",
         "//third_party/go/gocloud",
-        "//third_party/go/gocloud:api",
+        "//third_party/go:api",
         "//third_party/go/prometheus",
     ],
 )
