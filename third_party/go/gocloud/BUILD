@@ -28,8 +28,8 @@ go_module(
     download = ":gocloud_download",
     visibility = ["PUBLIC"],
     deps = [
-        "//third_party/go::gax-go",
-        "//third_party/go::go.opencensus.io",
+        "//third_party/go:gax-go",
+        "//third_party/go:go.opencensus.io",
         "//third_party/go:google-cloud-go",
         ":wire",
         ":x_errors",
