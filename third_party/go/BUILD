@@ -175,16 +175,24 @@ go_module(
 )
 
 go_module(
+    name = "difflib",
+    module = "github.com/pmezard/go-difflib",
+    install = ["difflib"],
+    version = "5d4384ee4fb2527b0a1256a821ebfc92f91efefc",
+)
+
+go_module(
     name = "testify",
     module = "github.com/stretchr/testify",
     install = [
         "assert",
         "require",
-        "vendor/github.com/davecgh/go-spew/spew",
-        "vendor/github.com/pmezard/go-difflib/difflib",
     ],
-    version = "f390dcf405f7b83c997eac1b06768bb9f44dec18",
-    deps = [":spew"],
+    version = "v1.3.0",
+    deps = [
+        ":difflib",
+        ":spew",
+    ],
 )
 
 go_module(
