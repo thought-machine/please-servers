@@ -25,7 +25,6 @@ go_module(
         "pubsub/gcppubsub",
         "pubsub/mempubsub",
     ],
-    please_go_install = True,
     download = ":gocloud_download",
     visibility = ["PUBLIC"],
     deps = [

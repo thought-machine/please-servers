@@ -249,7 +249,6 @@ go_module(
         ":protobuf",
         ":rpc",
     ],
-    please_go_install = True,
 )
 
 go_mod_download(
@@ -280,7 +279,6 @@ go_module(
         ":rpc",
         ":zstd",
     ],
-    please_go_install = True,
 )
 
 go_mod_download(
@@ -310,7 +308,6 @@ go_module(
     name = "glog",
     module = "github.com/golang/glog",
     download = ":glog_download",
-    please_go_install = True,
 )
 
 go_mod_download(
