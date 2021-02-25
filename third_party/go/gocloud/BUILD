@@ -28,6 +28,7 @@ go_module(
     download = ":gocloud_download",
     visibility = ["PUBLIC"],
     deps = [
+        "//third_party/go:cloud-storage",
         "//third_party/go:gax-go",
         "//third_party/go:go.opencensus.io",
         "//third_party/go:google-cloud-go",
@@ -53,7 +54,10 @@ go_module(
 go_module(
     name = "x_errors",
     module = "golang.org/x/xerrors",
-    install = ["..."],
+    install = [
+        ".",
+        "...",
+    ],
     version = "a5947ffaace3e882f334c1750858b4a6a7e52422",
     deps = ["//third_party/go:unix"],
 )

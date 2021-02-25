@@ -407,6 +407,18 @@ go_module(
 )
 
 go_module(
+    name = "type_expr",
+    module = "google.golang.org/genproto",
+    install = ["googleapis/type/expr"],
+    download = ":genproto_download",
+    deps = [
+        ":annotations",
+        ":grpc",
+        ":protobuf",
+    ],
+)
+
+go_module(
     name = "uuid",
     module = "github.com/google/uuid",
     version = "v1.1.1",
@@ -613,8 +625,6 @@ go_module(
         "internal/optional",
         "internal/trace",
         "internal/version",
-        "pubsub",
-        "pubsub/apiv1",
     ],
     deps = [
         ":api",
@@ -622,6 +632,24 @@ go_module(
         ":iam",
         ":gax-go",
         ":go.opencensus.io",
+    ],
+)
+
+go_module(
+    name = "cloud_pubsub",
+    module = "cloud.google.com/go/pubsub",
+    version = "v0.46.3",
+    install = [
+        ".",
+        "apiv1",
+    ],
+    deps = [
+        ":api",
+        ":google-cloud-go",
+        ":iam",
+        ":gax-go",
+        ":go.opencensus.io",
+        ":pubsub",
     ],
 )
 
@@ -634,6 +662,8 @@ go_module(
         ":errgroup",
         ":gax-go",
         ":go.opencensus.io",
+        ":google-cloud-go",
+        ":type_expr",
     ],
 )
 
