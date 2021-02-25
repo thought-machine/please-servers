@@ -3,6 +3,7 @@ package(default_visibility = ["PUBLIC"])
 go_module(
     name = "gocloud",
     module = "gocloud.dev",
+    version = "v0.22.0",
     install = [
         # This is an awkward lot but necessary so we don't have to pull in transitive
         # dependencies for the providers for aws, azure etc.
@@ -13,7 +14,6 @@ go_module(
         "blob/memblob",
         "gcerrors",
         "gcp",
-        "internal/batcher",
         "internal/escape",
         "internal/gcerr",
         "internal/oc",
@@ -25,7 +25,6 @@ go_module(
         "pubsub/gcppubsub",
         "pubsub/mempubsub",
     ],
-    download = ":gocloud_download",
     visibility = ["PUBLIC"],
     deps = [
         "//third_party/go:cloud-storage",
@@ -34,15 +33,10 @@ go_module(
         "//third_party/go:google-cloud-go",
         ":wire",
         ":x_errors",
+        "//third_party/go:cloud_pubsub",
         "//third_party/go:grpc",
         "//third_party/go:oauth2",
     ],
-)
-
-go_mod_download(
-    name = "gocloud_download",
-    module = "github.com/peterebden/go-cloud",
-    version = "6e9f62655df4f037f0007f5d4f1bd4efbb869d96",
 )
 
 go_module(

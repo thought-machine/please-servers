@@ -84,7 +84,8 @@ go_module(
         "codes",
         "connectivity",
         "credentials",
-        "credentials/...",
+        "credentials/google",
+        "credentials/oauth",
         "encoding",
         "encoding/gzip",
         "encoding/proto",
@@ -106,7 +107,7 @@ go_module(
         "status",
         "tap",
     ],
-    version = "v1.31.1",
+    version = "v1.36.0",
     deps = [
         ":cmp",
         ":oauth2",
@@ -119,7 +120,7 @@ go_module(
 go_mod_download(
     name = "genproto_download",
     module = "google.golang.org/genproto",
-    version = "a023cd5227bd25fd1f5c5633743ff3eacc93d169",
+    version = "063164c882e6716797f16f5accd450506145132d",
 )
 
 go_module(
@@ -385,7 +386,10 @@ go_module(
 go_module(
     name = "iam",
     module = "google.golang.org/genproto",
-    install = ["googleapis/iam/v1"],
+    install = [
+        "googleapis/iam/v1",
+        "googleapis/iam/credentials/v1",
+    ],
     download = ":genproto_download",
     deps = [
         ":annotations",
@@ -397,7 +401,10 @@ go_module(
 go_module(
     name = "pubsub",
     module = "google.golang.org/genproto",
-    install = ["googleapis/pubsub/v1"],
+    install = [
+        "googleapis/pubsub/v1",
+        "protobuf/field_mask",
+    ],
     download = ":genproto_download",
     deps = [
         ":annotations",
@@ -605,7 +612,7 @@ go_module(
 go_mod_download(
     name = "cloud_download",
     module = "cloud.google.com/go",
-    version = "v0.46.3",
+    version = "v0.78.0",
 )
 
 go_module(
@@ -621,8 +628,10 @@ go_module(
     download = ":cloud_download",
     install = [
         "iam",
+        "iam/credentials/...",
         "internal",
         "internal/optional",
+        "internal/pubsub",
         "internal/trace",
         "internal/version",
     ],
@@ -638,7 +647,7 @@ go_module(
 go_module(
     name = "cloud_pubsub",
     module = "cloud.google.com/go/pubsub",
-    version = "v0.46.3",
+    version = "v1.10.0",
     install = [
         ".",
         "apiv1",
@@ -656,7 +665,7 @@ go_module(
 go_module(
     name = "cloud-storage",
     module = "cloud.google.com/go/storage",
-    version = "v1.13.0",
+    version = "v1.11.0",
     deps = [
         ":api",
         ":errgroup",
@@ -725,7 +734,7 @@ go_module(
         "container/v1",
         "drive/v3",
     ],
-    version = "v0.27.0",
+    version = "v0.40.0",
     deps = [
         ":gax-go",
         ":go.opencensus.io",
