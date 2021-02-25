@@ -84,6 +84,8 @@ go_module(
         "codes",
         "connectivity",
         "credentials",
+        "credentials/alts",
+        "credentials/alts/...",
         "credentials/google",
         "credentials/oauth",
         "encoding",
@@ -699,7 +701,10 @@ go_module(
 go_module(
     name = "go.opencensus.io",
     module = "go.opencensus.io",
-    install = ["..."],
+    install = [
+        ".",
+        "...",
+    ],
     version = "v0.22.1",
     deps = [
         ":groupcache",

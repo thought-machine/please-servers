@@ -3,7 +3,7 @@ package(default_visibility = ["PUBLIC"])
 go_module(
     name = "gocloud",
     module = "gocloud.dev",
-    version = "v0.22.0",
+    download = ":gocloud_download",
     install = [
         # This is an awkward lot but necessary so we don't have to pull in transitive
         # dependencies for the providers for aws, azure etc.
@@ -21,6 +21,7 @@ go_module(
         "internal/retry",
         "internal/useragent",
         "pubsub",
+        "pubsub/batcher",
         "pubsub/driver",
         "pubsub/gcppubsub",
         "pubsub/mempubsub",
@@ -37,6 +38,12 @@ go_module(
         "//third_party/go:grpc",
         "//third_party/go:oauth2",
     ],
+)
+
+go_mod_download(
+    name = "gocloud_download",
+    module = "github.com/peterebden/go-cloud",
+    version = "6e9f62655df4f037f0007f5d4f1bd4efbb869d96",
 )
 
 go_module(
