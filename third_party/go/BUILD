@@ -140,7 +140,7 @@ go_module(
     download = ":protobuf_download",
     install = ["protoc-gen-go"],
     module = "github.com/golang/protobuf",
-    deps = [":protobuf"],
+    deps = [":golang-protobuf"],
 )
 
 go_module(
@@ -449,7 +449,10 @@ go_module(
 go_module(
     name = "ristretto",
     module = "github.com/dgraph-io/ristretto",
-    install = ["..."],
+    install = [
+        ".",
+        "...",
+    ],
     version = "v0.0.3",
     deps = [":xxhash"],
 )
@@ -724,6 +727,7 @@ go_module(
         "idtoken",
         "internal",
         "internal/gensupport",
+        "internal/impersonate",
         "internal/third_party/uritemplates",
         "iterator",
         "option",
@@ -737,6 +741,7 @@ go_module(
         "transport/grpc",
         "transport/http",
         "transport/http/internal/propagation",
+        "transport/internal/dca",
         "dataflow/...",
         "compute/v1",
         "container/v1",
