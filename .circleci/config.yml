@@ -3,7 +3,7 @@ jobs:
    build-linux:
      working_directory: ~/please
      docker:
-       - image: thoughtmachine/please-servers:20200828
+       - image: thoughtmachine/please-servers:20210226
      environment:
        PLZ_CONFIG_PROFILE: "ci"
      steps:
