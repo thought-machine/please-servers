@@ -12,7 +12,7 @@ go_library(
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:retryablehttp",
-        "//third_party/go:rpcstatus",
+        "//third_party/go:rpc",
         "//third_party/go:sri",
     ],
     visibility = ["//zeal/..."],
