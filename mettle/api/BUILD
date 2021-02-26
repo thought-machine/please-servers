@@ -22,8 +22,8 @@ go_test(
     deps = [
         ":api",
         "//grpcutil",
+        "//third_party/go:genproto",
         "//third_party/go:grpc",
-        "//third_party/go:longrunning",
         "//third_party/go:protobuf",
         "//third_party/go:remote-apis",
         "//third_party/go:testify",

@@ -36,7 +36,7 @@ go_test(
     deps = [
         ":rpc",
         "//grpcutil",
-        "//third_party/go:bytestream",
+        "//third_party/go:genproto",
         "//third_party/go:grpc",
         "//third_party/go:remote-apis",
         "//third_party/go:testify",
