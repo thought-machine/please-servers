@@ -5,6 +5,6 @@ go_library(
     deps = [
         "//third_party/go:cli-init",
         "//third_party/go/gocloud",
-        "//third_party/go:pubsub",
+        "//third_party/go:genproto",
     ],
 )

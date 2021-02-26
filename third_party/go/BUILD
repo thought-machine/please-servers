@@ -262,9 +262,8 @@ go_module(
     ],
     download = ":remote-apis-download",
     deps = [
-        ":annotations",
+        ":genproto",
         ":grpc",
-        ":longrunning",
         ":protobuf",
         ":rpc",
     ],
@@ -282,15 +281,13 @@ go_module(
     install = ["go/..."],
     download = ":remote-apis-sdks_download",
     deps = [
-        ":annotations",
-        ":bytestream",
+        ":genproto",
         ":cmp",
         ":errgroup",
         ":errors",
         ":glog",
         ":golang-protobuf",
         ":grpc",
-        ":longrunning",
         ":oauth2",
         ":pborman_uuid",
         ":protobuf",
@@ -356,80 +353,22 @@ go_module(
     ],
 )
 
-# TODO(peterebden): Splitting up this & the other bits of genproto is a bit of
-#                   a hack. Replace once we have a better way of describing Go modules.
 go_module(
-    name = "annotations",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/api/annotations"],
-    download = ":genproto_download",
-    deps = [
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "longrunning",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/longrunning"],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "bytestream",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/bytestream"],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "iam",
+    name = "genproto",
     module = "google.golang.org/genproto",
     install = [
+        "googleapis/api/annotations",
+        "googleapis/longrunning",
+        "googleapis/bytestream",
         "googleapis/iam/v1",
         "googleapis/iam/credentials/v1",
-    ],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "pubsub",
-    module = "google.golang.org/genproto",
-    install = [
         "googleapis/pubsub/v1",
         "protobuf/field_mask",
+        "googleapis/type/expr",
     ],
     download = ":genproto_download",
     deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "type_expr",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/type/expr"],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
+        ":rpc",
         ":grpc",
         ":protobuf",
     ],
@@ -651,7 +590,7 @@ go_module(
     deps = [
         ":api",
         ":errgroup",
-        ":iam",
+        ":genproto",
         ":gax-go",
         ":go.opencensus.io",
     ],
@@ -667,11 +606,10 @@ go_module(
     ],
     deps = [
         ":api",
+        ":genproto",
         ":google-cloud-go",
-        ":iam",
         ":gax-go",
         ":go.opencensus.io",
-        ":pubsub",
     ],
 )
 
@@ -683,9 +621,9 @@ go_module(
         ":api",
         ":errgroup",
         ":gax-go",
+        ":genproto",
         ":go.opencensus.io",
         ":google-cloud-go",
-        ":type_expr",
     ],
 )
 
@@ -756,7 +694,7 @@ go_module(
     deps = [
         ":gax-go",
         ":go.opencensus.io",
-        ":bytestream",
+        ":genproto",
         ":errgroup",
         ":grpc",
         ":oauth2",

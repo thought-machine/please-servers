@@ -5,7 +5,7 @@ go_library(
         "//grpcutil",
         "//flair/trie",
         "//proto:purity",
-        "//third_party/go:bytestream",
+        "//third_party/go:genproto",
         "//third_party/go:cli-init",
         "//third_party/go:errgroup",
         "//third_party/go:go-multierror",
