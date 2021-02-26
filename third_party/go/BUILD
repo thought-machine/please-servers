@@ -8,18 +8,18 @@ go_module(
 
 go_module(
     name = "terminal",
-    module = "golang.org/x/crypto",
     install = ["ssh/terminal"],
+    module = "golang.org/x/crypto",
     version = "7b85b097bf7527677d54d3220065e966a0e3b613",
 )
 
 go_module(
     name = "go-bindata",
     binary = True,
-    module = "github.com/kevinburke/go-bindata",
     install = ["..."],
-    version = "46eb4c183bfc1ebb527d9d19bcded39476302eb8",
+    module = "github.com/kevinburke/go-bindata",
     strip = ["testdata"],
+    version = "46eb4c183bfc1ebb527d9d19bcded39476302eb8",
 )
 
 go_module(
@@ -33,8 +33,8 @@ go_module(
 
 go_module(
     name = "net",
-    module = "golang.org/x/net",
     install = ["..."],
+    module = "golang.org/x/net",
     version = "136a25c244d3019482a795d728110278d6ba09a4",
     deps = [
         ":terminal",
@@ -44,11 +44,11 @@ go_module(
 
 go_module(
     name = "tools",
-    module = "golang.org/x/tools",
     install = [
         "cover",
         "go/...",
     ],
+    module = "golang.org/x/tools",
     strip = [
         "go/loader/testdata",
         "go/internal/gccgoimporter/testdata",
@@ -59,8 +59,8 @@ go_module(
 
 go_module(
     name = "text",
-    module = "golang.org/x/text",
     install = ["..."],
+    module = "golang.org/x/text",
     version = "4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1",
     deps = [
         ":tools",
@@ -70,7 +70,6 @@ go_module(
 go_module(
     name = "grpc",
     exported_deps = [":net"],
-    module = "google.golang.org/grpc",
     install = [
         ".",
         "attributes",
@@ -109,6 +108,7 @@ go_module(
         "status",
         "tap",
     ],
+    module = "google.golang.org/grpc",
     version = "v1.36.0",
     deps = [
         ":cmp",
@@ -127,12 +127,12 @@ go_mod_download(
 
 go_module(
     name = "rpc",
-    module = "google.golang.org/genproto",
+    download = ":genproto_download",
     install = [
         "googleapis/rpc/code",
         "googleapis/rpc/status",
     ],
-    download = ":genproto_download",
+    module = "google.golang.org/genproto",
     deps = [":protobuf"],
 )
 
@@ -147,12 +147,12 @@ go_module(
 
 go_module(
     name = "protobuf",
+    download = ":protobuf_download",
     exported_deps = [
         ":golang-protobuf",
     ],
-    module = "github.com/golang/protobuf",
     install = ["..."],
-    download = ":protobuf_download",
+    module = "github.com/golang/protobuf",
     strip = [
         "proto/proto3_proto",
         "conformance",
@@ -171,25 +171,25 @@ go_mod_download(
 
 go_module(
     name = "spew",
-    module = "github.com/davecgh/go-spew",
     install = ["spew"],
+    module = "github.com/davecgh/go-spew",
     version = "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
 )
 
 go_module(
     name = "difflib",
-    module = "github.com/pmezard/go-difflib",
     install = ["difflib"],
+    module = "github.com/pmezard/go-difflib",
     version = "5d4384ee4fb2527b0a1256a821ebfc92f91efefc",
 )
 
 go_module(
     name = "testify",
-    module = "github.com/stretchr/testify",
     install = [
         "assert",
         "require",
     ],
+    module = "github.com/stretchr/testify",
     version = "v1.3.0",
     deps = [
         ":difflib",
@@ -199,7 +199,6 @@ go_module(
 
 go_module(
     name = "grpc-middleware",
-    module = "github.com/grpc-ecosystem/go-grpc-middleware",
     install = [
         ".",
         "recovery",
@@ -207,6 +206,7 @@ go_module(
         "util/metautils",
         "util/backoffutils",
     ],
+    module = "github.com/grpc-ecosystem/go-grpc-middleware",
     version = "fa8fef87dcecac0bda02d36abb3c790ab9e0030b",
     deps = [
         ":grpc",
@@ -217,22 +217,22 @@ go_module(
 
 go_module(
     name = "errgroup",
-    module = "golang.org/x/sync",
     install = [
         "errgroup",
         "semaphore",
     ],
+    module = "golang.org/x/sync",
     version = "09787c993a3ab68e3d1f5c9b2394ab9433f391be",
     deps = [":net"],
 )
 
 go_module(
     name = "unix",
-    module = "golang.org/x/sys",
     install = [
         "internal/unsafeheader",
         "unix",
     ],
+    module = "golang.org/x/sys",
     version = "ddb9806d33aed8dbaac1cd6f1cba58952e87f933",
 )
 
@@ -256,15 +256,14 @@ go_module(
 
 go_module(
     name = "remote-apis",
-    module = "github.com/bazelbuild/remote-apis/",
+    download = ":remote-apis-download",
     install = [
         "build/bazel/...",
     ],
-    download = ":remote-apis-download",
+    module = "github.com/bazelbuild/remote-apis/",
     deps = [
-        ":annotations",
+        ":genproto",
         ":grpc",
-        ":longrunning",
         ":protobuf",
         ":rpc",
     ],
@@ -278,19 +277,17 @@ go_mod_download(
 
 go_module(
     name = "remote-apis-sdks",
-    module = "github.com/bazelbuild/remote-apis-sdks",
-    install = ["go/..."],
     download = ":remote-apis-sdks_download",
+    install = ["go/..."],
+    module = "github.com/bazelbuild/remote-apis-sdks",
     deps = [
-        ":annotations",
-        ":bytestream",
         ":cmp",
         ":errgroup",
         ":errors",
+        ":genproto",
         ":glog",
         ":golang-protobuf",
         ":grpc",
-        ":longrunning",
         ":oauth2",
         ":pborman_uuid",
         ":protobuf",
@@ -308,8 +305,8 @@ go_mod_download(
 
 go_module(
     name = "golang-protobuf",
-    module = "google.golang.org/protobuf",
     install = ["..."],
+    module = "google.golang.org/protobuf",
     version = "v1.25.0",
     deps = [
         ":cmp",
@@ -318,18 +315,18 @@ go_module(
 
 go_module(
     name = "cmp",
-    module = "github.com/google/go-cmp",
     install = [
         "cmp",
         "cmp/...",
     ],
+    module = "github.com/google/go-cmp",
     version = "b1c9c4891a6525d98001fea424c8926c6d77bb56",
 )
 
 go_module(
     name = "glog",
-    module = "github.com/golang/glog",
     download = ":glog_download",
+    module = "github.com/golang/glog",
 )
 
 go_mod_download(
@@ -340,7 +337,6 @@ go_mod_download(
 
 go_module(
     name = "oauth2",
-    module = "golang.org/x/oauth2",
     install = [
         ".",
         "google",
@@ -348,6 +344,7 @@ go_module(
         "jws",
         "jwt",
     ],
+    module = "golang.org/x/oauth2",
     version = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
     visibility = ["//third_party/go/..."],
     deps = [
@@ -356,82 +353,24 @@ go_module(
     ],
 )
 
-# TODO(peterebden): Splitting up this & the other bits of genproto is a bit of
-#                   a hack. Replace once we have a better way of describing Go modules.
 go_module(
-    name = "annotations",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/api/annotations"],
+    name = "genproto",
     download = ":genproto_download",
-    deps = [
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "longrunning",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/longrunning"],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "bytestream",
-    module = "google.golang.org/genproto",
-    install = ["googleapis/bytestream"],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "iam",
-    module = "google.golang.org/genproto",
     install = [
+        "googleapis/api/annotations",
+        "googleapis/longrunning",
+        "googleapis/bytestream",
         "googleapis/iam/v1",
         "googleapis/iam/credentials/v1",
-    ],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "pubsub",
-    module = "google.golang.org/genproto",
-    install = [
         "googleapis/pubsub/v1",
         "protobuf/field_mask",
+        "googleapis/type/expr",
     ],
-    download = ":genproto_download",
-    deps = [
-        ":annotations",
-        ":grpc",
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "type_expr",
     module = "google.golang.org/genproto",
-    install = ["googleapis/type/expr"],
-    download = ":genproto_download",
     deps = [
-        ":annotations",
         ":grpc",
         ":protobuf",
+        ":rpc",
     ],
 )
 
@@ -450,11 +389,11 @@ go_module(
 
 go_module(
     name = "ristretto",
-    module = "github.com/dgraph-io/ristretto",
     install = [
         ".",
         "...",
     ],
+    module = "github.com/dgraph-io/ristretto",
     version = "v0.0.3",
     deps = [":xxhash"],
 )
@@ -535,12 +474,12 @@ go_module(
 go_module(
     name = "color",
     module = "github.com/fatih/color",
+    version = "v1.9.0",
     deps = [
         ":colorable",
         ":isatty",
         ":unix",
     ],
-    version = "v1.9.0",
 )
 
 go_module(
@@ -552,12 +491,12 @@ go_module(
 go_module(
     name = "godirwalk",
     module = "github.com/karrick/godirwalk",
-    version = "v1.7.0",
     strip = [
         "examples",
         "testdata",
         "vendor",
     ],
+    version = "v1.7.0",
     deps = [":errors"],
 )
 
@@ -588,18 +527,17 @@ go_module(
 
 go_module(
     name = "psutil",
-    module = "github.com/shirou/gopsutil",
     install = [
         "internal/common",
         "mem",
     ],
+    module = "github.com/shirou/gopsutil",
     version = "v2.17.09",
     deps = [":unix"],
 )
 
 go_module(
     name = "zstd",
-    module = "github.com/klauspost/compress",
     install = [
         ".",
         "fse",
@@ -608,13 +546,14 @@ go_module(
         "zstd",
         "zstd/...",
     ],
+    module = "github.com/klauspost/compress",
     version = "v1.11.0",
 )
 
 go_module(
     name = "go-grpc-compression",
-    module = "github.com/mostynb/go-grpc-compression",
     install = ["zstd"],
+    module = "github.com/mostynb/go-grpc-compression",
     version = "v1.1.2",
     deps = [
         ":grpc",
@@ -630,14 +569,13 @@ go_mod_download(
 
 go_module(
     name = "cloud-metadata",
-    module = "cloud.google.com/go",
-    install = ["compute/metadata"],
     download = ":cloud_download",
+    install = ["compute/metadata"],
+    module = "cloud.google.com/go",
 )
 
 go_module(
     name = "google-cloud-go",
-    module = "cloud.google.com/go",
     download = ":cloud_download",
     install = [
         "iam",
@@ -648,30 +586,30 @@ go_module(
         "internal/trace",
         "internal/version",
     ],
+    module = "cloud.google.com/go",
     deps = [
         ":api",
         ":errgroup",
-        ":iam",
         ":gax-go",
+        ":genproto",
         ":go.opencensus.io",
     ],
 )
 
 go_module(
     name = "cloud_pubsub",
-    module = "cloud.google.com/go/pubsub",
-    version = "v1.10.0",
     install = [
         ".",
         "apiv1",
     ],
+    module = "cloud.google.com/go/pubsub",
+    version = "v1.10.0",
     deps = [
         ":api",
-        ":google-cloud-go",
-        ":iam",
         ":gax-go",
+        ":genproto",
         ":go.opencensus.io",
-        ":pubsub",
+        ":google-cloud-go",
     ],
 )
 
@@ -683,9 +621,9 @@ go_module(
         ":api",
         ":errgroup",
         ":gax-go",
+        ":genproto",
         ":go.opencensus.io",
         ":google-cloud-go",
-        ":type_expr",
     ],
 )
 
@@ -700,11 +638,11 @@ go_module(
 
 go_module(
     name = "go.opencensus.io",
-    module = "go.opencensus.io",
     install = [
         ".",
         "...",
     ],
+    module = "go.opencensus.io",
     version = "v0.22.1",
     deps = [
         ":groupcache",
@@ -715,16 +653,15 @@ go_module(
 
 go_module(
     name = "groupcache",
-    module = "github.com/golang/groupcache",
     install = [
         "lru",
     ],
+    module = "github.com/golang/groupcache",
     version = "404acd9df4cc9859d64fb9eed42e5c026187287a",
 )
 
 go_module(
     name = "api",
-    module = "google.golang.org/api",
     install = [
         "calendar/v3",
         "googleapi",
@@ -752,12 +689,13 @@ go_module(
         "container/v1",
         "drive/v3",
     ],
+    module = "google.golang.org/api",
     version = "v0.40.0",
     deps = [
-        ":gax-go",
-        ":go.opencensus.io",
-        ":bytestream",
         ":errgroup",
+        ":gax-go",
+        ":genproto",
+        ":go.opencensus.io",
         ":grpc",
         ":oauth2",
     ],

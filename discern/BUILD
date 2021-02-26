@@ -8,7 +8,7 @@ go_binary(
         "//third_party/go:cli-init",
         "//third_party/go:humanize",
         "//third_party/go:protobuf",
-        "//third_party/go:remote-apis-sdks",
         "//third_party/go:remote-apis",
+        "//third_party/go:remote-apis-sdks",
     ],
 )

@@ -1,8 +1,8 @@
 github_repo(
     name = "please",
+    config = "plz.config",
     repo = "thought-machine/please",
     revision = "master",
-    config = "plz.config",
 )
 
 go_test(
