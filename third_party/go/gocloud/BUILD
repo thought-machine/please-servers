@@ -2,7 +2,6 @@ package(default_visibility = ["PUBLIC"])
 
 go_module(
     name = "gocloud",
-    module = "gocloud.dev",
     download = ":gocloud_download",
     install = [
         # This is an awkward lot but necessary so we don't have to pull in transitive
@@ -26,15 +25,16 @@ go_module(
         "pubsub/gcppubsub",
         "pubsub/mempubsub",
     ],
+    module = "gocloud.dev",
     visibility = ["PUBLIC"],
     deps = [
+        ":wire",
+        ":x_errors",
         "//third_party/go:cloud-storage",
+        "//third_party/go:cloud_pubsub",
         "//third_party/go:gax-go",
         "//third_party/go:go.opencensus.io",
         "//third_party/go:google-cloud-go",
-        ":wire",
-        ":x_errors",
-        "//third_party/go:cloud_pubsub",
         "//third_party/go:grpc",
         "//third_party/go:oauth2",
     ],
@@ -54,11 +54,11 @@ go_module(
 
 go_module(
     name = "x_errors",
-    module = "golang.org/x/xerrors",
     install = [
         ".",
         "...",
     ],
+    module = "golang.org/x/xerrors",
     version = "a5947ffaace3e882f334c1750858b4a6a7e52422",
     deps = ["//third_party/go:unix"],
 )

@@ -4,7 +4,7 @@ go_library(
     visibility = ["//mettle/..."],
     deps = [
         "//third_party/go:cli-init",
-        "//third_party/go/gocloud",
         "//third_party/go:genproto",
+        "//third_party/go/gocloud",
     ],
 )

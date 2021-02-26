@@ -1,6 +1,10 @@
 go_library(
     name = "gc",
     srcs = glob(["*.go"]),
+    visibility = [
+        "//discern/...",
+        "//purity/...",
+    ],
     deps = [
         "//proto:purity",
         "//rexclient",
@@ -11,9 +15,5 @@ go_library(
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:terminal",
-    ],
-    visibility = [
-        "//purity/...",
-        "//discern/...",
     ],
 )

@@ -12,6 +12,7 @@ go_library(
         "//grpcutil",
         "//proto:purity",
         "//rexclient",
+        "//third_party/go:api",
         "//third_party/go:cli-init",
         "//third_party/go:errgroup",
         "//third_party/go:genproto",
@@ -24,7 +25,6 @@ go_library(
         "//third_party/go:rpc",
         "//third_party/go:zstd",
         "//third_party/go/gocloud",
-        "//third_party/go:api",
         "//third_party/go/prometheus",
     ],
 )
