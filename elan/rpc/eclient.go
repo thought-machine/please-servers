@@ -21,6 +21,10 @@ type elanClient struct {
 	timeout time.Duration
 }
 
+func (e *elanClient) Healthcheck() error {
+	return nil  // We don't have a remote server to check for health
+}
+
 func (e *elanClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()

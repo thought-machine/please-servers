@@ -8,6 +8,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	hpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // New creates a new Client based on the given URL.
@@ -23,11 +24,18 @@ func New(url string, tls bool, tokenFile string) (Client, error) {
 		}, nil
 	}
 	client, err := rexclient.New("mettle", url, tls, tokenFile)
-	return &remoteClient{c: client}, err
+	if err != nil {
+		return nil, err
+	}
+	return &remoteClient{
+		c:      client,
+		health: hpb.NewHealthClient(client.CASConnection),
+	}, nil
 }
 
 // Client is a genericised interface over a limited set of actions on the CAS / AC.
 type Client interface{
+	Healthcheck() error
 	ReadBlob(*pb.Digest) ([]byte, error)
 	WriteBlob([]byte) (*pb.Digest, error)
 	UpdateActionResult(*pb.UpdateActionResultRequest) (*pb.ActionResult, error)

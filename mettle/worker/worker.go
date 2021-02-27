@@ -347,6 +347,7 @@ func (w *worker) receiveTask(ctx context.Context) (*pubsub.Message, error) {
 		if err == context.DeadlineExceeded {
 			log.Debug("Task receive timed out, retrying...")
 			w.waitForFreeResources()
+			w.waitForLiveConnection()
 			w.waitIfDisabled()
 			continue
 		}
