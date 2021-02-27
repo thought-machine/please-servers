@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -22,7 +23,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"gopkg.in/op/go-logging.v1"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -198,7 +198,8 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	j, present := s.jobs[digest.Hash]
-	if !present {
+	// Don't return unsuccessful actions if they asked to create a new one.
+	if !present || (create && !j.Success) {
 		if !create {
 			return nil
 		}
@@ -270,33 +271,26 @@ func (s *server) process(msg *pubsub.Message) {
 		log.Error("ActionDigest in received message is nil: %s", op)
 		return
 	}
-	if op.Done {
-		switch result := op.Result.(type) {
-		case *longrunning.Operation_Response, *longrunning.Operation_Error:
-		default:
-			log.Error("Received a done response with neither response nor error field set: %#v", result)
-		}
+
+	err := s.status(op)
+	successful := err == nil
+	if !successful {
+		log.Info("Got a failed update for %s: %s", metadata.ActionDigest.Hash, err)
+	} else {
+		log.Info("Got an update for %s", metadata.ActionDigest.Hash)
 	}
-	if log.IsEnabledFor(logging.DEBUG) {
-		switch result := op.Result.(type) {
-		case *longrunning.Operation_Response:
-			response := &pb.ExecuteResponse{}
-			if err := ptypes.UnmarshalAny(result.Response, response); err == nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
-				log.Debug("Got a failed update for %s: %s", metadata.ActionDigest.Hash, response.Status.Message)
-			}
-		}
-	}
-	log.Info("Got an update for %s", metadata.ActionDigest.Hash)
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if j, present := s.jobs[metadata.ActionDigest.Hash]; !present {
 		// This is legit, we are getting an update about a job someone else started.
 		log.Debug("Update for %s is for a previously unknown job", metadata.ActionDigest.Hash)
-		s.jobs[metadata.ActionDigest.Hash] = &job{Current: op}
+		s.jobs[metadata.ActionDigest.Hash] = &job{Current: op, Success: successful}
 	} else if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
 		// Only send QUEUED messages if they're the first one. This prevents us from
 		// re-broadcasting a QUEUED message after something's already started executing.
 		j.SentFirst = true
+		j.Success = successful
 		if j.Done && !op.Done {
 			log.Warning("Got a progress message after completion for %s, discarding", metadata.ActionDigest.Hash)
 			return
@@ -325,6 +319,29 @@ func (s *server) process(msg *pubsub.Message) {
 	}
 }
 
+// status returns the status of an operation response as an error (if unsuccessful)
+func (s *server) status(op *longrunning.Operation) error {
+	if !op.Done {
+		return nil
+	}
+	switch result := op.Result.(type) {
+	case *longrunning.Operation_Error:
+		return fmt.Errorf("Operation errored: %s %s", result.Error.Code, result.Error.Message)
+	case *longrunning.Operation_Response:
+		response := &pb.ExecuteResponse{}
+		if err := ptypes.UnmarshalAny(result.Response, response); err != nil {
+			return fmt.Errorf("Invalid response: %s", err)
+		} else if response.Status == nil {
+			return fmt.Errorf("Missing status on response")
+		} else if response.Status.Code != int32(codes.OK) {
+			return fmt.Errorf("Action failes: %s %s", response.Status.Code, response.Status.Message)
+		}
+		return nil
+	default:
+		return fmt.Errorf("Unknown response type (was a %T): %#v", op.Result, op)
+	}
+}
+
 // deleteJob waits for a period then removes the given job from memory.
 func (s *server) deleteJob(hash string) {
 	time.Sleep(retentionTime)
@@ -337,7 +354,8 @@ func (s *server) deleteJob(hash string) {
 // A job represents a single execution request.
 type job struct {
 	Streams   []chan *longrunning.Operation
-	Current   *longrunning.Operation
-	SentFirst bool
-	Done      bool
+	Current   *longrunning.Operation  // The 'current' update for this job
+	SentFirst bool  // Have we sent the first response back yet.
+	Done      bool  // Is the job complete
+	Success   bool  // Is the job successful so far (does not imply Done)
 }
