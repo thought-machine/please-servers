@@ -141,3 +141,23 @@ func (w *worker) waitIfDisabled() {
 		}
 	}
 }
+
+// waitForLiveConnection waits for the connection to be alive to the remote servers.
+func (w *worker) waitForLiveConnection() {
+	if w.checkLiveConnection() {
+		return
+	}
+	for range time.NewTicker(1 * time.Minute).C {
+		if w.checkLiveConnection() {
+			return
+		}
+	}
+}
+
+func (w *worker) checkLiveConnection() bool {
+	if _, err := w.client.Capabilities(); err != nil {
+		log.Errorf("Failed to contact remote server: %s", err)
+		return false
+	}
+	return true
+}
