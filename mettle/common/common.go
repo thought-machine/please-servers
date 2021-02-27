@@ -16,6 +16,7 @@ import (
 	// Must import the schemes we want to use.
 	_ "gocloud.dev/pubsub/gcppubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
+	"github.com/thought-machine/please-servers/mettle/omempubsub"
 )
 
 var log = cli.MustGetLogger()
@@ -83,6 +84,11 @@ func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byt
 			var message *pspb.PubsubMessage
 			if asFunc(message) {
 				message.OrderingKey = key
+				return nil
+			}
+			var om *omempubsub.OrderedMessage
+			if asFunc(om) {
+				om.Key = key
 			}
 			return nil
 		},

@@ -18,7 +18,6 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
-	_ "github.com/thought-machine/please-servers/mettle/omempubsub"
 )
 
 const (

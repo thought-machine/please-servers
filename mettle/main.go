@@ -13,7 +13,6 @@ import (
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/mettle/common"
-	_ "github.com/thought-machine/please-servers/mettle/omempubsub"
 	"github.com/thought-machine/please-servers/mettle/worker"
 )
 

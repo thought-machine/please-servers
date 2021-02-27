@@ -6,7 +6,6 @@ go_binary(
         "//grpcutil",
         "//mettle/api",
         "//mettle/common",
-        "//mettle/omempubsub",
         "//mettle/worker",
         "//third_party/go:cli-init",
     ],
