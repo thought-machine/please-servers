@@ -27,7 +27,7 @@ const (
 )
 
 func TestUncached(t *testing.T) {
-	client, ex, s := setupServers(t, 9996, "mem://requests1", "mem://responses1")
+	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
 	defer s.Stop()
 
 	digest := &pb.Digest{Hash: uncachedHash}
@@ -57,6 +57,10 @@ func TestUncached(t *testing.T) {
 }
 
 func TestWaitExecution(t *testing.T) {
+	// TODO(peterebden): We should really be using omem:// but the semantics are in some way different
+	//                   that this test fails. I suspect this is a sign of some bad assumption here
+	//                   (it tends to be more immediate then mem since it doesn't have the 250ms cooldown
+	//                   thing and instead just blocks for arbitrary periods of time).
 	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
 	defer s.Stop()
 

@@ -129,8 +129,8 @@ updated blobs dominating much of the data downloaded.
 }
 
 func main() {
-	const requests = "mem://requests"
-	const responses = "mem://responses"
+	const requests = "omem://requests"
+	const responses = "omem://responses"
 
 	cmd, info := flags.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
 	if cmd != "one" {
