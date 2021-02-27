@@ -83,7 +83,7 @@ func (t *topic) SendBatch(ctx context.Context, messages []*driver.Message) error
 	oms := make([]*OrderedMessage, len(messages))
 	for i, msg := range messages {
 		msg.AckID = atomic.AddInt64(&t.ackID, 1)
-		om := &OrderedMessage{}
+		om := &OrderedMessage{Message: msg}
 		oms[i] = om
 		if msg.BeforeSend != nil {
 			if err := msg.BeforeSend(func(i interface{}) bool {
