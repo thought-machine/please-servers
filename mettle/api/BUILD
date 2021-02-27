@@ -22,6 +22,7 @@ go_test(
     deps = [
         ":api",
         "//grpcutil",
+        "//mettle/omempubsub",
         "//third_party/go:genproto",
         "//third_party/go:grpc",
         "//third_party/go:protobuf",

@@ -18,6 +18,7 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
+	_ "github.com/thought-machine/please-servers/mettle/omempubsub"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 )
 
 func TestUncached(t *testing.T) {
-	client, ex, s := setupServers(t, 9996, "mem://requests1", "mem://responses1")
+	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
 	defer s.Stop()
 
 	digest := &pb.Digest{Hash: uncachedHash}
@@ -57,7 +58,7 @@ func TestUncached(t *testing.T) {
 }
 
 func TestWaitExecution(t *testing.T) {
-	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
+	client, ex, s := setupServers(t, 9999, "omem://requests3", "omem://responses3")
 	defer s.Stop()
 
 	digest := &pb.Digest{Hash: uncachedHash}
