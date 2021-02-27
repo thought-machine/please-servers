@@ -116,16 +116,23 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
-	if md := s.contextMetadata(stream.Context()); md != nil {
-		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
-	} else {
-		log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
-	}
 	// N.B. We never try a cache lookup here because Please always tells us not to; it's not
 	//      clear to me that is ever useful (because a good client will try to optimise by
 	//      not uploading sources unnecessarily, and to work out that it can not do that it
 	//      needs to contact the action cache itself anyway).
-	ch := s.eventStream(req.ActionDigest, true)
+	ch, created := s.eventStream(req.ActionDigest, true)
+
+	attachedMsg := func() string {
+		if created {
+			return ""
+		}
+		return " (attached to existing execution)"
+	}
+	if md := s.contextMetadata(stream.Context()); md != nil {
+		log.Notice("Received an ExecuteRequest for %s%s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, attachedMsg(), md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
+	} else {
+		log.Notice("Received an ExecuteRequest for %s%s", req.ActionDigest.Hash, attachedMsg())
+	}
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
 	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
@@ -171,7 +178,7 @@ func (s *server) contextMetadata(ctx context.Context) *pb.RequestMetadata {
 func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
 	log.Info("Received a request to wait for %s", req.Name)
 	digest := &pb.Digest{Hash: req.Name}
-	ch := s.eventStream(digest, false)
+	ch, _ := s.eventStream(digest, false)
 	if ch == nil {
 		log.Warning("Request for execution %s which is not in progress", req.Name)
 		return status.Errorf(codes.NotFound, "No execution in progress for %s", req.Name)
@@ -193,15 +200,15 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 	return nil
 }
 
-// eventStream registers an event stream for a job.
-func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning.Operation {
+// eventStream registers an event stream for a job and returns the stream and whether it was newly created.
+func (s *server) eventStream(digest *pb.Digest, create bool) (rch <-chan *longrunning.Operation, created bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	j, present := s.jobs[digest.Hash]
 	// Don't return unsuccessful actions if they asked to create a new one.
 	if !present || (create && !j.Success) {
 		if !create {
-			return nil
+			return nil, false
 		}
 		any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 			Stage:        pb.ExecutionStage_QUEUED,
@@ -212,6 +219,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 		log.Debug("Created job for %s", digest.Hash)
 		totalRequests.Inc()
 		currentRequests.Inc()
+		created = true
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	j.Streams = append(j.Streams, ch)
@@ -225,7 +233,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 		// amount of time until we receive the next real update.
 		ch <- j.Current
 	}
-	return ch
+	return ch, created
 }
 
 // stopStream de-registers the given event stream for a job.
