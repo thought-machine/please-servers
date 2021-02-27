@@ -40,6 +40,10 @@ var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
 })
+var reusedRequests = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "requests_reused",
+})
 var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "mettle",
 	Name:      "requests_current",
@@ -49,6 +53,7 @@ var serveHTTPOnce sync.Once
 
 func init() {
 	prometheus.MustRegister(totalRequests)
+	prometheus.MustRegister(reusedRequests)
 	prometheus.MustRegister(currentRequests)
 }
 
@@ -122,16 +127,15 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	//      needs to contact the action cache itself anyway).
 	ch, created := s.eventStream(req.ActionDigest, true)
 
-	attachedMsg := func() string {
-		if created {
-			return ""
-		}
-		return " (attached to existing execution)"
+	attachedMsg := ""
+	if !created {
+		reusedRequests.Inc()
+	attachedMsg = " (attached to existing execution)"
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
-		log.Notice("Received an ExecuteRequest for %s%s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, attachedMsg(), md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
+		log.Notice("Received an ExecuteRequest for %s%s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, attachedMsg, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
 	} else {
-		log.Notice("Received an ExecuteRequest for %s%s", req.ActionDigest.Hash, attachedMsg())
+		log.Notice("Received an ExecuteRequest for %s%s", req.ActionDigest.Hash, attachedMsg)
 	}
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
@@ -298,13 +302,13 @@ func (s *server) process(msg *pubsub.Message) {
 		// Only send QUEUED messages if they're the first one. This prevents us from
 		// re-broadcasting a QUEUED message after something's already started executing.
 		j.SentFirst = true
-		j.Success = successful
-		if j.Done && !op.Done {
+		if j.Done && !op.Done && j.Success {
 			log.Warning("Got a progress message after completion for %s, discarding", metadata.ActionDigest.Hash)
 			return
 		} else if op.Done {
 			j.Done = true
 		}
+		j.Success = successful
 		j.Current = op
 		for _, stream := range j.Streams {
 			// Invoke this in a goroutine so we do not block.
