@@ -1,6 +1,6 @@
 module github.com/thought-machine/please-servers
 
-go 1.14
+go 1.16
 
 require (
 	cloud.google.com/go/storage v1.10.0 // indirect
@@ -62,4 +62,9 @@ require (
 	gopkg.in/gcfg.v1 v1.2.3 // indirect
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+)
+
+replace (
+	github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c => github.com/peterebden/remote-apis v0.0.0-20201218092846-5306a2d66a1b
+	github.com/bazelbuild/remote-apis-sdks v0.0.0-20210219194604-fdb5dae38ca8 => github.com/peterebden/remote-apis-sdks v0.0.0-20210113155222-5e7b88ce7342
 )

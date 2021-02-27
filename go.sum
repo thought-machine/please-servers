@@ -107,6 +107,7 @@ github.com/aws/aws-sdk-go v1.31.13/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZve
 github.com/bazelbuild/remote-apis v0.0.0-20191104140458-e77c4eb2ca48/go.mod h1:9Y+1FnaNUGVV6wKE0Jdh+mguqDUsyd9uUqokalrC7DQ=
 github.com/bazelbuild/remote-apis v0.0.0-20200708200203-1252343900d9 h1:cEFRynjrFOjUj9ZQj/ubiVbKPUcMG2kpMIbQkKGYlcI=
 github.com/bazelbuild/remote-apis v0.0.0-20200708200203-1252343900d9/go.mod h1:9Y+1FnaNUGVV6wKE0Jdh+mguqDUsyd9uUqokalrC7DQ=
+github.com/bazelbuild/remote-apis v0.0.0-20200904140912-1aeb39973178/go.mod h1:9Y+1FnaNUGVV6wKE0Jdh+mguqDUsyd9uUqokalrC7DQ=
 github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c h1:rk6YYsIbLDZ/frDYZPANInvCUqAEjPitjRSyWTcsjiA=
 github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c/go.mod h1:9Y+1FnaNUGVV6wKE0Jdh+mguqDUsyd9uUqokalrC7DQ=
 github.com/bazelbuild/remote-apis-sdks v0.0.0-20200714141554-ef239a11844d h1:0vMVG4gr4+L49o2+fIo4bGFln4fE3UjMtnHWMienOLQ=
@@ -317,6 +318,7 @@ github.com/kevinburke/go-bindata v3.21.0+incompatible/go.mod h1:/pEEZ72flUW2p0yi
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
+github.com/klauspost/compress v1.11.2/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.6/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.8 h1:difgzQsp5mdAz9v8lm3P/I+EpDKMU/6uTMw1y1FObuo=
 github.com/klauspost/compress v1.11.8/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
@@ -377,6 +379,10 @@ github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c h1:nfjG02IJ
 github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c/go.mod h1:HRIMlnGKKev+xk7cb/nfjbV0nuB2gcfTpRRRQBa6Tew=
 github.com/peterebden/go-sri v1.1.1 h1:KK8yZ5/NX8YzWUY9QvhrP220QsvEKANLLAgvw35AkyU=
 github.com/peterebden/go-sri v1.1.1/go.mod h1:KIRxtog35NfDWec5LV/iBqqfOEPcMpePZLc7EPE6goQ=
+github.com/peterebden/remote-apis v0.0.0-20201218092846-5306a2d66a1b h1:uwYEVCswYMbXS7MjM0AlzF5n/K5g0h+SsWgtBS756ms=
+github.com/peterebden/remote-apis v0.0.0-20201218092846-5306a2d66a1b/go.mod h1:9Y+1FnaNUGVV6wKE0Jdh+mguqDUsyd9uUqokalrC7DQ=
+github.com/peterebden/remote-apis-sdks v0.0.0-20210113155222-5e7b88ce7342 h1:CjegyviKd5sjirJnhDQnlX44HNUxgRF7i0wmZHYiZpg=
+github.com/peterebden/remote-apis-sdks v0.0.0-20210113155222-5e7b88ce7342/go.mod h1:/yf7jC9k31CIQcIH2OAnI+Dq5cchI9Ks8R7Jj7F/znw=
 github.com/phpdave11/gofpdi v1.0.7/go.mod h1:vBmVV0Do6hSBHC8uKUQ71JGW+ZGQq74llk/7bXwjDoI=
 github.com/pierrec/lz4 v2.5.2+incompatible/go.mod h1:pdkljMzZIN41W+lC3N2tnIh5sFi+IEE17M5jbnwPHcY=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
