@@ -155,7 +155,7 @@ func (w *worker) waitForLiveConnection() {
 }
 
 func (w *worker) checkLiveConnection() bool {
-	if _, err := w.client.Capabilities(); err != nil {
+	if err := w.client.Healthcheck(); err != nil {
 		log.Errorf("Failed to contact remote server: %s", err)
 		return false
 	}
