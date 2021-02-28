@@ -781,7 +781,7 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 	body, _ := proto.Marshal(op)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash)
+	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash, w.name)
 }
 
 // readBlobToProto reads an entire blob and deserialises it into a message.

@@ -27,6 +27,9 @@ var log = cli.MustGetLogger()
 var subscriptions = map[string]*pubsub.Subscription{}
 var subMutex sync.Mutex
 
+// workerKey is the metadata key we set to identify workers in messages.
+const workerKey = "build.please.mettle.worker"
+
 // MustOpenSubscription opens a subscription, which must have been created ahead of time.
 // It dies on any errors.
 func MustOpenSubscription(url string) *pubsub.Subscription {
@@ -79,7 +82,8 @@ type Shutdownable interface {
 
 // PublishWithOrderingKey publishes a message and sets the ordering key if possible
 // (i.e. if it is a GCP Pub/Sub message, otherwise no).
-func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byte, key string) error {
+// The worker name will be attached to the outgoing message as metadata if it is not empty.
+func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byte, key, workerName string) error {
 	return topic.Send(ctx, &pubsub.Message{
 		Body: body,
 		BeforeSend: func(asFunc func(interface{}) bool) error {
@@ -94,5 +98,24 @@ func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byt
 			}
 			return nil
 		},
+		Metadata: metadata(workerName),
 	})
+}
+
+// metadata returns the metadata we would associate with a message.
+func metadata(worker string) map[string]string {
+	if worker != "" {
+		return map[string]string{workerKey: worker}
+	}
+	return nil
+}
+
+// WorkerName returns the name of a worker associated with a message, or the given default if there isn't one.
+func WorkerName(msg *pubsub.Message, defaultName string) string {
+	if msg.Metadata != nil {
+		if worker, present := msg.Metadata[workerKey]; present {
+			return worker
+		}
+	}
+	return defaultName
 }
