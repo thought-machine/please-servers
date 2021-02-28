@@ -284,26 +284,26 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 }
 
 type worker struct {
-	requests         *pubsub.Subscription
-	responses        *pubsub.Topic
-	client           elan.Client
-	rclient          *client.Client
-	lucidity         lpb.LucidityClient
-	lucidChan        chan *lpb.UpdateRequest
-	cache            *ristretto.Cache
-	instanceName     string
-	dir, rootDir     string
-	home             string
-	name             string
-	version          string
-	browserURL       string
-	sandbox          string
-	clean            bool
-	disabled         bool
-	fileCache        *cache
-	startTime        time.Time
-	diskSpace        int64
-	memoryThreshold  float64
+	requests        *pubsub.Subscription
+	responses       *pubsub.Topic
+	client          elan.Client
+	rclient         *client.Client
+	lucidity        lpb.LucidityClient
+	lucidChan       chan *lpb.UpdateRequest
+	cache           *ristretto.Cache
+	instanceName    string
+	dir, rootDir    string
+	home            string
+	name            string
+	version         string
+	browserURL      string
+	sandbox         string
+	clean           bool
+	disabled        bool
+	fileCache       *cache
+	startTime       time.Time
+	diskSpace       int64
+	memoryThreshold float64
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest
