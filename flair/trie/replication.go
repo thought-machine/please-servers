@@ -195,7 +195,7 @@ func (r *Replicator) healthcheckRange(key string) error {
 	for j := 0; j < r.Replicas; j++ {
 		s := r.Trie.GetOffset(key, j)
 		if s.Failed < failureThreshold {
-			return nil  // This server is alive, so this range is alive.
+			return nil // This server is alive, so this range is alive.
 		}
 	}
 	return fmt.Errorf("All replicas for range %s are down", key)
