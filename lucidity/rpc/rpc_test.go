@@ -24,11 +24,11 @@ func TestValidVersion(t *testing.T) {
 		return r.ShouldDisable
 	}
 
-	assert.False(t, update("worker-1", "1.0"))  // At this point this worker is 100% of the fleet
-	assert.False(t, update("worker-2", "2.0"))  // This one is 50% of the fleet so still OK
-	assert.False(t, update("worker-3", "2.0"))  // 2 and 3 are now 66% so still OK
-	assert.True(t, update("worker-1", "1.0"))   // worker-1 is now only 33% so it gets turned off.
-	assert.False(t, update("worker-2", "2.0"))  // worker-2 is still OK as it was before though
-	assert.False(t, update("worker-1", "2.0"))  // worker-1 has now updated and is alive again.
-	assert.True(t, update("worker-3", "3.0"))   // worker-3 has now updated beyond the others and it disables.
+	assert.False(t, update("worker-1", "1.0")) // At this point this worker is 100% of the fleet
+	assert.False(t, update("worker-2", "2.0")) // This one is 50% of the fleet so still OK
+	assert.False(t, update("worker-3", "2.0")) // 2 and 3 are now 66% so still OK
+	assert.True(t, update("worker-1", "1.0"))  // worker-1 is now only 33% so it gets turned off.
+	assert.False(t, update("worker-2", "2.0")) // worker-2 is still OK as it was before though
+	assert.False(t, update("worker-1", "2.0")) // worker-1 has now updated and is alive again.
+	assert.True(t, update("worker-3", "3.0"))  // worker-3 has now updated beyond the others and it disables.
 }
