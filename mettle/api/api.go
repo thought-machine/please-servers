@@ -138,7 +138,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, ""); err != nil {
+	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, "mettle API server"); err != nil {
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
 	b, _ = proto.Marshal(req)
@@ -287,7 +287,7 @@ func (s *server) process(msg *pubsub.Message) {
 		case *longrunning.Operation_Error:
 		}
 	}
-	worker := common.WorkerName(msg, "another server")
+	worker := common.WorkerName(msg)
 	log.Notice("Got an update for %s from %s, now %s", metadata.ActionDigest.Hash, worker, metadata.Stage)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

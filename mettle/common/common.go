@@ -82,7 +82,7 @@ type Shutdownable interface {
 
 // PublishWithOrderingKey publishes a message and sets the ordering key if possible
 // (i.e. if it is a GCP Pub/Sub message, otherwise no).
-// The worker name will be attached to the outgoing message as metadata if it is not empty.
+// The worker name will be attached to the outgoing message as metadata.
 func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byte, key, workerName string) error {
 	return topic.Send(ctx, &pubsub.Message{
 		Body: body,
@@ -98,24 +98,16 @@ func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byt
 			}
 			return nil
 		},
-		Metadata: metadata(workerName),
+		Metadata: map[string]string{workerKey: workerName},
 	})
 }
 
-// metadata returns the metadata we would associate with a message.
-func metadata(worker string) map[string]string {
-	if worker != "" {
-		return map[string]string{workerKey: worker}
-	}
-	return nil
-}
-
-// WorkerName returns the name of a worker associated with a message, or the given default if there isn't one.
-func WorkerName(msg *pubsub.Message, defaultName string) string {
+// WorkerName returns the name of a worker associated with a message, or the empty string if there isn't one.
+func WorkerName(msg *pubsub.Message) string {
 	if msg.Metadata != nil {
 		if worker, present := msg.Metadata[workerKey]; present {
 			return worker
 		}
 	}
-	return defaultName
+	return ""
 }
