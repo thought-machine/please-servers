@@ -21,13 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v3"
 	"gocloud.dev/gcerrors"
 	"gocloud.dev/pubsub"
 	"gocloud.dev/pubsub/driver"
 )
-
-var log = cli.MustGetLogger()
 
 // Scheme is the URL scheme mempubsub registers its URLOpeners under on pubsub.DefaultMux.
 const Scheme = "omem"

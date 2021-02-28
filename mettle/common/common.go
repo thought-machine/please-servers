@@ -63,7 +63,8 @@ func handleSignals(cancel context.CancelFunc, s Shutdownable) {
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	go func() {
 		log.Warning("Received signal %s, shutting down queue", <-ch)
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		if err := s.Shutdown(ctx); err != nil {
 			log.Error("Failed to shut down queue: %s", err)
 		}
