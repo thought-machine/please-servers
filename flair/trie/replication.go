@@ -180,6 +180,27 @@ func (r *Replicator) call(f ReplicatedFunc, s *Server) error {
 	return err
 }
 
+// Healthcheck returns an error if any first-level ranges of the trie are unhealthy
+// (i.e. do not have any live servers in them)
+func (r *Replicator) Healthcheck() error {
+	for i := 0; i < 16; i++ {
+		if err := r.healthcheckRange(string(toHex(i)) + "000"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Replicator) healthcheckRange(key string) error {
+	for j := 0; j < r.Replicas; j++ {
+		s := r.Trie.GetOffset(key, j)
+		if s.Failed < failureThreshold {
+			return nil  // This server is alive, so this range is alive.
+		}
+	}
+	return fmt.Errorf("All replicas for range %s are down", key)
+}
+
 // recheck continually rechecks a server to see if it's become alive again.
 func (r *Replicator) recheck(s *Server) {
 	t := time.NewTicker(recheckFrequency)

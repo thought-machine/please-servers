@@ -31,6 +31,7 @@ type Opts struct {
 	CertFile  string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
 	TokenFile string `long:"token_file" description:"File containing a pre-shared token that clients must provide as authentication."`
 	AuthAll   bool   `long:"auth_all" description:"Require authentication on all RPCs (by default only on RPCs that mutate state)"`
+	NoHealth  bool   `no-flag:"true" description:"Used internally to indicate when we don't want to automatically add a healthcheck."`
 }
 
 // NewServer creates a new gRPC server with a standard set of interceptors.
@@ -57,7 +58,9 @@ func NewServer(opts Opts) (net.Listener, *grpc.Server) {
 	)...)
 	grpc_prometheus.Register(s)
 	reflection.Register(s)
-	grpc_health_v1.RegisterHealthServer(s, health.NewServer())
+	if !opts.NoHealth {
+		grpc_health_v1.RegisterHealthServer(s, health.NewServer())
+	}
 	return lis, s
 }
 

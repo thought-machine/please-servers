@@ -179,6 +179,13 @@ func toInt(c byte) int {
 	}
 }
 
+func toHex(i int) byte {
+	if i >= 10 {
+		return byte('a' + i)
+	}
+	return byte('0' + i)
+}
+
 // Get returns a server from this trie.
 // It is assumed not to fail since the trie is already complete.
 func (t *Trie) Get(key string) *Server {
@@ -206,11 +213,7 @@ func (t *Trie) Check() error {
 
 func (t *Trie) check(prefix string, node *node) error {
 	for i, child := range node.children {
-		c := '0' + i
-		if i >= 10 {
-			c = 'a' + i
-		}
-		name := fmt.Sprintf("%s%c", prefix, c)
+		name := prefix + string(toHex(i))
 		if child.node != nil {
 			if err := t.check(name, child.node); err != nil {
 				return err
