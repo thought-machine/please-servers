@@ -1,6 +1,7 @@
 run:
   skip-dirs:
-    - test_data
+    - plz-out/
+    - tests/
 
 issues:
   exclude:
