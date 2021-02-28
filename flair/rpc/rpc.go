@@ -18,7 +18,6 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
-	"github.com/peterebden/go-cli-init/v3"
 	"github.com/peterebden/go-sri"
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
@@ -31,8 +30,6 @@ import (
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 )
-
-var log = cli.MustGetLogger()
 
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
