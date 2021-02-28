@@ -22,7 +22,7 @@ type remoteClient struct{
 func (r *remoteClient) Healthcheck() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
-	if resp, err := r.health.Check(ctx, &hpb.HealthCheckRequest{Service: r.c.InstanceName}); err != nil {
+	if resp, err := r.health.Check(ctx, &hpb.HealthCheckRequest{}); err != nil {
 		return err
 	} else if resp.Status != hpb.HealthCheckResponse_SERVING {
 		return fmt.Errorf("Server not in healthy state: %s", resp.Status)
