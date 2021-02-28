@@ -127,6 +127,7 @@ var authenticatedMethods = map[string]bool{
 	"/google.bytestream.ByteStream/Read":                                          false,
 	"/google.bytestream.ByteStream/Write":                                         true,
 	"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo":              false,
+	"/grpc.health.v1.Health/Check":                                                false,
 }
 
 // authenticate authenticates an incoming RPC and returns an error if it's not permitted.
