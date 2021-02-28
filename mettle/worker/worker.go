@@ -157,6 +157,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}()
 	for {
 		w.waitForFreeResources()
+		w.waitForLiveConnection()
 		w.waitIfDisabled()
 		w.Report(true, false, true, "Awaiting next task...")
 		if _, err := w.RunTask(ctx); err != nil {
