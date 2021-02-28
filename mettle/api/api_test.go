@@ -13,8 +13,6 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -22,7 +20,6 @@ import (
 
 const (
 	uncachedHash = "1234"
-	cachedHash   = "2345"
 	failedHash   = "3456"
 )
 
@@ -125,19 +122,6 @@ func recv(stream pb.Execution_ExecuteClient) (*longrunning.Operation, *pb.Execut
 		log.Fatalf("Failed to deserialise metadata: %s", err)
 	}
 	return op, metadata
-}
-
-type actionCache struct{}
-
-func (ac *actionCache) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (*pb.ActionResult, error) {
-	if req.ActionDigest.Hash == cachedHash {
-		return &pb.ActionResult{}, nil
-	}
-	return nil, status.Errorf(codes.NotFound, "not found")
-}
-
-func (ac *actionCache) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
-	return nil, status.Errorf(codes.Unimplemented, "UpdateActionResult not implemented")
 }
 
 type executor struct {

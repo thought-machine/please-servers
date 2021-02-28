@@ -13,8 +13,9 @@ import (
 	"gocloud.dev/pubsub"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 
-	// Must import the schemes we want to use.
 	"github.com/thought-machine/please-servers/mettle/omempubsub"
+
+	// Must import the schemes we want to use.
 	_ "gocloud.dev/pubsub/gcppubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
 )
