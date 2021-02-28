@@ -51,7 +51,7 @@ func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, 
 		// Theoretically we could check stream compression separately, but in practice our servers
 		// will only support both or neither.
 		log.Warning("Remote execution server doesn't advertise batch compression support, disabling all compression")
-		client.CompressedBytestreamThreshold = -1  // Disables all compression.
+		client.CompressedBytestreamThreshold = -1 // Disables all compression.
 	}
 	log.Notice("Connected to remote server on %s", url)
 	return client, nil

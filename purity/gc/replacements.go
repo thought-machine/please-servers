@@ -41,7 +41,7 @@ func (bar *progressBar) Fprintf(w io.Writer, msg string, args ...interface{}) {
 		if bar.cols == 0 {
 			v = ""
 		}
-		msg = strings.Replace(msg, fmt.Sprintf("${%s}", k), v, -1)
+		msg = strings.ReplaceAll(msg, fmt.Sprintf("${%s}", k), v)
 	}
 	fmt.Fprintf(w, msg, args...)
 }

@@ -233,7 +233,7 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 	defer s.mutex.Unlock()
 	job, present := s.jobs[digest.Hash]
 	if !present {
-		log.Warning("stopStream for non-existant job %s", digest.Hash)
+		log.Warning("stopStream for non-existent job %s", digest.Hash)
 		return
 	}
 	for i, stream := range job.Streams {
@@ -284,6 +284,7 @@ func (s *server) process(msg *pubsub.Message) {
 			if err := ptypes.UnmarshalAny(result.Response, response); err == nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
 				log.Debug("Got a failed update for %s: %s", metadata.ActionDigest.Hash, response.Status.Message)
 			}
+		case *longrunning.Operation_Error:
 		}
 	}
 	log.Info("Got an update for %s", metadata.ActionDigest.Hash)

@@ -60,7 +60,7 @@ func (s *server) list(ctx context.Context, prefix, prefix2 string) ([]*ppb.Actio
 		} else if hash := path.Base(obj.Key); !strings.HasPrefix(hash, "tmp") {
 			ret = append(ret, &ppb.ActionResult{
 				Hash:         hash,
-				SizeBytes:    obj.Size,  // Note that this might not be accurate for compressed blobs. For GC it is unlikely to matter deeply.
+				SizeBytes:    obj.Size, // Note that this might not be accurate for compressed blobs. For GC it is unlikely to matter deeply.
 				LastAccessed: obj.ModTime.Unix(),
 				Replicas:     1,
 			})

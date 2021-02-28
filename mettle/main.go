@@ -153,10 +153,8 @@ func main() {
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile)
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue)
-	} else {
-		if err := one(); err != nil {
-			log.Fatalf("%s", err)
-		}
+	} else if err := one(); err != nil {
+		log.Fatalf("%s", err)
 	}
 }
 

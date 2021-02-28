@@ -46,7 +46,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 		bytestreamRe:    regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		timeout:         timeout,
 	}
-	opts.NoHealth = true  // We will do this ourselves.
+	opts.NoHealth = true // We will do this ourselves.
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
@@ -70,7 +70,7 @@ type server struct {
 }
 
 func (s *server) Check(context.Context, *hpb.HealthCheckRequest) (*hpb.HealthCheckResponse, error) {
-	for _, r := range []*trie.Replicator{s.replicator, s.assetReplicator, s.exeReplicator}{
+	for _, r := range []*trie.Replicator{s.replicator, s.assetReplicator, s.exeReplicator} {
 		if err := r.Healthcheck(); err != nil {
 			log.Error("Failed healthcheck: %s", err)
 			return &hpb.HealthCheckResponse{Status: hpb.HealthCheckResponse_NOT_SERVING}, nil

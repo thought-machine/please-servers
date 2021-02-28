@@ -153,7 +153,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		allBlobs:    map[string]int64{},
 		actionSizes: map[string]int64{},
 		referencedBlobs: map[string]struct{}{
-			digest.Empty.Hash: struct{}{}, // The empty blob always counts as referenced.
+			digest.Empty.Hash: {}, // The empty blob always counts as referenced.
 		},
 		brokenResults: map[string]int64{},
 		inputSizes:    map[string]int{},
@@ -524,7 +524,7 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 		log.Debug("Removing action result %s", digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
-			ActionResults: []*ppb.Blob{&ppb.Blob{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
+			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
 			Hard:          true,
 		}); err != nil {
 			return err

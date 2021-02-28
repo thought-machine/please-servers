@@ -22,7 +22,7 @@ type elanClient struct {
 }
 
 func (e *elanClient) Healthcheck() error {
-	return nil  // We don't have a remote server to check for health
+	return nil // We don't have a remote server to check for health
 }
 
 func (e *elanClient) ReadBlob(dg *pb.Digest) ([]byte, error) {

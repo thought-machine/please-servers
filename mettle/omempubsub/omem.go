@@ -21,13 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v3"
 	"gocloud.dev/gcerrors"
 	"gocloud.dev/pubsub"
 	"gocloud.dev/pubsub/driver"
 )
-
-var log = cli.MustGetLogger()
 
 // Scheme is the URL scheme mempubsub registers its URLOpeners under on pubsub.DefaultMux.
 const Scheme = "omem"
@@ -38,7 +35,7 @@ func init() {
 	pubsub.DefaultURLMux().RegisterSubscription(Scheme, uo)
 }
 
-type urlOpener struct{
+type urlOpener struct {
 	topics sync.Map
 }
 
@@ -65,7 +62,7 @@ func (uo *urlOpener) OpenSubscriptionURL(ctx context.Context, u *url.URL) (*pubs
 }
 
 // An OrderedMessage is like a normal Message but adds an ordering key.
-type OrderedMessage struct{
+type OrderedMessage struct {
 	Key     string
 	Message *driver.Message
 }
@@ -161,7 +158,7 @@ func NewSubscription(pstopic *pubsub.Topic, ackDeadline time.Duration) *pubsub.S
 		panic("incorrect topic type")
 	}
 	sub := &subscription{
-		messages: make(chan *driver.Message, 1000),
+		messages:    make(chan *driver.Message, 1000),
 		ackDeadline: ackDeadline,
 	}
 	t.AddSubscription(sub)
@@ -184,7 +181,7 @@ func (s *subscription) Deliver(oms []*OrderedMessage) {
 	for _, om := range oms {
 		ch, loaded := s.keyedMessages.LoadOrStore(om.Key, make(chan *driver.Message, 10))
 		if !loaded {
-			go s.forward(ch.(chan *driver.Message))  // This is a new key, we need to forward it.
+			go s.forward(ch.(chan *driver.Message)) // This is a new key, we need to forward it.
 		}
 		s.acks.Store(om.Message.AckID, newAckableMessage(ch.(chan *driver.Message), om.Message, s.ackDeadline))
 	}
@@ -193,7 +190,7 @@ func (s *subscription) Deliver(oms []*OrderedMessage) {
 // forward forwards messages from a subscription key to the main queue.
 func (s *subscription) forward(ch chan *driver.Message) {
 	defer func() {
-		recover()  // This happens if s.messages gets closed.
+		recover() // This happens if s.messages gets closed.
 	}()
 	for msg := range ch {
 		s.messages <- msg
@@ -248,7 +245,7 @@ func (s *subscription) Close() error {
 	return nil
 }
 
-type ackableMessage struct{
+type ackableMessage struct {
 	acknowledged chan struct{}
 }
 

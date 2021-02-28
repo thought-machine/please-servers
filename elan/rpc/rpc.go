@@ -55,9 +55,6 @@ var log = cli.MustGetLogger()
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
 
-// uncompressed is a constant we use in a few places to indicate we're not compressing blobs.
-const uncompressed = false
-
 var bytesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "bytes_received_total",
@@ -192,7 +189,6 @@ type server struct {
 	bucket                   bucket
 	bytestreamRe             *regexp.Regexp
 	limiter                  chan struct{}
-	maxCacheItemSize         int64
 	dirCache, knownBlobCache *ristretto.Cache
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
@@ -597,10 +593,6 @@ func (s *server) compressedKey(prefix string, digest *pb.Digest, compressed bool
 		return s.key("zstd_"+prefix, digest)
 	}
 	return s.key(prefix, digest)
-}
-
-func (s *server) labelKey(label string) string {
-	return path.Join("rec", strings.Replace(strings.TrimLeft(label, "/"), ":", "/", -1))
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {

@@ -284,27 +284,26 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 }
 
 type worker struct {
-	requests         *pubsub.Subscription
-	responses        *pubsub.Topic
-	client           elan.Client
-	rclient          *client.Client
-	lucidity         lpb.LucidityClient
-	lucidChan        chan *lpb.UpdateRequest
-	cache            *ristretto.Cache
-	instanceName     string
-	dir, rootDir     string
-	home             string
-	name             string
-	version          string
-	browserURL       string
-	sandbox          string
-	clean            bool
-	disabled         bool
-	batchCompression bool
-	fileCache        *cache
-	startTime        time.Time
-	diskSpace        int64
-	memoryThreshold  float64
+	requests        *pubsub.Subscription
+	responses       *pubsub.Topic
+	client          elan.Client
+	rclient         *client.Client
+	lucidity        lpb.LucidityClient
+	lucidChan       chan *lpb.UpdateRequest
+	cache           *ristretto.Cache
+	instanceName    string
+	dir, rootDir    string
+	home            string
+	name            string
+	version         string
+	browserURL      string
+	sandbox         string
+	clean           bool
+	disabled        bool
+	fileCache       *cache
+	startTime       time.Time
+	diskSpace       int64
+	memoryThreshold float64
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest
@@ -504,7 +503,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		if strings.HasPrefix(v.Name, "TOOL") && !path.IsAbs(v.Value) && strings.ContainsRune(v.Value, '/') {
 			v.Value = path.Join(w.dir, v.Value)
 		} else if v.Name == "PATH" {
-			v.Value = strings.Replace(v.Value, "~", w.home, -1)
+			v.Value = strings.ReplaceAll(v.Value, "~", w.home)
 		} else if v.Name == "TEST" {
 			v.Value = path.Join(w.dir, v.Value)
 		}
@@ -731,10 +730,8 @@ func (w *worker) markOutputsAsBinary(cmd *pb.Command) error {
 			if err != nil {
 				return err
 			}
-		} else {
-			if err := os.Chmod(filePath, 0555); err != nil {
-				return err
-			}
+		} else if err := os.Chmod(filePath, 0555); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -809,15 +806,6 @@ func inferStatus(defaultCode codes.Code, msg string, err error) *rpcstatus.Statu
 		return status(code, msg, err)
 	}
 	return status(defaultCode, msg, err)
-}
-
-// appendStd appends the contents of a std stream to an error message, if it is not empty.
-func appendStd(msg, name, contents string) string {
-	contents = strings.TrimSpace(contents)
-	if contents == "" {
-		return msg
-	}
-	return fmt.Sprintf("%s\n%s:\n%s\n", msg, name, contents)
 }
 
 // toTimestamp converts the given time to a proto timestamp, ignoring errors

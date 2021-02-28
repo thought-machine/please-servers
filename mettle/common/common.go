@@ -13,10 +13,11 @@ import (
 	"gocloud.dev/pubsub"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 
+	"github.com/thought-machine/please-servers/mettle/omempubsub"
+
 	// Must import the schemes we want to use.
 	_ "gocloud.dev/pubsub/gcppubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
-	"github.com/thought-machine/please-servers/mettle/omempubsub"
 )
 
 var log = cli.MustGetLogger()
@@ -63,7 +64,8 @@ func handleSignals(cancel context.CancelFunc, s Shutdownable) {
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	go func() {
 		log.Warning("Received signal %s, shutting down queue", <-ch)
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		if err := s.Shutdown(ctx); err != nil {
 			log.Error("Failed to shut down queue: %s", err)
 		}

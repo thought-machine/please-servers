@@ -152,7 +152,9 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	resp, err := s.client.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("Error making request: %s", err)
-	} else if resp.StatusCode != 200 {
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("Request failed: %s", resp.Status)
 	}
 	var buf bytes.Buffer
