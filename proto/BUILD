@@ -12,7 +12,7 @@ grpc_library(
 
 sh_cmd(
     name = "generate",
-    cmd = "cp $(out_location :_lucidity#go) proto/lucidity.pb.go && cp $(out_location :_purity#go) proto/purity.pb.go",
+    cmd = "cp $(out_location :_lucidity#go) proto/lucidity && cp $(out_location :_purity#go) proto/purity",
     data = [
         ":_lucidity#go",
         ":_purity#go",
