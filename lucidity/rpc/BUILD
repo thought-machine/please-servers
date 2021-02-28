@@ -33,3 +33,10 @@ go_test(
         "//third_party/go:testify",
     ],
 )
+
+sh_cmd(
+    name = "generate",
+    data = [":static_files"],
+    cmd = "cp $(out_location :static_files) lucidity/rpc/",
+    labels = ["codegen"],
+)
