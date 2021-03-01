@@ -53,16 +53,20 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) {
-	s, lis, err := serve(opts, requestQueue, responseQueue, preResponseQueue)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
+	if name == "" {
+		name = "mettle API server"
+	}
 	srv := &server{
+		name:         name,
 		requests:     common.MustOpenTopic(requestQueue),
 		responses:    common.MustOpenSubscription(responseQueue),
 		preResponses: common.MustOpenTopic(preResponseQueue),
@@ -79,6 +83,7 @@ func serve(opts grpcutil.Opts, requestQueue, responseQueue, preResponseQueue str
 }
 
 type server struct {
+	name         string
 	requests     *pubsub.Topic
 	responses    *pubsub.Subscription
 	preResponses *pubsub.Topic
@@ -138,7 +143,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, "mettle API server"); err != nil {
+	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, s.name); err != nil {
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
 	b, _ = proto.Marshal(req)
