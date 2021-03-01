@@ -1,5 +1,10 @@
 package(default_visibility = ["PUBLIC"])
 
+go_toolchain(
+    name = "toolchain",
+    version = "1.16",
+)
+
 go_module(
     name = "logging",
     module = "gopkg.in/op/go-logging.v1",
