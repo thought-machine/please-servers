@@ -2,22 +2,20 @@ syntax = "proto3";
 
 package build.please.remote.mettle;
 
-import "google.golang.org/genproto";
-
 service Bootstrap {
 
-    rpc InflightExecutions(InflightExecutionsRequest) returns (InflightExecutionsResponse);
+    rpc ServeExecutions(ServeExecutionsRequest) returns (ServeExecutionsResponse);
 }
 
 message Job {
     string ID = 1;
-    google.longrunning.Operation Current = 2;
+    int32 Current = 2;
     bool SentFirst = 3;
     bool Done = 4;
 }
 
-message InflightExecutionsRequest {}
+message ServeExecutionsRequest {}
 
-message InflightExecutionsResponse {
+message ServeExecutionsResponse {
     repeated Job jobs = 1;
 }

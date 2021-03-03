@@ -5,6 +5,7 @@ go_library(
     deps = [
         "//grpcutil",
         "//mettle/common",
+        "//proto:mettle",
         "//third_party/go:cli-init",
         "//third_party/go:genproto",
         "//third_party/go:grpc",

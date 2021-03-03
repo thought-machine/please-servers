@@ -3,15 +3,12 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/peterebden/go-cli-init/v3"
@@ -23,6 +20,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
+	bpb "github.com/thought-machine/please-servers/proto/mettle"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -76,13 +74,19 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
-	serveHTTPOnce.Do(func() {
-		http.HandleFunc("/executions", srv.ServeExecutions)
-	})
+
+	conn, err := grpcutil.Dail(mettle, true, "", tokenFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to dial Bootstap server: %s", err)
+	}
+	srv.bsClient := pbp.NewBootstrapClient(conn)
+	bpb.RegisterBootstrapServer(s, srv)
+
 	return s, lis, nil
 }
 
 type server struct {
+	bpb.BootstrapServer
 	name         string
 	requests     *pubsub.Topic
 	responses    *pubsub.Subscription
@@ -91,19 +95,22 @@ type server struct {
 	mutex        sync.Mutex
 }
 
-// ServeExecutions serves a list of currently executing jobs over HTTP.
-func (s *server) ServeExecutions(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]string{}
-	m := jsonpb.Marshaler{Indent: "  "}
-	s.mutex.Lock()
+// ServeExecutions serves a list of currently executing jobs over GRPC.
+func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
+	executions := []*bpb.Job{}
 	for k, v := range s.jobs {
-		s, _ := m.MarshalToString(v.Current)
-		resp[k] = s
+		job := &bpb.Job{
+			ID:			k,
+			Current:	1,
+			SentFirst:	v.SentFirst,
+			Done:		v.Done,
+		}
+		executions = append(executions, job)
 	}
-	s.mutex.Unlock()
-	e := json.NewEncoder(w)
-	e.SetIndent("", "  ")
-	e.Encode(resp)
+	res := &bpb.ServeExecutionsResponse{
+		Jobs:	executions,
+	}
+	return res, nil
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
