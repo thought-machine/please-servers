@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package build.please.remote.mettle;
+
+import "google.golang.org/genproto";
+
+service Bootstrap {
+
+    rpc InflightExecutions(InflightExecutionsRequest) returns (InflightExecutionsResponse);
+}
+
+message Job {
+    string ID = 1;
+    google.longrunning.Operation Current = 2;
+    bool SentFirst = 3;
+    bool Done = 4;
+}
+
+message InflightExecutionsRequest {}
+
+message InflightExecutionsResponse {
+    repeated Job jobs = 1;
+}
