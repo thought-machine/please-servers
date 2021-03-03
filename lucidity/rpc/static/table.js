@@ -109,7 +109,7 @@ function disable(name, disable) {
         'disable': disable,
     }));
     addStyles();
-    $(`td:contains(${name}):nth-child(2)`).parent().children().eq(5).html(link(name, disable));
+    $(`td:contains(${name}):nth-child(2)`).parent().children().eq(6).html(link(name, disable));
     return false;
 }
 
