@@ -80,6 +80,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		return nil, nil, fmt.Errorf("Failed to dial Bootstap server: %s", err)
 	}
 	srv.bsClient := pbp.NewBootstrapClient(conn)
+
 	bpb.RegisterBootstrapServer(s, srv)
 
 	return s, lis, nil
