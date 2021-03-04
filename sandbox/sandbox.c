@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#ifdef __linux__
 #include <sched.h>
 #include <signal.h>
 #include <string.h>
@@ -227,3 +228,13 @@ int contain(char* argv[], bool net, bool mount) {
   fprintf(stderr, "child exit failed\n");
   return 1;
 }
+
+#else  // __linux__
+
+// On non-Linux systems contain simply execs a subprocess.
+// It's not really expected to be used there, this is simply to make it compile.
+int contain(char* argv[], bool net, bool mount) {
+  return execvp(argv[0], argv);
+}
+
+#endif  // __linux__
