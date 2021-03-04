@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"fmt"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
@@ -75,11 +76,14 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
 
-	conn, err := grpcutil.Dail(mettle, true, "", tokenFile)
+	conn, err := grpcutil.Dial("mettle", true, "", "tokenFile")
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to dial Bootstap server: %s", err)
 	}
-	srv.bsClient := pbp.NewBootstrapClient(conn)
+	bootstrapClient := bpb.NewBootstrapClient(conn)
+	if err = srv.GetExecutions(bootstrapClient); err != nil {
+		return nil, nil, err
+	}
 
 	bpb.RegisterBootstrapServer(s, srv)
 
@@ -112,6 +116,26 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 		Jobs:	executions,
 	}
 	return res, nil
+}
+
+func (s *server) GetExecutions(client bpb.BootstrapClient) error {
+	req := &bpb.ServeExecutionsRequest{}
+
+	res, err := client.ServeExecutions(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("Failed to get in flight executions: %s", err)
+	}
+
+	for _, j := range res.Jobs {
+		job := &job{
+			SentFirst:	j.SentFirst,
+			Done:		j.Done,
+		}
+		s.jobs[j.ID] = job
+	}
+
+	return nil
+
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
