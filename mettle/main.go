@@ -50,7 +50,7 @@ var opts = struct {
 		Browser         string       `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
 		Lucidity        string       `long:"lucidity" description:"URL of Lucidity server to report to"`
 		Sandbox         string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		AltSandbox      string        `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
+		AltSandbox      string       `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
 		Timeout         cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace    cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64      `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
@@ -87,7 +87,7 @@ var opts = struct {
 		} `positional-args:"true"`
 		Dir         string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		Sandbox     string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		AltSandbox      string        `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
+		AltSandbox  string       `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
 		Timeout     cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		ProfileFile string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 		MemProfile  string       `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
