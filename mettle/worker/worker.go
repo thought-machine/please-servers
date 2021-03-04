@@ -238,8 +238,8 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		clean:           clean,
 		home:            home,
 		name:            name,
-		sandbox:         sandbox,
-		altSandbox:      altSandbox,
+		sandbox:         mustAbs(sandbox),
+		altSandbox:      mustAbs(altSandbox),
 		limiter:         make(chan struct{}, downloadParallelism),
 		iolimiter:       make(chan struct{}, ioParallelism),
 		browserURL:      browserURL,
@@ -837,4 +837,13 @@ func getEnvVar(command *pb.Command, name string) string {
 		}
 	}
 	return ""
+}
+
+// mustAbs converts the given path to an absolute one, or dies in the attempt.
+func mustAbs(file string) string {
+	p, err := filepath.Abs(file)
+	if err != nil {
+		log.Fatalf("Failed to make %s absolute: %s", file, err)
+	}
+	return p
 }
