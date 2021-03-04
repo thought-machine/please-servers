@@ -53,14 +53,15 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue)
+	conn := Connect(opts)
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, conn)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string, conn *grpc.ClientConn) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -75,18 +76,11 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
-
-	conn, err := grpcutil.Dial("mettle", true, "", "tokenFile")
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to dial Bootstap server: %s", err)
+	if conn != nil {
+		srv.bsClient = bpb.NewBootstrapClient(conn)
+		srv.GetExecutions()
 	}
-	bootstrapClient := bpb.NewBootstrapClient(conn)
-	if err = srv.GetExecutions(bootstrapClient); err != nil {
-		return nil, nil, err
-	}
-
 	bpb.RegisterBootstrapServer(s, srv)
-
 	return s, lis, nil
 }
 
@@ -98,8 +92,25 @@ type server struct {
 	preResponses *pubsub.Topic
 	jobs         map[string]*job
 	mutex        sync.Mutex
+	bsClient	 bpb.BootstrapClient
 }
 
+// Connect dials a grpc connection.
+// If the connection does not reach a ready state i.e. does not connect to a server, it return nil
+func Connect(opts grpcutil.Opts) *grpc.ClientConn {
+	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), true, opts.CertFile, opts.TokenFile)
+	if err != nil {
+		log.Warning("Failed to connect to bootstrap client: %s", err)
+	}
+	state := conn.GetState()
+	stringState := state.String()
+	if stringState != "READY" {
+		log.Warningf("Bootstrap client not connected")
+		conn.Close()
+		return nil
+	}
+	return conn
+}
 // ServeExecutions serves a list of currently executing jobs over GRPC.
 func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
 	executions := []*bpb.Job{}
@@ -118,14 +129,15 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 	return res, nil
 }
 
-func (s *server) GetExecutions(client bpb.BootstrapClient) error {
+// GetExecutions requests a list of currently executing jobs over grpc and updates the server.
+func (s *server) GetExecutions() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	req := &bpb.ServeExecutionsRequest{}
-
-	res, err := client.ServeExecutions(context.Background(), req)
+	res, err := s.bsClient.ServeExecutions(context.Background(), req)
 	if err != nil {
-		return fmt.Errorf("Failed to get in flight executions: %s", err)
+		log.Fatalf("Failed to get inflight executions: %s", err)
 	}
-
 	for _, j := range res.Jobs {
 		job := &job{
 			SentFirst:	j.SentFirst,
@@ -133,9 +145,6 @@ func (s *server) GetExecutions(client bpb.BootstrapClient) error {
 		}
 		s.jobs[j.ID] = job
 	}
-
-	return nil
-
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {

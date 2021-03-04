@@ -13,6 +13,7 @@ grpc_library(
 grpc_library(
     name = "mettle",
     srcs = ["mettle.proto"],
+    deps = ["//third_party/go:genproto",],
     visibility = ["PUBLIC"],
 )
 
