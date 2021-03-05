@@ -1,8 +1,7 @@
 syntax = "proto3";
 
-import "google/longrunning/operations.proto";
-
 package build.please.remote.mettle;
+
 
 service Bootstrap {
 
@@ -11,7 +10,7 @@ service Bootstrap {
 
 message Job {
     string ID = 1;
-    google.longrunning.Operation Current = 2;
+    bytes Current = 2;
     bool SentFirst = 3;
     bool Done = 4;
 }

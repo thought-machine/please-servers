@@ -13,6 +13,7 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
+	// bpb "github.com/thought-machine/please-servers/proto/mettle"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -96,6 +97,37 @@ func TestWaitExecution(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response.Result)
 	assert.EqualValues(t, 0, response.Result.ExitCode)
+}
+
+func TestBootstrapServers(t *testing.T) {
+	// set up server
+	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
+	defer s.Stop()
+
+	digest := &pb.Digest{Hash: uncachedHash}
+	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: digest,
+	})
+	assert.NoError(t, err)
+
+	op, metadata := recv(stream)
+	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
+	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
+	assert.Equal(t, digest.Hash, ex.Receive().Hash)
+
+	// Now dial it up with WaitExecution, we should get the responses back on that too.
+	_, err = client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
+		Name: op.Name,
+	})
+	assert.NoError(t, err)
+
+	// Set up bootstrap client
+	bsConn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", 9999), grpc.WithInsecure())
+	// bsClient := bpb.NewBootstrapClient(bsConn)
+	//jobs, err := GetExecutions(bsClient)
+	bsConn.Close()
+	//assert.NoError(t, err)
+
 }
 
 func setupServers(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {

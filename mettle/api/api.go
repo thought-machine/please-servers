@@ -78,7 +78,8 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	pb.RegisterExecutionServer(s, srv)
 	if conn != nil {
 		srv.bsClient = bpb.NewBootstrapClient(conn)
-		srv.GetExecutions()
+		srv.jobs, _ = GetExecutions(srv.bsClient)
+		conn.Close()
 	}
 	bpb.RegisterBootstrapServer(s, srv)
 	return s, lis, nil
@@ -96,7 +97,7 @@ type server struct {
 }
 
 // Connect dials a grpc connection.
-// If the connection does not reach a ready state i.e. does not connect to a server, it return nil
+// If the connection does not reach a ready state i.e. does not connect to a server, it returns nil.
 func Connect(opts grpcutil.Opts) *grpc.ClientConn {
 	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), true, opts.CertFile, opts.TokenFile)
 	if err != nil {
@@ -113,11 +114,15 @@ func Connect(opts grpcutil.Opts) *grpc.ClientConn {
 }
 // ServeExecutions serves a list of currently executing jobs over GRPC.
 func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
+	log.Notice("Recieved request for inflight executions")
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	executions := []*bpb.Job{}
 	for k, v := range s.jobs {
+		current, _ := proto.Marshal(v.Current)
 		job := &bpb.Job{
 			ID:			k,
-			Current:	1,
+			Current:	current,
 			SentFirst:	v.SentFirst,
 			Done:		v.Done,
 		}
@@ -126,25 +131,35 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 	res := &bpb.ServeExecutionsResponse{
 		Jobs:	executions,
 	}
+	log.Notice("Serving %s inflight executions", len(executions))
 	return res, nil
 }
 
 // GetExecutions requests a list of currently executing jobs over grpc and updates the server.
-func (s *server) GetExecutions() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+func GetExecutions(client bpb.BootstrapClient) (map[string]*job, error) {
+	log.Notice("Requesting inflight executions...")
+	var jobs map[string]*job
 	req := &bpb.ServeExecutionsRequest{}
-	res, err := s.bsClient.ServeExecutions(context.Background(), req)
+	res, err := client.ServeExecutions(context.Background(), req)
 	if err != nil {
-		log.Fatalf("Failed to get inflight executions: %s", err)
+		return jobs, fmt.Errorf("Failed to get inflight executions: %s", err)
 	}
 	for _, j := range res.Jobs {
+		current := &longrunning.Operation{}
+		if err := proto.Unmarshal(j.Current, current); err != nil {
+			log.Warningf("unable to unmarshal s%", j.ID)
+			continue
+		}
 		job := &job{
+			Current:	current,
 			SentFirst:	j.SentFirst,
 			Done:		j.Done,
 		}
-		s.jobs[j.ID] = job
+		jobs[j.ID] = job
 	}
+	log.Notice("Updated server with %s inflight executions", len(jobs))
+
+	return jobs, nil
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
