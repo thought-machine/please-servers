@@ -840,7 +840,11 @@ func getEnvVar(command *pb.Command, name string) string {
 }
 
 // mustAbs converts the given path to an absolute one, or dies in the attempt.
+// If it's the empty string it is left as that.
 func mustAbs(file string) string {
+	if file == "" {
+		return file
+	}
 	p, err := filepath.Abs(file)
 	if err != nil {
 		log.Fatalf("Failed to make %s absolute: %s", file, err)
