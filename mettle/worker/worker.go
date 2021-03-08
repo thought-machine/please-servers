@@ -413,6 +413,8 @@ func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Co
 		return req, nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
 	} else if err := w.readBlobToProto(action.CommandDigest, command); err != nil {
 		return req, nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
+	} else if err := common.CheckOutputPaths(command); err != nil {
+		return req, nil, nil, status(codes.InvalidArgument, "Invalid command outputs: %s", err)
 	}
 	return req, action, command, nil
 }

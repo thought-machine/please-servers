@@ -18,6 +18,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/rexclient"
+	"github.com/thought-machine/please-servers/mettle/common"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
@@ -71,18 +72,24 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string
 		return fmt.Errorf("Missing directory %s", digest.Hash)
 	}
 	for _, file := range dir.Files {
-		if err := makeDirIfNeeded(root, file.Name); err != nil {
+		if err := common.CheckPath(file.Name); err != nil {
+			return err
+		} else if err := makeDirIfNeeded(root, file.Name); err != nil {
 			return err
 		}
 		files[path.Join(root, file.Name)] = file
 	}
 	for _, dir := range dir.Directories {
-		if err := w.createDirectory(dirs, files, path.Join(root, dir.Name), dir.Digest); err != nil {
+		if err := common.CheckPath(dir.Name); err != nil {
+			return err
+		} else if err := w.createDirectory(dirs, files, path.Join(root, dir.Name), dir.Digest); err != nil {
 			return err
 		}
 	}
 	for _, sym := range dir.Symlinks {
-		if err := makeDirIfNeeded(root, sym.Name); err != nil {
+		if err := common.CheckPath(sym.Name); err != nil {
+			return err
+		} else if err := makeDirIfNeeded(root, sym.Name); err != nil {
 			return err
 		}
 		if err := os.Symlink(sym.Target, path.Join(root, sym.Name)); err != nil {

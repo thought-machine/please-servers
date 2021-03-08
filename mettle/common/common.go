@@ -5,13 +5,17 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/peterebden/go-cli-init/v3"
+	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"gocloud.dev/pubsub"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/mettle/omempubsub"
 
@@ -110,4 +114,36 @@ func WorkerName(msg *pubsub.Message) string {
 		}
 	}
 	return ""
+}
+
+// CheckOutputPaths checks that all output paths are OK (i.e. don't contain ../ or other such naughtiness)
+func CheckOutputPaths(cmd *pb.Command) error {
+	// Check OutputDirectories and OutputFiles although we don't normally use them (the SDK might choose to).
+	if err := checkOutputPaths(cmd.OutputDirectories); err != nil {
+		return err
+	}
+	if err := checkOutputPaths(cmd.OutputFiles); err != nil {
+		return err
+	}
+	if err := checkOutputPaths(cmd.OutputPaths); err != nil {
+		return err
+	}
+	return nil
+}
+
+func checkOutputPaths(paths []string) error {
+	for _, path := range paths {
+		if err := CheckPath(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CheckPath checks that an individual input or output path doesn't contain any illegal entities.
+func CheckPath(path string) error {
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		return status.Errorf(codes.InvalidArgument, "Output path %s attempts directory traversal", path)
+	}
+	return nil
 }
