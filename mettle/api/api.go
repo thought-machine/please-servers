@@ -53,7 +53,10 @@ func init() {
 
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) {
-	conn := Connect(opts)
+	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), true, opts.CertFile, opts.TokenFile)
+	if err != nil {
+		log.Warning("Failed to connect to bootstrap client: %s", err)
+	}
 	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, conn)
 	if err != nil {
 		log.Fatalf("%s", err)
@@ -72,15 +75,17 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		preResponses: common.MustOpenTopic(preResponseQueue),
 		jobs:         map[string]*job{},
 	}
+
 	go srv.Receive()
-	lis, s := grpcutil.NewServer(opts)
-	pb.RegisterCapabilitiesServer(s, srv)
-	pb.RegisterExecutionServer(s, srv)
 	if conn != nil {
 		srv.bsClient = bpb.NewBootstrapClient(conn)
 		srv.jobs, _ = GetExecutions(srv.bsClient)
+		log.Notice("Updated server with %s inflight executions", len(srv.jobs))
 		conn.Close()
 	}
+	lis, s := grpcutil.NewServer(opts)
+	pb.RegisterCapabilitiesServer(s, srv)
+	pb.RegisterExecutionServer(s, srv)
 	bpb.RegisterBootstrapServer(s, srv)
 	return s, lis, nil
 }
@@ -157,8 +162,6 @@ func GetExecutions(client bpb.BootstrapClient) (map[string]*job, error) {
 		}
 		jobs[j.ID] = job
 	}
-	log.Notice("Updated server with %s inflight executions", len(jobs))
-
 	return jobs, nil
 }
 

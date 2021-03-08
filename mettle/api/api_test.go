@@ -13,7 +13,7 @@ import (
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
-	// bpb "github.com/thought-machine/please-servers/proto/mettle"
+	bpb "github.com/thought-machine/please-servers/proto/mettle"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -99,37 +99,6 @@ func TestWaitExecution(t *testing.T) {
 	assert.EqualValues(t, 0, response.Result.ExitCode)
 }
 
-func TestBootstrapServers(t *testing.T) {
-	// set up server
-	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
-	defer s.Stop()
-
-	digest := &pb.Digest{Hash: uncachedHash}
-	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
-		ActionDigest: digest,
-	})
-	assert.NoError(t, err)
-
-	op, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	assert.Equal(t, digest.Hash, ex.Receive().Hash)
-
-	// Now dial it up with WaitExecution, we should get the responses back on that too.
-	_, err = client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
-		Name: op.Name,
-	})
-	assert.NoError(t, err)
-
-	// Set up bootstrap client
-	bsConn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", 9999), grpc.WithInsecure())
-	// bsClient := bpb.NewBootstrapClient(bsConn)
-	//jobs, err := GetExecutions(bsClient)
-	bsConn.Close()
-	//assert.NoError(t, err)
-
-}
-
 func setupServers(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
@@ -142,6 +111,45 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
 	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
+}
+
+func TestGetExecutions(t *testing.T) {
+	port := 9999
+	opts := grpcutil.Opts{
+		Host: "127.0.0.1",
+		Port: port,
+	}
+	srv := &server{
+		name: "mettle API server",
+		jobs: loadJob(),
+	}
+	lis, s := grpcutil.NewServer(opts)
+	bpb.RegisterBootstrapServer(s, srv)
+	go s.Serve(lis)
+
+	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
+	assert.NoError(t, err)
+	defer conn.Close()
+	client :=  bpb.NewBootstrapClient(conn)
+	jobs, _ := GetExecutions(client)
+	fmt.Println("%v", jobs)
+
+}
+
+
+func loadJob() map[string]*job {
+	jobs := map[string]*job{
+		"1234": &job{
+			Current: &longrunning.Operation{
+				Name:     "Hash",
+				Done:     true,
+			},
+			SentFirst: true,
+			Done:	   false,
+		},
+	}
+	return jobs
+
 }
 
 func recv(stream pb.Execution_ExecuteClient) (*longrunning.Operation, *pb.ExecuteOperationMetadata) {
