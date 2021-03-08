@@ -17,8 +17,8 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/rexclient"
 	"github.com/thought-machine/please-servers/mettle/common"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 // maxBlobBatchSize is the maximum size of a single blob batch we'll ever request.
