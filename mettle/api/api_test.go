@@ -130,8 +130,8 @@ func TestGetExecutions(t *testing.T) {
 	assert.NoError(t, err)
 
 	client := bpb.NewBootstrapClient(conn)
-	jobs, err := getExecutions(client)
-	assert.NoError(t, err)
+	jobs, er := getExecutions(client)
+	assert.NoError(t, er)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
 }
