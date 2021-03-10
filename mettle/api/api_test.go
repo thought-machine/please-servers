@@ -109,6 +109,7 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
+	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
 }
 
@@ -130,8 +131,8 @@ func TestGetExecutions(t *testing.T) {
 	assert.NoError(t, err)
 
 	client := bpb.NewBootstrapClient(conn)
-	jobs, er := getExecutions(client)
-	assert.NoError(t, er)
+	jobs, err := getExecutions(client)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
 }
