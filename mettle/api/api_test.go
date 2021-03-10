@@ -130,7 +130,7 @@ func TestGetExecutions(t *testing.T) {
 	assert.NoError(t, err)
 
 	client := bpb.NewBootstrapClient(conn)
-	jobs, err = getExecutions(client)
+	jobs, err := getExecutions(client)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
@@ -156,7 +156,6 @@ func loadJob() map[string]*job {
 		},
 	}
 	return jobs
-
 }
 
 func recv(stream pb.Execution_ExecuteClient) (*longrunning.Operation, *pb.ExecuteOperationMetadata) {

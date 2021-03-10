@@ -59,7 +59,6 @@ func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResp
 }
 
 func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
-	var err error
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -72,7 +71,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	}
 
 	go srv.Receive()
-	conn, err = grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), true, opts.CertFile, opts.TokenFile)
+	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), true, opts.CertFile, opts.TokenFile)
 	if err != nil {
 		log.Warning("Failed to connect to bootstrap client: %s", err)
 	}
