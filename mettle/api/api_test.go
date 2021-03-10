@@ -10,10 +10,10 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
-	bpb "github.com/thought-machine/please-servers/proto/mettle"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -129,31 +129,30 @@ func TestGetExecutions(t *testing.T) {
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
 	assert.NoError(t, err)
 
-	client :=  bpb.NewBootstrapClient(conn)
+	client := bpb.NewBootstrapClient(conn)
 	jobs, err := GetExecutions(client)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
 }
 
-
 func loadJob() map[string]*job {
 	jobs := map[string]*job{
-		"1234": &job{
+		"1234": {
 			Current: &longrunning.Operation{
-				Name:     "Unfinished Operation",
-				Done:     true,
+				Name: "Unfinished Operation",
+				Done: true,
 			},
 			SentFirst: true,
-			Done:	   false,
+			Done:      false,
 		},
-		"5678": &job{
+		"5678": {
 			Current: &longrunning.Operation{
-				Name:	"Finished Operation",
-				Done:	true,
+				Name: "Finished Operation",
+				Done: true,
 			},
 			SentFirst: true,
-			Done:	   true,
+			Done:      true,
 		},
 	}
 	return jobs

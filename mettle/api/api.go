@@ -3,10 +3,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
-	"fmt"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
@@ -14,6 +14,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/peterebden/go-cli-init/v3"
 	"github.com/prometheus/client_golang/prometheus"
+	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
@@ -21,7 +22,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"gopkg.in/op/go-logging.v1"
-	bpb "github.com/thought-machine/please-servers/proto/mettle"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -43,8 +43,6 @@ var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "mettle",
 	Name:      "requests_current",
 })
-
-var serveHTTPOnce sync.Once
 
 func init() {
 	prometheus.MustRegister(totalRequests)
@@ -78,7 +76,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		log.Warning("Failed to connect to bootstrap client: %s", err)
 	}
 	bootstrapClient := bpb.NewBootstrapClient(conn)
-	srv.jobs, err = GetExecutions(bootstrapClient)
+	srv.jobs, err = getExecutions(bootstrapClient)
 	if err != nil {
 		log.Warningf("%s", err)
 	}
@@ -104,29 +102,29 @@ type server struct {
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
 func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
-	log.Notice("Recieved request for inflight executions")
+	log.Notice("Received request for inflight executions")
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	executions := []*bpb.Job{}
 	for k, v := range s.jobs {
 		current, _ := proto.Marshal(v.Current)
 		job := &bpb.Job{
-			ID:			k,
-			Current:	current,
-			SentFirst:	v.SentFirst,
-			Done:		v.Done,
+			ID:        k,
+			Current:   current,
+			SentFirst: v.SentFirst,
+			Done:      v.Done,
 		}
 		executions = append(executions, job)
 	}
 	res := &bpb.ServeExecutionsResponse{
-		Jobs:	executions,
+		Jobs: executions,
 	}
 	log.Notice("Serving %d inflight executions", len(executions))
 	return res, nil
 }
 
-// GetExecutions requests a list of currently executing jobs over grpc and updates the server.
-func GetExecutions(client bpb.BootstrapClient) (map[string]*job, error) {
+// getExecutions requests a list of currently executing jobs over grpc and updates the server.
+func getExecutions(client bpb.BootstrapClient) (map[string]*job, error) {
 	log.Notice("Requesting inflight executions...")
 	req := &bpb.ServeExecutionsRequest{}
 	res, err := client.ServeExecutions(context.Background(), req)
@@ -141,9 +139,9 @@ func GetExecutions(client bpb.BootstrapClient) (map[string]*job, error) {
 			continue
 		}
 		job := &job{
-			Current:	current,
-			SentFirst:	j.SentFirst,
-			Done:		j.Done,
+			Current:   current,
+			SentFirst: j.SentFirst,
+			Done:      j.Done,
 		}
 		jobs[j.ID] = job
 	}
