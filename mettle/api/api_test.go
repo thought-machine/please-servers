@@ -105,11 +105,10 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: port,
-	}, "", requests, responses, responses, nil)
+	}, "", requests, responses, responses)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
-	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
 }
 
@@ -129,11 +128,12 @@ func TestGetExecutions(t *testing.T) {
 
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
 	assert.NoError(t, err)
-	defer conn.Close()
-	client :=  bpb.NewBootstrapClient(conn)
-	jobs, _ := GetExecutions(client)
-	fmt.Println("%v", jobs)
 
+	client :=  bpb.NewBootstrapClient(conn)
+	jobs, err := GetExecutions(client)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(jobs))
+	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
 }
 
 
@@ -141,11 +141,19 @@ func loadJob() map[string]*job {
 	jobs := map[string]*job{
 		"1234": &job{
 			Current: &longrunning.Operation{
-				Name:     "Hash",
+				Name:     "Unfinished Operation",
 				Done:     true,
 			},
 			SentFirst: true,
 			Done:	   false,
+		},
+		"5678": &job{
+			Current: &longrunning.Operation{
+				Name:	"Finished Operation",
+				Done:	true,
+			},
+			SentFirst: true,
+			Done:	   true,
 		},
 	}
 	return jobs
