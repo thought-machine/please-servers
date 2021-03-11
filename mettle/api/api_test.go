@@ -116,8 +116,10 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 func TestGetExecutions(t *testing.T) {
 	port := 9999
 	opts := grpcutil.Opts{
-		Host: "127.0.0.1",
-		Port: port,
+		Host:      "127.0.0.1",
+		Port:      port,
+		CertFile:  "",
+		TokenFile: "",
 	}
 	srv := &server{
 		name: "mettle API server",
@@ -127,11 +129,7 @@ func TestGetExecutions(t *testing.T) {
 	bpb.RegisterBootstrapServer(s, srv)
 	go s.Serve(lis)
 
-	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
-	assert.NoError(t, err)
-
-	client := bpb.NewBootstrapClient(conn)
-	jobs, err := getExecutions(client)
+	jobs, err := getExecutions(opts, false)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
