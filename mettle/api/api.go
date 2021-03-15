@@ -72,7 +72,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 
 	go srv.Receive()
 	if jobs, err := getExecutions(opts, true); err != nil {
-		log.Warningf("%s", err)
+		log.Warningf("Failed to get inflight executions: %s", err)
 	} else {
 		srv.jobs = jobs
 		log.Notice("Updated server with %s inflight executions", len(srv.jobs))
@@ -122,7 +122,7 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 func getExecutions(opts grpcutil.Opts, conTLS bool) (map[string]*job, error) {
 	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), conTLS, opts.CertFile, opts.TokenFile)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get inflight executions: %s", err)
+		return nil, err
 	}
 	defer conn.Close()
 	client := bpb.NewBootstrapClient(conn)
@@ -132,7 +132,7 @@ func getExecutions(opts grpcutil.Opts, conTLS bool) (map[string]*job, error) {
 	defer cancel()
 	res, err := client.ServeExecutions(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get inflight executions: %s", err)
+		return nil, err
 	}
 	jobs := make(map[string]*job, len(res.Jobs))
 	for _, j := range res.Jobs {
@@ -147,7 +147,6 @@ func getExecutions(opts grpcutil.Opts, conTLS bool) (map[string]*job, error) {
 			Done:      j.Done,
 		}
 	}
-
 	return jobs, nil
 }
 
