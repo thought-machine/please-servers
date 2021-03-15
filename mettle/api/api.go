@@ -122,7 +122,7 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 func getExecutions(opts grpcutil.Opts, conTLS bool) (map[string]*job, error) {
 	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), conTLS, opts.CertFile, opts.TokenFile)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to bootstrap client: %s", err)
+		return nil, fmt.Errorf("Failed to get inflight executions: %s", err)
 	}
 	defer conn.Close()
 	client := bpb.NewBootstrapClient(conn)
