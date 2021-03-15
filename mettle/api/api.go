@@ -59,7 +59,6 @@ func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResp
 }
 
 func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
-	var err error
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -72,11 +71,12 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	}
 
 	go srv.Receive()
-	srv.jobs, err = getExecutions(opts, true)
-	if err != nil {
+	if jobs, err := getExecutions(opts, true); err != nil {
 		log.Warningf("%s", err)
+	} else {
+		srv.jobs = jobs
+		log.Notice("Updated server with %s inflight executions", len(srv.jobs))
 	}
-	log.Notice("Updated server with %s inflight executions", len(srv.jobs))
 
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
@@ -118,19 +118,21 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 	return res, nil
 }
 
-// getExecutions requests a list of currently executing jobs over grpc and updates the server.
+// getExecutions requests a list of currently executing jobs over grpc
 func getExecutions(opts grpcutil.Opts, conTLS bool) (map[string]*job, error) {
 	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), conTLS, opts.CertFile, opts.TokenFile)
 	if err != nil {
-		return map[string]*job{}, fmt.Errorf("Failed to connect to bootstrap client: %s", err)
+		return nil, fmt.Errorf("Failed to connect to bootstrap client: %s", err)
 	}
 	defer conn.Close()
 	client := bpb.NewBootstrapClient(conn)
 	log.Notice("Requesting inflight executions...")
 	req := &bpb.ServeExecutionsRequest{}
-	res, err := client.ServeExecutions(context.Background(), req)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	res, err := client.ServeExecutions(ctx, req)
 	if err != nil {
-		return map[string]*job{}, fmt.Errorf("Failed to get inflight executions: %s", err)
+		return nil, fmt.Errorf("Failed to get inflight executions: %s", err)
 	}
 	jobs := make(map[string]*job, len(res.Jobs))
 	for _, j := range res.Jobs {
@@ -139,12 +141,11 @@ func getExecutions(opts grpcutil.Opts, conTLS bool) (map[string]*job, error) {
 			log.Warningf("unable to unmarshal s%", j.ID)
 			continue
 		}
-		job := &job{
+		jobs[j.ID] = &job{
 			Current:   current,
 			SentFirst: j.SentFirst,
 			Done:      j.Done,
 		}
-		jobs[j.ID] = job
 	}
 
 	return jobs, nil
