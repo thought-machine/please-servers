@@ -35,7 +35,7 @@ var opts = struct {
 	Logging      flags.LoggingOpts `group:"Options controlling logging output"`
 	InstanceName string            `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API          struct {
-		TLS bool `long:"tls" env:"TLS" default:"false" description:"Use TLS for communication between api pods"`
+		TLS    bool          `long:"tls" env:"TLS" default:"false" description:"Use TLS for communication between api pods"`
 		GRPC   grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
