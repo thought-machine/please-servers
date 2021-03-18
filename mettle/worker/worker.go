@@ -501,11 +501,11 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 		// (notably for "go build" which needs an absolute path for -toolexec). For now, we
 		// fix up here, but ideally we shouldn't need to know the detail of this.
 		if strings.HasPrefix(v.Name, "TOOL") && !path.IsAbs(v.Value) && strings.ContainsRune(v.Value, '/') {
-			v.Value = path.Join(w.dir, v.Value)
+			v.Value = w.sandboxDir(v.Value)
 		} else if v.Name == "PATH" {
 			v.Value = strings.ReplaceAll(v.Value, "~", w.home)
 		} else if v.Name == "TEST" {
-			v.Value = path.Join(w.dir, v.Value)
+			v.Value = w.sandboxDir(v.Value)
 		}
 		cmd.Env[i] = v.Name + "=" + v.Value
 	}
@@ -525,6 +525,7 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	log.Info("Uploading outputs for %s", w.actionDigest.Hash)
 	w.observeSysUsage(cmd, execDuration)
 	if err != nil {
+		log.Debug("Execution failed.\nStdout: %s\nStderr: %s", w.stdout.String(), w.stderr.String())
 		msg := "Execution failed: " + err.Error()
 		msg += w.writeUncachedResult(ar, msg)
 		// Attempt to collect outputs. They may exist and contain useful information such as a test.results file
@@ -673,6 +674,14 @@ func (w *worker) addSandbox(command *pb.Command) []string {
 		return append([]string{w.altSandbox}, command.Arguments...)
 	}
 	return command.Arguments
+}
+
+// sandboxDir puts a path within either the sandbox directory or the worker's directory.
+func (w *worker) sandboxDir(v string) string {
+	if w.sandbox != "" && w.altSandbox != "" {
+		return path.Join("/tmp/plz_sandbox", v)
+	}
+	return path.Join(w.dir, v)
 }
 
 // observeSysUsage observes some stats from a running process.
