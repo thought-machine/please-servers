@@ -105,7 +105,7 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: port,
-	}, "", requests, responses, responses)
+	}, "", requests, responses, responses, true)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
