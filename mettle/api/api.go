@@ -3,19 +3,18 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/peterebden/go-cli-init/v3"
 	"github.com/prometheus/client_golang/prometheus"
+	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
@@ -45,23 +44,21 @@ var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name:      "requests_current",
 })
 
-var serveHTTPOnce sync.Once
-
 func init() {
 	prometheus.MustRegister(totalRequests)
 	prometheus.MustRegister(currentRequests)
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string, connTLS bool) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, connTLS)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string, connTLS bool) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -72,17 +69,24 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		preResponses: common.MustOpenTopic(preResponseQueue),
 		jobs:         map[string]*job{},
 	}
+
 	go srv.Receive()
+	if jobs, err := getExecutions(opts, connTLS); err != nil {
+		log.Warningf("Failed to get inflight executions: %s", err)
+	} else {
+		srv.jobs = jobs
+		log.Notice("Updated server with %s inflight executions", len(srv.jobs))
+	}
+
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterExecutionServer(s, srv)
-	serveHTTPOnce.Do(func() {
-		http.HandleFunc("/executions", srv.ServeExecutions)
-	})
+	bpb.RegisterBootstrapServer(s, srv)
 	return s, lis, nil
 }
 
 type server struct {
+	bpb.BootstrapServer
 	name         string
 	requests     *pubsub.Topic
 	responses    *pubsub.Subscription
@@ -91,19 +95,59 @@ type server struct {
 	mutex        sync.Mutex
 }
 
-// ServeExecutions serves a list of currently executing jobs over HTTP.
-func (s *server) ServeExecutions(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]string{}
-	m := jsonpb.Marshaler{Indent: "  "}
+// ServeExecutions serves a list of currently executing jobs over GRPC.
+func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
+	log.Notice("Received request for inflight executions")
 	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	executions := []*bpb.Job{}
 	for k, v := range s.jobs {
-		s, _ := m.MarshalToString(v.Current)
-		resp[k] = s
+		current, _ := proto.Marshal(v.Current)
+		job := &bpb.Job{
+			ID:        k,
+			Current:   current,
+			SentFirst: v.SentFirst,
+			Done:      v.Done,
+		}
+		executions = append(executions, job)
 	}
-	s.mutex.Unlock()
-	e := json.NewEncoder(w)
-	e.SetIndent("", "  ")
-	e.Encode(resp)
+	res := &bpb.ServeExecutionsResponse{
+		Jobs: executions,
+	}
+	log.Notice("Serving %d inflight executions", len(executions))
+	return res, nil
+}
+
+// getExecutions requests a list of currently executing jobs over grpc
+func getExecutions(opts grpcutil.Opts, connTLS bool) (map[string]*job, error) {
+	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), connTLS, opts.CertFile, opts.TokenFile)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	client := bpb.NewBootstrapClient(conn)
+	log.Notice("Requesting inflight executions...")
+	req := &bpb.ServeExecutionsRequest{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	res, err := client.ServeExecutions(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make(map[string]*job, len(res.Jobs))
+	for _, j := range res.Jobs {
+		current := &longrunning.Operation{}
+		if err := proto.Unmarshal(j.Current, current); err != nil {
+			log.Warningf("unable to unmarshal s%", j.ID)
+			continue
+		}
+		jobs[j.ID] = &job{
+			Current:   current,
+			SentFirst: j.SentFirst,
+			Done:      j.Done,
+		}
+	}
+	return jobs, nil
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {

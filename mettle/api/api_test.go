@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
@@ -104,12 +105,56 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: port,
-	}, "", requests, responses, responses)
+	}, "", requests, responses, responses, true)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
 	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
+}
+
+func TestGetExecutions(t *testing.T) {
+	port := 9999
+	opts := grpcutil.Opts{
+		Host:      "127.0.0.1",
+		Port:      port,
+		CertFile:  "",
+		TokenFile: "",
+	}
+	srv := &server{
+		name: "mettle API server",
+		jobs: loadJob(),
+	}
+	lis, s := grpcutil.NewServer(opts)
+	bpb.RegisterBootstrapServer(s, srv)
+	go s.Serve(lis)
+
+	jobs, err := getExecutions(opts, false)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(jobs))
+	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
+}
+
+func loadJob() map[string]*job {
+	jobs := map[string]*job{
+		"1234": {
+			Current: &longrunning.Operation{
+				Name: "Unfinished Operation",
+				Done: true,
+			},
+			SentFirst: true,
+			Done:      false,
+		},
+		"5678": {
+			Current: &longrunning.Operation{
+				Name: "Finished Operation",
+				Done: true,
+			},
+			SentFirst: true,
+			Done:      true,
+		},
+	}
+	return jobs
 }
 
 func recv(stream pb.Execution_ExecuteClient) (*longrunning.Operation, *pb.ExecuteOperationMetadata) {
