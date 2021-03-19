@@ -111,7 +111,7 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 		InstanceName: s.storageClient.InstanceName,
 		ActionDigest: dg.ToProto(),
 		ActionResult: &rpb.ActionResult{
-			OutputFiles:  []*rpb.OutputFile{{
+			OutputFiles: []*rpb.OutputFile{{
 				Digest: resp.BlobDigest,
 			}},
 		},
