@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
 	rpb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/ptypes"
@@ -83,6 +84,44 @@ func (s *server) FetchDirectory(ctx context.Context, req *pb.FetchDirectoryReque
 }
 
 func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.FetchBlobResponse, error) {
+	// Do a cache check against the action cache.
+	// Digesting the entire message is a little stricter than maybe necessary but it's easy (and we are unlikely
+	// to get a huge amount of variance in parts of it that don't matter anyway).
+	dg, err := digest.NewFromMessage(req)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to digest message: %s", err)
+	}
+	if ar, err := s.storageClient.CheckActionCache(ctx, dg.ToProto()); err != nil {
+		log.Error("Failed to check action cache: %s", err)
+	} else if ar != nil {
+		if len(ar.OutputFiles) == 1 {
+			log.Info("Retrieved %s from action cache (as %s/%d)", req.Uris, dg.Hash, dg.Size)
+			return &pb.FetchBlobResponse{
+				Status:     &rpcstatus.Status{},
+				BlobDigest: ar.OutputFiles[0].Digest,
+			}, nil
+		}
+		log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
+	}
+	resp, err := s.fetchBlob(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.storageClient.UpdateActionResult(ctx, &rpb.UpdateActionResultRequest{
+		InstanceName: s.storageClient.InstanceName,
+		ActionDigest: dg.ToProto(),
+		ActionResult: &rpb.ActionResult{
+			OutputFiles:  []*rpb.OutputFile{{
+				Digest: resp.BlobDigest,
+			}},
+		},
+	}); err != nil {
+		log.Error("Failed to update action result: %s", err)
+	}
+	return resp, nil
+}
+
+func (s *server) fetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.FetchBlobResponse, error) {
 	if _, err := s.sriChecker(req.Qualifiers); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "Invalid sri.checksum qualifier: %s", err)
 	}
