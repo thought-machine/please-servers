@@ -71,9 +71,11 @@ type server struct {
 
 func (s *server) Check(context.Context, *hpb.HealthCheckRequest) (*hpb.HealthCheckResponse, error) {
 	for _, r := range []*trie.Replicator{s.replicator, s.assetReplicator, s.exeReplicator} {
-		if err := r.Healthcheck(); err != nil {
-			log.Error("Failed healthcheck: %s", err)
-			return &hpb.HealthCheckResponse{Status: hpb.HealthCheckResponse_NOT_SERVING}, nil
+		if r != nil {
+			if err := r.Healthcheck(); err != nil {
+				log.Error("Failed healthcheck: %s", err)
+				return &hpb.HealthCheckResponse{Status: hpb.HealthCheckResponse_NOT_SERVING}, nil
+			}
 		}
 	}
 	log.Debug("Passed healthcheck, all ranges serving")
