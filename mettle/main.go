@@ -35,7 +35,7 @@ var opts = struct {
 	Logging      flags.LoggingOpts `group:"Options controlling logging output"`
 	InstanceName string            `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API          struct {
-		TLS    bool          `long:"tls" env:"TLS" default:"false" description:"Use TLS for communication between api pods"`
+		TLS    bool          `long:"api_tls" description:"Use TLS for communication between api pods"`
 		GRPC   grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
@@ -152,7 +152,7 @@ func main() {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
 			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile)
 		}
-		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, opts.API.TLS)
+		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, false)
 	} else if cmd == "worker" {
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile)
 	} else if cmd == "api" {
