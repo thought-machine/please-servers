@@ -159,12 +159,12 @@ func (r *Replicator) callAck(f ReplicatedAckFunc, s *Server) (bool, error) {
 		return true, serverDead
 	}
 	shouldContinue, err := f(s)
-	if status.Code(err) == codes.DeadlineExceeded {
+	if r.isServer(err) {
 		if failed := atomic.AddInt64(&s.Failed, 1); failed == failureThreshold {
-			log.Error("Deadline exceeded on server %s-%s, taking it out of service", s.Start, s.End)
+			log.Error("Error on server %s-%s, taking it out of service: %s", s.Start, s.End, err)
 			go r.recheck(s)
 		} else {
-			log.Warning("Deadline exceeded on server %s-%s, failures: %d", s.Start, s.End, failed)
+			log.Warning("Error on server %s-%s, failures: %d: %s", s.Start, s.End, failed, err)
 		}
 	} else if err == nil {
 		s.Failed = 0 // Must be OK since it responded to this RPC successfully
@@ -241,5 +241,15 @@ func (r *Replicator) isContinuable(err error) bool {
 		return true // Clearly retryable
 	default:
 		return false // Everything else.
+	}
+}
+
+// isServer returns true if the given error is a server error and we should mark it down.
+func (r *Replicator) isServer(err error) bool {
+	switch status.Code(err) {
+	case codes.Unknown, codes.DeadlineExceeded, codes.ResourceExhausted, codes.Aborted, codes.Unavailable:
+		return true
+	default:
+		return false
 	}
 }
