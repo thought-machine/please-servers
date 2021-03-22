@@ -581,8 +581,8 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	resp := &ppb.ListResponse{}
 	ars := map[string]*ppb.ActionResult{}
 	blobs := map[string]*ppb.Blob{}
-	err := s.replicator.All(req.Prefix, func(srv *trie.Server) error {
-		ctx, cancel := context.WithTimeout(ctx, 100*s.timeout) // Multiply up timeout since this operation can be expensive.
+	err := s.replicator.Parallel(req.Prefix, func(srv *trie.Server) error {
+		ctx, cancel := context.WithTimeout(ctx, s.timeout)
 		defer cancel()
 		r, err := srv.GC.List(ctx, req)
 		if err != nil {
