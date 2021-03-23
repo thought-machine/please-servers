@@ -142,7 +142,7 @@ func checkOutputPaths(paths []string) error {
 
 // CheckPath checks that an individual input or output path doesn't contain any illegal entities.
 func CheckPath(path string) error {
-	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+	if strings.Contains(path, "../") || strings.HasPrefix(path, "/") {
 		return status.Errorf(codes.InvalidArgument, "Output path %s attempts directory traversal", path)
 	}
 	return nil
