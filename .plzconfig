@@ -1,5 +1,5 @@
 [please]
-version = >=16.0.0-prerelease.2
+version = >=16.0.0-prerelease.14
 
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
@@ -23,6 +23,3 @@ desc = Runs an instance of each server for local development
 [alias "buildlocal"]
 cmd = build //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local
 desc = Builds (but doesn't run) all the servers
-
-[featureflags]
-RemovePleasings = true

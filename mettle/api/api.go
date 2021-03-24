@@ -74,7 +74,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		log.Warningf("Failed to get inflight executions: %s", err)
 	} else {
 		srv.jobs = jobs
-		log.Notice("Updated server with %s inflight executions", len(srv.jobs))
+		log.Notice("Updated server with %d inflight executions", len(srv.jobs))
 	}
 
 	lis, s := grpcutil.NewServer(opts)
@@ -119,6 +119,10 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 
 // getExecutions requests a list of currently executing jobs over grpc
 func getExecutions(opts grpcutil.Opts, apiURL string, connTLS bool) (map[string]*job, error) {
+	if apiURL == "" {
+		log.Notice("No API URL provided, will not request inflight executions")
+		return map[string]*job{}, nil
+	}
 	conn, err := grpcutil.Dial(apiURL, connTLS, opts.CertFile, opts.TokenFile)
 	if err != nil {
 		return nil, err

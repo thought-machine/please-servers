@@ -120,6 +120,7 @@ var authenticatedMethods = map[string]bool{
 	"/build.bazel.remote.execution.v2.ContentAddressableStorage/GetTree":          false,
 	"/build.bazel.remote.execution.v2.Execution/Execute":                          true,
 	"/build.bazel.remote.execution.v2.Execution/WaitExecution":                    true,
+	"/build.please.remote.mettle.Bootstrap/ServeExecutions":                       false,
 	"/build.please.remote.purity.GC/Info":                                         false,
 	"/build.please.remote.purity.GC/List":                                         false,
 	"/build.please.remote.purity.GC/Delete":                                       true,
