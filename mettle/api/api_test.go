@@ -105,7 +105,7 @@ func setupServers(t *testing.T, port int, requests, responses string) (pb.Execut
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: port,
-	}, "", requests, responses, responses, true)
+	}, "", requests, responses, responses, "", true)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
@@ -129,7 +129,7 @@ func TestGetExecutions(t *testing.T) {
 	bpb.RegisterBootstrapServer(s, srv)
 	go s.Serve(lis)
 
-	jobs, err := getExecutions(opts, false)
+	jobs, err := getExecutions(opts, "127.0.0.1:9999", false)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
