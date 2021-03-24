@@ -25,10 +25,10 @@ type StorageOpts struct {
 }
 
 type CacheOpts struct {
-	Dir    string       `long:"cache_dir" description:"Directory to cache blobs in"`
-	Prefix []string     `long:"cache_prefix" description:"Path prefix for cache items to store"`
-	Part   []string     `long:"cache_part" description:"Cache any paths with a component with this name in them"`
-	MaxMem cli.ByteSize `long:"cache_max_size" default:"100M" description:"Max size of in-memory blob cache"`
+	Dir    string       `long:"dir" description:"Directory to cache blobs in"`
+	Prefix []string     `long:"prefix" description:"Path prefix for cache items to store"`
+	Part   []string     `long:"part" description:"Cache any paths with a component with this name in them"`
+	MaxMem cli.ByteSize `long:"max_size" default:"100M" description:"Max size of in-memory blob cache"`
 }
 
 var opts = struct {
@@ -36,7 +36,10 @@ var opts = struct {
 	Logging      flags.LoggingOpts `group:"Options controlling logging output"`
 	InstanceName string            `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API          struct {
-		TLS    bool          `long:"api_tls" description:"Use TLS for communication between api pods"`
+		API struct {
+			URL string        `long:"url" description:"URL for communicating with other API servers"`
+			TLS    bool          `long:"tls" description:"Use TLS for communication between api servers"`
+		} `group:"Options controlling communication with other API servers for bootstrapping zero-downtime deployments." namespace:"api"`
 		GRPC   grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
@@ -57,7 +60,7 @@ var opts = struct {
 		MinDiskSpace    cli.ByteSize `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64      `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		VersionFile     string       `long:"version_file" description:"File containing version tag"`
-		Cache           CacheOpts    `group:"Options controlling caching"`
+		Cache           CacheOpts    `group:"Options controlling caching" namespace:"cache"`
 		Storage         StorageOpts  `group:"Options controlling communication with the CAS server"`
 		Queues          struct {
 			RequestQueue  string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
@@ -77,7 +80,7 @@ var opts = struct {
 		MinDiskSpace    cli.ByteSize  `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64       `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		VersionFile     string        `long:"version_file" description:"File containing version tag"`
-		Cache           CacheOpts     `group:"Options controlling caching"`
+		Cache           CacheOpts     `group:"Options controlling caching" namespace:"cache"`
 		Storage         struct {
 			Storage []string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -93,7 +96,7 @@ var opts = struct {
 		Timeout     cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		ProfileFile string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 		MemProfile  string       `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
-		Cache       CacheOpts    `group:"Options controlling caching"`
+		Cache       CacheOpts    `group:"Options controlling caching" namespace:"cache"`
 		Storage     StorageOpts  `group:"Options controlling communication with the CAS server"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
 	Admin flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
@@ -153,11 +156,11 @@ func main() {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
 			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile)
 		}
-		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, false)
+		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, "", false)
 	} else if cmd == "worker" {
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile)
 	} else if cmd == "api" {
-		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.TLS)
+		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.API.URL, opts.API.API.TLS)
 	} else if err := one(); err != nil {
 		log.Fatalf("%s", err)
 	}

@@ -3,7 +3,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -50,15 +49,15 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string, connTLS bool) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, connTLS)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue string, connTLS bool) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -71,7 +70,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	}
 
 	go srv.Receive()
-	if jobs, err := getExecutions(opts, connTLS); err != nil {
+	if jobs, err := getExecutions(opts, apiURL, connTLS); err != nil {
 		log.Warningf("Failed to get inflight executions: %s", err)
 	} else {
 		srv.jobs = jobs
@@ -119,8 +118,8 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 }
 
 // getExecutions requests a list of currently executing jobs over grpc
-func getExecutions(opts grpcutil.Opts, connTLS bool) (map[string]*job, error) {
-	conn, err := grpcutil.Dial(fmt.Sprintf("%s:%d", opts.Host, opts.Port), connTLS, opts.CertFile, opts.TokenFile)
+func getExecutions(opts grpcutil.Opts, apiURL string, connTLS bool) (map[string]*job, error) {
+	conn, err := grpcutil.Dial(apiURL, connTLS, opts.CertFile, opts.TokenFile)
 	if err != nil {
 		return nil, err
 	}
