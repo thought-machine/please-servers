@@ -3,6 +3,7 @@ package worker
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/peterebden/go-copyfile"
@@ -15,14 +16,20 @@ type cache struct {
 	root     string
 	copier   copyfile.Copier
 	prefixes []string
+	parts    map[string]struct{}
 }
 
 // newCache returns a new cache instance.
-func newCache(root string, prefixes []string) *cache {
-	return &cache{
+func newCache(root string, prefixes, parts []string) *cache {
+	c := &cache{
 		root:     root,
 		prefixes: prefixes,
+		parts:    map[string]struct{}{},
 	}
+	for _, part := range parts {
+		c.parts[part] = struct{}{}
+	}
+	return c
 }
 
 // Retrieve copies a blob from the cache to the given location.
@@ -64,6 +71,13 @@ func (c *cache) shouldStore(dir, src string) bool {
 	for _, p := range c.prefixes {
 		if strings.HasPrefix(src, p) {
 			return true
+		}
+	}
+	if len(c.parts) > 0 {
+		for _, part := range strings.Split(src, string(filepath.Separator)) {
+			if _, present := c.parts[part]; present {
+				return true
+			}
 		}
 	}
 	return false
