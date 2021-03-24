@@ -11,3 +11,12 @@ go_library(
         "//third_party/go/gocloud",
     ],
 )
+
+go_test(
+    name = "common_test",
+    srcs = ["common_test.go"],
+    deps = [
+        ":common",
+        "//third_party/go:testify",
+    ],
+)

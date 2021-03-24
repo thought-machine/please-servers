@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -142,8 +143,13 @@ func checkOutputPaths(paths []string) error {
 
 // CheckPath checks that an individual input or output path doesn't contain any illegal entities.
 func CheckPath(path string) error {
-	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		return status.Errorf(codes.InvalidArgument, "Output path %s attempts directory traversal", path)
+	for _, part := range strings.Split(path, string(filepath.Separator)) {
+		if part == ".." {
+			return status.Errorf(codes.InvalidArgument, "Output path %s attempts directory traversal", path)
+		}
+	}
+	if strings.HasPrefix(path, "/") {
+		return status.Errorf(codes.InvalidArgument, "Output path %s is absolute, that's not permitted", path)
 	}
 	return nil
 }
