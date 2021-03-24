@@ -37,8 +37,8 @@ var opts = struct {
 	InstanceName string            `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API          struct {
 		API struct {
-			URL string        `long:"url" description:"URL for communicating with other API servers"`
-			TLS    bool          `long:"tls" description:"Use TLS for communication between api servers"`
+			URL string `long:"url" description:"URL for communicating with other API servers"`
+			TLS bool   `long:"tls" description:"Use TLS for communication between api servers"`
 		} `group:"Options controlling communication with other API servers for bootstrapping zero-downtime deployments." namespace:"api"`
 		GRPC   grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues struct {
