@@ -551,14 +551,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	log.Notice("Uploaded outputs for %s", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 
-	if req.SkipCacheLookup {
-		return &pb.ExecuteResponse{
-			Status: &rpcstatus.Status{Code: int32(codes.OK)},
-			Result: ar,
-		}
-	}
-
-	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
+	newAr, err := w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
 		InstanceName: w.instanceName,
 		ActionDigest: w.actionDigest,
 		ActionResult: ar,
@@ -569,6 +562,10 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 			Status: status(codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
 		}
+	}
+
+	if !req.SkipCacheLookup {
+		ar = newAr
 	}
 	log.Notice("Uploaded action result for %s", w.actionDigest.Hash)
 	return &pb.ExecuteResponse{
