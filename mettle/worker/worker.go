@@ -399,7 +399,7 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 			Status: status,
 		}
 	}
-	return w.execute(action, command)
+	return w.execute(req, action, command)
 }
 
 // readRequest unmarshals the original execution request.
@@ -478,7 +478,7 @@ func (w *worker) createTempDir() error {
 }
 
 // execute runs the actual commands once the inputs are prepared.
-func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResponse {
+func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.Command) *pb.ExecuteResponse {
 	log.Notice("Beginning execution for %s", w.actionDigest.Hash)
 	log.Debug("Executing %s: %s", w.actionDigest.Hash, command.Arguments)
 	if w.clean {
@@ -550,6 +550,14 @@ func (w *worker) execute(action *pb.Action, command *pb.Command) *pb.ExecuteResp
 	uploadDurations.Observe(end.Sub(execEnd).Seconds())
 	log.Notice("Uploaded outputs for %s", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
+
+	if req.SkipCacheLookup {
+		return &pb.ExecuteResponse{
+			Status: &rpcstatus.Status{Code: int32(codes.OK)},
+			Result: ar,
+		}
+	}
+
 	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
 		InstanceName: w.instanceName,
 		ActionDigest: w.actionDigest,
