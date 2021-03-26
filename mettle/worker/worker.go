@@ -511,7 +511,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		}
 		cmd.Env[i] = v.Name + "=" + v.Value
 	}
-	err := w.runCommand(cmd, duration)
+	err := w.runCommand(cmd, duration) // * ACTUAL EXECUTION HERE *
 	log.Notice("Completed execution for %s", w.actionDigest.Hash)
 	execEnd := time.Now()
 	w.metadata.ExecutionCompletedTimestamp = toTimestamp(execEnd)
