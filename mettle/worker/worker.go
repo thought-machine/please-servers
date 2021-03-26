@@ -551,10 +551,13 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	log.Notice("Uploaded outputs for %s", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 
-	newAr, err := w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
+	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
 		InstanceName: w.instanceName,
 		ActionDigest: w.actionDigest,
 		ActionResult: ar,
+		ResultsCachePolicy: &pb.ResultsCachePolicy{
+			Priority: resultsCachePriority(req.SkipCacheLookup),
+		},
 	})
 	if err != nil {
 		log.Error("Failed to upload action result: %s", err)
@@ -562,10 +565,6 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 			Status: status(codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
 		}
-	}
-
-	if !req.SkipCacheLookup {
-		ar = newAr
 	}
 	log.Notice("Uploaded action result for %s", w.actionDigest.Hash)
 	return &pb.ExecuteResponse{
@@ -866,4 +865,13 @@ func mustAbs(file string) string {
 		log.Fatalf("Failed to make %s absolute: %s", file, err)
 	}
 	return p
+}
+
+// resultsCachePriority returns the priority of an action cache update based on the SkipCacheLookup flag.
+// If that flag is true it's deemed 'urgent' which will allow overwriting whatever is there.
+func resultsCachePriority(skipCacheLookup bool) int32 {
+	if skipCacheLookup {
+		return -1
+	}
+	return 0
 }

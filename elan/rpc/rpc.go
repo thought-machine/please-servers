@@ -204,6 +204,18 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
 				UpdateEnabled: false,
 			},
+			CachePriorityCapabilities: &pb.PriorityCapabilities{
+				Priorities: []*pb.PriorityCapabilities_PriorityRange{
+					{
+						MinPriority: 0,
+						MaxPriority: 0,
+					},
+					{
+						MinPriority: -1,
+						MaxPriority: -1,
+					},
+				},
+			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 			SupportedCompressor: []pb.Compressor_Value{
 				pb.Compressor_IDENTITY,
@@ -243,12 +255,16 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 }
 
 func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
-	if ar, err := s.GetActionResult(ctx, &pb.GetActionResultRequest{
-		InstanceName: req.InstanceName,
-		ActionDigest: req.ActionDigest,
-	}); err == nil {
-		log.Debug("Returning existing action result for UpdateActionResult request for %s", req.ActionDigest.Hash)
-		return ar, nil
+	// If priority is < 0 that indicates an 'urgent' update which will overwrite the existing one
+	// regardless of what is currently there.
+	if req.ResultsCachePolicy == nil || req.ResultsCachePolicy.Priority >= 0 {
+		if ar, err := s.GetActionResult(ctx, &pb.GetActionResultRequest{
+			InstanceName: req.InstanceName,
+			ActionDigest: req.ActionDigest,
+		}); err == nil {
+			log.Debug("Returning existing action result for UpdateActionResult request for %s", req.ActionDigest.Hash)
+			return ar, nil
+		}
 	}
 	b, err := proto.Marshal(req.ActionResult)
 	if err != nil {
