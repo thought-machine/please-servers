@@ -99,6 +99,18 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
 				UpdateEnabled: false,
 			},
+			CachePriorityCapabilities: &pb.PriorityCapabilities{
+				Priorities: []*pb.PriorityCapabilities_PriorityRange{
+					{
+						MinPriority: 0,
+						MaxPriority: 0,
+					},
+					{
+						MinPriority: -1,
+						MaxPriority: -1,
+					},
+				},
+			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
 			SupportedCompressor: []pb.Compressor_Value{
 				pb.Compressor_IDENTITY,
