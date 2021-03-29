@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/peterebden/go-cli-init/v3"
@@ -15,6 +16,7 @@ var log = cli.MustGetLogger()
 
 var actionRe = regexp.MustCompile("([0-9a-fA-F]+)/([0-9]+)/?")
 var shortActionRe = regexp.MustCompile("([0-9a-fA-F]+)")
+var currencyRe = regexp.MustCompile(`([A-Z]{3})([0-9]+(?:\.[0-9]+))`)
 
 // LoggingOpts are a common set of logging options that we use across the repo.
 type LoggingOpts struct {
@@ -92,6 +94,33 @@ func AllToProto(actions []Action) []*pb.Digest {
 		ret[i] = a.ToProto()
 	}
 	return ret
+}
+
+// A Currency models an amount of real-world money (used to track costs for build actions)
+// It is not pinpoint accurate due to use of floating-point; for our purposes exact accuracy is not needed.
+type Currency struct {
+	Denomination string // ISO4217 code
+	Amount       float64
+}
+
+// UnmarshalFlag parses from a string such as "£2.20" or "$0.21" or "GBP3.36"
+func (c *Currency) UnmarshalFlag(in string) error {
+	if strings.HasPrefix(in, "£") {
+		return c.UnmarshalFlag("GBP" + strings.TrimPrefix(in, "£"))
+	} else if strings.HasPrefix(in, "$") {
+		return c.UnmarshalFlag("USD" + strings.TrimPrefix(in, "$"))
+	}
+	matches := currencyRe.FindStringSubmatch(in)
+	if matches == nil {
+		return fmt.Errorf("Invalid currency: %s", in)
+	}
+	f, err := strconv.ParseFloat(matches[2], 64)
+	if err != nil {
+		return err
+	}
+	c.Denomination = matches[1]
+	c.Amount = f
+	return nil
 }
 
 // MustGetLogger is a re-export of the same function from the CLI library.

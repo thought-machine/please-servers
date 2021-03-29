@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	mettlecli "github.com/thought-machine/please-servers/cli"
 	elan "github.com/thought-machine/please-servers/elan/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -100,8 +101,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -110,7 +111,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("omem://requests")
-	w, err := initialiseWorker(instanceName, "omem://requests", "omem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "")
+	w, err := initialiseWorker(instanceName, "omem://requests", "omem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil)
 	if err != nil {
 		return err
 	}
@@ -138,8 +139,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs)
 	if err != nil {
 		return err
 	}
@@ -176,7 +177,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -247,6 +248,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		diskSpace:       minDiskSpace,
 		memoryThreshold: memoryThreshold,
 		instanceName:    instanceName,
+		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix, cacheParts)
@@ -280,6 +282,9 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
+	for name, cost := range costs {
+		w.costs[name] = &bbru.MonetaryResourceUsage_Expense{Currency: cost.Denomination, Cost: cost.Amount}
+	}
 	log.Notice("%s initialised with settings: CAS: %s cache dir: %s max cache size: %d sandbox: %s alt sandbox: %s", name, storage, cacheDir, maxCacheSize, w.sandbox, w.altSandbox)
 	return w, nil
 }
@@ -306,6 +311,7 @@ type worker struct {
 	startTime       time.Time
 	diskSpace       int64
 	memoryThreshold float64
+	costs           map[string]*bbru.MonetaryResourceUsage_Expense
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest
@@ -550,6 +556,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	uploadDurations.Observe(end.Sub(execEnd).Seconds())
 	log.Notice("Uploaded outputs for %s", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
+	w.observeCosts()
 
 	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
 		InstanceName: w.instanceName,
@@ -725,6 +732,29 @@ func (w *worker) observeSysUsage(cmd *exec.Cmd, execDuration float64) {
 	})
 	if err != nil {
 		log.Warning("Failed to serialise resource usage: %s", err)
+		return
+	}
+	w.metadata.AuxiliaryMetadata = append(w.metadata.AuxiliaryMetadata, any)
+}
+
+// observeCosts attaches any costs to the completed action.
+func (w *worker) observeCosts() {
+	if len(w.costs) == 0 {
+		return
+	}
+	duration := time.Since(w.taskStartTime).Seconds()
+	msg := &bbru.MonetaryResourceUsage{
+		Expenses: make(map[string]*bbru.MonetaryResourceUsage_Expense, len(w.costs)),
+	}
+	for name, cost := range w.costs {
+		msg.Expenses[name] = &bbru.MonetaryResourceUsage_Expense{
+			Currency: cost.Currency,
+			Cost:     cost.Cost * duration,
+		}
+	}
+	any, err := ptypes.MarshalAny(msg)
+	if err != nil {
+		log.Warning("Failed to serialise costs: %s", err)
 		return
 	}
 	w.metadata.AuxiliaryMetadata = append(w.metadata.AuxiliaryMetadata, any)

@@ -3,6 +3,7 @@ go_library(
     srcs = glob(["*.go"]),
     visibility = ["//mettle/..."],
     deps = [
+        "//cli",
         "//elan/rpc",
         "//grpcutil",
         "//mettle/common",

@@ -352,6 +352,114 @@ func (x *Duration) GetNanos() int32 {
 	return 0
 }
 
+// A representation of unique factors that may be aggregated to
+// compute a given build action's total price.
+type MonetaryResourceUsage struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// A mapping of expense categories to their respective costs.
+	Expenses map[string]*MonetaryResourceUsage_Expense `protobuf:"bytes,1,rep,name=expenses,proto3" json:"expenses,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (x *MonetaryResourceUsage) Reset() {
+	*x = MonetaryResourceUsage{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_third_party_proto_resourceusage_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MonetaryResourceUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MonetaryResourceUsage) ProtoMessage() {}
+
+func (x *MonetaryResourceUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_third_party_proto_resourceusage_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MonetaryResourceUsage.ProtoReflect.Descriptor instead.
+func (*MonetaryResourceUsage) Descriptor() ([]byte, []int) {
+	return file_third_party_proto_resourceusage_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MonetaryResourceUsage) GetExpenses() map[string]*MonetaryResourceUsage_Expense {
+	if x != nil {
+		return x.Expenses
+	}
+	return nil
+}
+
+type MonetaryResourceUsage_Expense struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// The type of currency the cost is measured in. Required to be in
+	// ISO 4217 format: https://en.wikipedia.org/wiki/ISO_4217#Active_codes
+	Currency string `protobuf:"bytes,1,opt,name=currency,proto3" json:"currency,omitempty"`
+	// The value of a specific expense for a build action.
+	Cost float64 `protobuf:"fixed64,2,opt,name=cost,proto3" json:"cost,omitempty"`
+}
+
+func (x *MonetaryResourceUsage_Expense) Reset() {
+	*x = MonetaryResourceUsage_Expense{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_third_party_proto_resourceusage_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MonetaryResourceUsage_Expense) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MonetaryResourceUsage_Expense) ProtoMessage() {}
+
+func (x *MonetaryResourceUsage_Expense) ProtoReflect() protoreflect.Message {
+	mi := &file_third_party_proto_resourceusage_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MonetaryResourceUsage_Expense.ProtoReflect.Descriptor instead.
+func (*MonetaryResourceUsage_Expense) Descriptor() ([]byte, []int) {
+	return file_third_party_proto_resourceusage_proto_rawDescGZIP(), []int{3, 0}
+}
+
+func (x *MonetaryResourceUsage_Expense) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *MonetaryResourceUsage_Expense) GetCost() float64 {
+	if x != nil {
+		return x.Cost
+	}
+	return 0
+}
+
 var File_third_party_proto_resourceusage_proto protoreflect.FileDescriptor
 
 var file_third_party_proto_resourceusage_proto_rawDesc = []byte{
@@ -427,12 +535,30 @@ var file_third_party_proto_resourceusage_proto_rawDesc = []byte{
 	0x0a, 0x08, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x65,
 	0x63, 0x6f, 0x6e, 0x64, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x07, 0x73, 0x65, 0x63,
 	0x6f, 0x6e, 0x64, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x6e, 0x61, 0x6e, 0x6f, 0x73, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x05, 0x52, 0x05, 0x6e, 0x61, 0x6e, 0x6f, 0x73, 0x42, 0x42, 0x5a, 0x40, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x62, 0x61,
-	0x72, 0x6e, 0x2f, 0x62, 0x62, 0x2d, 0x72, 0x65, 0x6d, 0x6f, 0x74, 0x65, 0x2d, 0x65, 0x78, 0x65,
-	0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2f, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x75, 0x73, 0x61, 0x67, 0x65, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x01, 0x28, 0x05, 0x52, 0x05, 0x6e, 0x61, 0x6e, 0x6f, 0x73, 0x22, 0xa1, 0x02, 0x0a, 0x15, 0x4d,
+	0x6f, 0x6e, 0x65, 0x74, 0x61, 0x72, 0x79, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x55,
+	0x73, 0x61, 0x67, 0x65, 0x12, 0x58, 0x0a, 0x08, 0x65, 0x78, 0x70, 0x65, 0x6e, 0x73, 0x65, 0x73,
+	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x3c, 0x2e, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x62, 0x61,
+	0x72, 0x6e, 0x2e, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x75, 0x73, 0x61, 0x67, 0x65,
+	0x2e, 0x4d, 0x6f, 0x6e, 0x65, 0x74, 0x61, 0x72, 0x79, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x55, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x45, 0x78, 0x70, 0x65, 0x6e, 0x73, 0x65, 0x73, 0x45,
+	0x6e, 0x74, 0x72, 0x79, 0x52, 0x08, 0x65, 0x78, 0x70, 0x65, 0x6e, 0x73, 0x65, 0x73, 0x1a, 0x39,
+	0x0a, 0x07, 0x45, 0x78, 0x70, 0x65, 0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x63, 0x75, 0x72,
+	0x72, 0x65, 0x6e, 0x63, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x63, 0x75, 0x72,
+	0x72, 0x65, 0x6e, 0x63, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x63, 0x6f, 0x73, 0x74, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x01, 0x52, 0x04, 0x63, 0x6f, 0x73, 0x74, 0x1a, 0x73, 0x0a, 0x0d, 0x45, 0x78, 0x70,
+	0x65, 0x6e, 0x73, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65,
+	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x4c, 0x0a, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x36, 0x2e, 0x62, 0x75,
+	0x69, 0x6c, 0x64, 0x62, 0x61, 0x72, 0x6e, 0x2e, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65,
+	0x75, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x4d, 0x6f, 0x6e, 0x65, 0x74, 0x61, 0x72, 0x79, 0x52, 0x65,
+	0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x55, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x45, 0x78, 0x70, 0x65,
+	0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x42, 0x42,
+	0x5a, 0x40, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x62, 0x75, 0x69,
+	0x6c, 0x64, 0x62, 0x61, 0x72, 0x6e, 0x2f, 0x62, 0x62, 0x2d, 0x72, 0x65, 0x6d, 0x6f, 0x74, 0x65,
+	0x2d, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x75, 0x73, 0x61,
+	0x67, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -447,20 +573,25 @@ func file_third_party_proto_resourceusage_proto_rawDescGZIP() []byte {
 	return file_third_party_proto_resourceusage_proto_rawDescData
 }
 
-var file_third_party_proto_resourceusage_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_third_party_proto_resourceusage_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_third_party_proto_resourceusage_proto_goTypes = []interface{}{
-	(*FilePoolResourceUsage)(nil), // 0: buildbarn.resourceusage.FilePoolResourceUsage
-	(*POSIXResourceUsage)(nil),    // 1: buildbarn.resourceusage.POSIXResourceUsage
-	(*Duration)(nil),              // 2: buildbarn.resourceusage.Duration
+	(*FilePoolResourceUsage)(nil),         // 0: buildbarn.resourceusage.FilePoolResourceUsage
+	(*POSIXResourceUsage)(nil),            // 1: buildbarn.resourceusage.POSIXResourceUsage
+	(*Duration)(nil),                      // 2: buildbarn.resourceusage.Duration
+	(*MonetaryResourceUsage)(nil),         // 3: buildbarn.resourceusage.MonetaryResourceUsage
+	(*MonetaryResourceUsage_Expense)(nil), // 4: buildbarn.resourceusage.MonetaryResourceUsage.Expense
+	nil,                                   // 5: buildbarn.resourceusage.MonetaryResourceUsage.ExpensesEntry
 }
 var file_third_party_proto_resourceusage_proto_depIdxs = []int32{
 	2, // 0: buildbarn.resourceusage.POSIXResourceUsage.user_time:type_name -> buildbarn.resourceusage.Duration
 	2, // 1: buildbarn.resourceusage.POSIXResourceUsage.system_time:type_name -> buildbarn.resourceusage.Duration
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	5, // 2: buildbarn.resourceusage.MonetaryResourceUsage.expenses:type_name -> buildbarn.resourceusage.MonetaryResourceUsage.ExpensesEntry
+	4, // 3: buildbarn.resourceusage.MonetaryResourceUsage.ExpensesEntry.value:type_name -> buildbarn.resourceusage.MonetaryResourceUsage.Expense
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_third_party_proto_resourceusage_proto_init() }
@@ -505,6 +636,30 @@ func file_third_party_proto_resourceusage_proto_init() {
 				return nil
 			}
 		}
+		file_third_party_proto_resourceusage_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*MonetaryResourceUsage); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_third_party_proto_resourceusage_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*MonetaryResourceUsage_Expense); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -512,7 +667,7 @@ func file_third_party_proto_resourceusage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_third_party_proto_resourceusage_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
