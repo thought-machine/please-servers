@@ -5,10 +5,10 @@ remote_file(
     out = "bb-browser",
     binary = True,
     hashes = [
-        "35691a41fe5cb8d134ed7f0728d9696f492c346ef133cdb718397937c1d667af",
-        "ae9a13454da895d4ff5b8137afe39050b8af6b67fc3ec364636312dae000b50a",
+        "4e7e3645a7ccc61562afd67b272affe09f700f91b6575c82ea3c270388f2b5e8",
+        "a639f32046e3d66edbbbfa57bc0120770f81cee9c692a106f3a9a454efebd932",
     ],
-    url = "https://github.com/thought-machine/please-servers/releases/download/v7.6.1/bb_browser_${OS}_${ARCH}",
+    url = "https://github.com/thought-machine/please-servers/releases/download/v8.8.4/bb_browser_${OS}_${ARCH}",
 )
 
 filegroup(
