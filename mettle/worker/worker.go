@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/cli"
+	mettlecli "github.com/thought-machine/please-servers/cli"
 	elan "github.com/thought-machine/please-servers/elan/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -101,7 +101,7 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]cli.Currency) {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) {
 	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
@@ -139,7 +139,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs []cli.Currency) error {
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) error {
 	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs []cli.Currency) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -744,10 +744,13 @@ func (w *worker) observeCosts() {
 	}
 	duration := time.Since(w.taskStartTime).Seconds()
 	msg := &bbru.MonetaryResourceUsage{
-		Expenses: make(map[string]*bbru.MonetaryResourceUsage_Expense, len(w.costs))
+		Expenses: make(map[string]*bbru.MonetaryResourceUsage_Expense, len(w.costs)),
 	}
 	for name, cost := range w.costs {
-		msg.Expenses[name] = cost * duration
+		msg.Expenses[name] = &bbru.MonetaryResourceUsage_Expense{
+			Currency: cost.Currency,
+			Cost:     cost.Cost * duration,
+		}
 	}
 	any, err := ptypes.MarshalAny(msg)
 	if err != nil {

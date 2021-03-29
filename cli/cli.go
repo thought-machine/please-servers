@@ -98,7 +98,7 @@ func AllToProto(actions []Action) []*pb.Digest {
 
 // A Currency models an amount of real-world money (used to track costs for build actions)
 // It is not pinpoint accurate due to use of floating-point; for our purposes exact accuracy is not needed.
-type Currency struct{
+type Currency struct {
 	Denomination string // ISO4217 code
 	Amount       float64
 }
