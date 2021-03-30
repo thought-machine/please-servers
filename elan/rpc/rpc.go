@@ -107,6 +107,10 @@ var knownBlobCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "known_blob_cache_misses_total",
 })
+var blobSizeMismatches = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "elan",
+	Name:      "blob_size_mismatches_total",
+})
 var blobsServed = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "elan",
 	Name:      "blobs_served_total",
@@ -131,6 +135,7 @@ func init() {
 	prometheus.MustRegister(dirCacheMisses)
 	prometheus.MustRegister(knownBlobCacheHits)
 	prometheus.MustRegister(knownBlobCacheMisses)
+	prometheus.MustRegister(blobSizeMismatches)
 	prometheus.MustRegister(blobsServed)
 	prometheus.MustRegister(blobsReceived)
 }
@@ -359,6 +364,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if len(r.Data) != int(r.Digest.SizeBytes) && !compressed {
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
+				blobSizeMismatches.Inc()
 			} else if s.blobExists(ctx, s.compressedKey("cas", r.Digest, compressed)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {

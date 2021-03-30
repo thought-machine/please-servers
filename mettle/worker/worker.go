@@ -87,6 +87,10 @@ var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "cache_misses_total",
 })
+var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "blob_not_found_errors_total",
+})
 
 func init() {
 	prometheus.MustRegister(totalBuilds)
@@ -98,6 +102,7 @@ func init() {
 	prometheus.MustRegister(cpuUsage)
 	prometheus.MustRegister(cacheHits)
 	prometheus.MustRegister(cacheMisses)
+	prometheus.MustRegister(blobNotFoundErrors)
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
@@ -438,6 +443,9 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
+		if grpcstatus.Code(err) == codes.NotFound {
+			blobNotFoundErrors.Inc()
+		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
 	// We are required to create directories for all the outputs.
