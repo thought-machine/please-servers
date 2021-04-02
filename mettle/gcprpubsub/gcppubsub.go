@@ -272,7 +272,7 @@ func openTopic(client *raw.PublisherClient, topicPath string) driver.Topic {
 
 // SendBatch implements driver.Topic.SendBatch.
 func (t *topic) SendBatch(ctx context.Context, dms []*driver.Message) error {
-	var ms []*pb.PubsubMessage
+	ms := make([]*pb.PubsubMessage, 0, len(dms))
 	for _, dm := range dms {
 		psm := &pb.PubsubMessage{Data: dm.Body, Attributes: dm.Metadata}
 		if dm.BeforeSend != nil {

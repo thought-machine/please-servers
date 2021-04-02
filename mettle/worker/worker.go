@@ -455,12 +455,12 @@ func (w *worker) extendAckDeadline(ctx context.Context, msg *pubsub.Message) {
 }
 
 // extendAckDeadlineOnce extends the message's ack deadline one time.
-func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.SubscriberClient, ackId string) {
+func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.SubscriberClient, ackID string) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if err := client.ModifyAckDeadline(ctx, &pspb.ModifyAckDeadlineRequest{
 		Subscription:       w.ackExtensionSub,
-		AckIds:             []string{ackId},
+		AckIds:             []string{ackID},
 		AckDeadlineSeconds: int32(w.ackExtension.Seconds()),
 	}); err != nil {
 		log.Warning("Failed to extend ack deadline for %s: %s", w.actionDigest.Hash, err)
