@@ -21,6 +21,7 @@ import (
 	"github.com/thought-machine/please-servers/mettle/omempubsub"
 
 	// Must import the schemes we want to use.
+	_ "github.com/thought-machine/please-servers/mettle/gcprpubsub"
 	_ "gocloud.dev/pubsub/gcppubsub"
 	_ "gocloud.dev/pubsub/mempubsub"
 )
