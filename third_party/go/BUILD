@@ -351,7 +351,6 @@ go_module(
     ],
     module = "golang.org/x/oauth2",
     version = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
-    visibility = ["//third_party/go/..."],
     deps = [
         ":cloud-metadata",
         ":net",
