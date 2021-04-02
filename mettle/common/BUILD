@@ -3,6 +3,7 @@ go_library(
     srcs = ["common.go"],
     visibility = ["//mettle/..."],
     deps = [
+        "//mettle/gcprpubsub",
         "//mettle/omempubsub",
         "//third_party/go:cli-init",
         "//third_party/go:genproto",

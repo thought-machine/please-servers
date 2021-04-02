@@ -10,6 +10,7 @@ go_library(
         "//proto:lucidity",
         "//rexclient",
         "//third_party/go:cli-init",
+        "//third_party/go:cloud_pubsub",
         "//third_party/go:copyfile",
         "//third_party/go:errgroup",
         "//third_party/go:genproto",

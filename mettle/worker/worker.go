@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	psraw "cloud.google.com/go/pubsub/apiv1"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
@@ -30,6 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
+	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -106,8 +108,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -116,7 +118,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("omem://requests")
-	w, err := initialiseWorker(instanceName, "omem://requests", "omem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil)
+	w, err := initialiseWorker(instanceName, "omem://requests", "omem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
 	if err != nil {
 		return err
 	}
@@ -144,8 +146,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension)
 	if err != nil {
 		return err
 	}
@@ -182,7 +184,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -238,6 +240,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	w := &worker{
 		requests:        common.MustOpenSubscription(requestQueue),
 		responses:       common.MustOpenTopic(responseQueue),
+		ackExtension:    ackExtension,
 		client:          client,
 		rclient:         rexclient.Uninitialised(),
 		rootDir:         abspath,
@@ -254,6 +257,12 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		memoryThreshold: memoryThreshold,
 		instanceName:    instanceName,
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
+	}
+	if ackExtension > 0 {
+		if !strings.HasPrefix(requestQueue, "gcprpubsub://") {
+			return nil, fmt.Errorf("Cannot specify a non-zero ack extension on subscription %s", requestQueue)
+		}
+		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcprpubsub://")
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix, cacheParts)
@@ -297,6 +306,8 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 type worker struct {
 	requests        *pubsub.Subscription
 	responses       *pubsub.Topic
+	ackExtension    time.Duration
+	ackExtensionSub string
 	client          elan.Client
 	rclient         *client.Client
 	lucidity        lpb.LucidityClient
@@ -345,7 +356,7 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	}
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
-	response := w.runTask(msg.Body)
+	response := w.runTask(msg)
 	msg.Ack()
 	err = w.update(pb.ExecutionStage_COMPLETED, response)
 	w.actionDigest = nil
@@ -375,7 +386,12 @@ func (w *worker) receiveOne(ctx context.Context) (*pubsub.Message, error) {
 }
 
 // runTask does the actual running of a task.
-func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
+func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
+	if w.ackExtension > 0 {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go w.extendAckDeadline(ctx, msg)
+	}
 	totalBuilds.Inc()
 	currentBuilds.Inc()
 	defer currentBuilds.Dec()
@@ -384,7 +400,7 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 		WorkerStartTimestamp: ptypes.TimestampNow(),
 	}
 	w.taskStartTime = time.Now()
-	req, action, command, status := w.readRequest(msg)
+	req, action, command, status := w.readRequest(msg.Body)
 	if req != nil {
 		w.actionDigest = req.ActionDigest
 	}
@@ -411,6 +427,44 @@ func (w *worker) runTask(msg []byte) *pb.ExecuteResponse {
 		}
 	}
 	return w.execute(req, action, command)
+}
+
+// extendAckDeadline continuously extends the ack deadline of a message until the
+// supplied context expires.
+func (w *worker) extendAckDeadline(ctx context.Context, msg *pubsub.Message) {
+	var rm *pspb.ReceivedMessage
+	if !msg.As(&rm) {
+		log.Warning("Failed to convert message to a *ReceivedMessage, cannot extend ack deadline")
+		return
+	}
+	var client *psraw.SubscriberClient
+	if !w.requests.As(&client) {
+		log.Warning("Failed to convert subscription to a *SubscriberClient, cannot extend ack deadline")
+		return
+	}
+	t := time.NewTicker(w.ackExtension / 2) // Extend twice as frequently as the deadline expiry
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			w.extendAckDeadlineOnce(ctx, client, rm.AckId)
+		}
+	}
+}
+
+// extendAckDeadlineOnce extends the message's ack deadline one time.
+func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.SubscriberClient, ackId string) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if err := client.ModifyAckDeadline(ctx, &pspb.ModifyAckDeadlineRequest{
+		Subscription:       w.ackExtensionSub,
+		AckIds:             []string{ackId},
+		AckDeadlineSeconds: int32(w.ackExtension.Seconds()),
+	}); err != nil {
+		log.Warning("Failed to extend ack deadline for %s: %s", w.actionDigest.Hash, err)
+	}
 }
 
 // readRequest unmarshals the original execution request.

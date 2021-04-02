@@ -6,9 +6,11 @@
 //
 // The max batch size is also reduced to one.
 //
+// It registers for the scheme gcprpubsub.
+//
 // As
 //
-// gcppubsub exposes the following types for As:
+// gcprpubsub exposes the following types for As:
 //  - Topic: *raw.PublisherClient
 //  - Subscription: *raw.SubscriberClient
 //  - Message.BeforeSend: *pb.PubsubMessage
@@ -136,14 +138,14 @@ func (o *lazyCredsOpener) OpenSubscriptionURL(ctx context.Context, u *url.URL) (
 	return opener.OpenSubscriptionURL(ctx, u)
 }
 
-// Scheme is the URL scheme gcppubsub registers its URLOpeners under on pubsub.DefaultMux.
-const Scheme = "gcppubsub"
+// Scheme is the URL scheme gcprpubsub registers its URLOpeners under on pubsub.DefaultMux.
+const Scheme = "gcprpubsub"
 
-// URLOpener opens GCP Pub/Sub URLs like "gcppubsub://projects/myproject/topics/mytopic" for
-// topics or "gcppubsub://projects/myproject/subscriptions/mysub" for subscriptions.
+// URLOpener opens GCP Pub/Sub URLs like "gcprpubsub://projects/myproject/topics/mytopic" for
+// topics or "gcprpubsub://projects/myproject/subscriptions/mysub" for subscriptions.
 //
-// The shortened forms "gcppubsub://myproject/mytopic" for topics or
-// "gcppubsub://myproject/mysub" for subscriptions are also supported.
+// The shortened forms "gcprpubsub://myproject/mytopic" for topics or
+// "gcprpubsub://myproject/mysub" for subscriptions are also supported.
 //
 // No URL parameters are supported.
 type URLOpener struct {
