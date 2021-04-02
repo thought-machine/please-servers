@@ -33,14 +33,13 @@ import (
 	"github.com/google/wire"
 	"gocloud.dev/gcerrors"
 	"gocloud.dev/gcp"
-	"gocloud.dev/internal/gcerr"
-	"gocloud.dev/internal/useragent"
 	"gocloud.dev/pubsub"
 	"gocloud.dev/pubsub/batcher"
 	"gocloud.dev/pubsub/driver"
 	"google.golang.org/api/option"
 	pb "google.golang.org/genproto/googleapis/pubsub/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/status"
@@ -213,7 +212,7 @@ func Dial(ctx context.Context, ts gcp.TokenSource) (*grpc.ClientConn, func(), er
 		// to 10MB.
 		// https://github.com/googleapis/google-cloud-node/issues/1991
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*10)),
-		useragent.GRPCDialOption("pubsub"),
+		GRPCDialOption("pubsub"),
 	)
 
 	if err != nil {
@@ -224,7 +223,7 @@ func Dial(ctx context.Context, ts gcp.TokenSource) (*grpc.ClientConn, func(), er
 
 // dialEmulator opens a gRPC connection to the GCP Pub Sub API.
 func dialEmulator(ctx context.Context, e string) (*grpc.ClientConn, error) {
-	conn, err := grpc.DialContext(ctx, e, grpc.WithInsecure(), useragent.GRPCDialOption("pubsub"))
+	conn, err := grpc.DialContext(ctx, e, grpc.WithInsecure(), GRPCDialOption("pubsub"))
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +331,7 @@ func errorAs(err error, i interface{}) bool {
 }
 
 func (*topic) ErrorCode(err error) gcerrors.ErrorCode {
-	return gcerr.GRPCCode(err)
+	return GRPCCode(err)
 }
 
 // Close implements driver.Topic.Close.
@@ -475,8 +474,50 @@ func (*subscription) ErrorAs(err error, i interface{}) bool {
 }
 
 func (*subscription) ErrorCode(err error) gcerrors.ErrorCode {
-	return gcerr.GRPCCode(err)
+	return GRPCCode(err)
 }
 
 // Close implements driver.Subscription.Close.
 func (*subscription) Close() error { return nil }
+
+// The following two functions are copied from internal gocloud packages.
+
+// GRPCDialOption returns a grpc.DialOption that sets a Go CDK User-Agent.
+func GRPCDialOption(api string) grpc.DialOption {
+	return grpc.WithUserAgent(userAgentString(api))
+}
+
+func userAgentString(api string) string {
+	const prefix = "go-cloud"
+	const version = "0.1.0"
+	return fmt.Sprintf("%s/%s/%s", prefix, api, version)
+}
+
+// GRPCCode extracts the gRPC status code and converts it into an ErrorCode.
+// It returns Unknown if the error isn't from gRPC.
+func GRPCCode(err error) gcerrors.ErrorCode {
+	switch status.Code(err) {
+	case codes.NotFound:
+		return gcerrors.NotFound
+	case codes.AlreadyExists:
+		return gcerrors.AlreadyExists
+	case codes.InvalidArgument:
+		return gcerrors.InvalidArgument
+	case codes.Internal:
+		return gcerrors.Internal
+	case codes.Unimplemented:
+		return gcerrors.Unimplemented
+	case codes.FailedPrecondition:
+		return gcerrors.FailedPrecondition
+	case codes.PermissionDenied:
+		return gcerrors.PermissionDenied
+	case codes.ResourceExhausted:
+		return gcerrors.ResourceExhausted
+	case codes.Canceled:
+		return gcerrors.Canceled
+	case codes.DeadlineExceeded:
+		return gcerrors.DeadlineExceeded
+	default:
+		return gcerrors.Unknown
+	}
+}

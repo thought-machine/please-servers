@@ -3,6 +3,7 @@ module github.com/thought-machine/please-servers
 go 1.16
 
 require (
+	cloud.google.com/go/pubsub v1.3.1 // indirect
 	cloud.google.com/go/storage v1.10.0 // indirect
 	github.com/Workiva/go-datastructures v1.0.52 // indirect
 	github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c
@@ -17,6 +18,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
+	github.com/google/wire v0.4.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
