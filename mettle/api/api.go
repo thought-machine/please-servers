@@ -252,7 +252,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 	j, present := s.jobs[digest.Hash]
 	if !present && !create {
 		return nil
-	} else if !present || !j.Successful() {
+	} else if !present || (!j.Successful() && create) {
 		any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 			Stage:        pb.ExecutionStage_QUEUED,
 			ActionDigest: digest,

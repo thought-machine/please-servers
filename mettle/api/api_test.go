@@ -58,6 +58,35 @@ func TestTwiceFlaky(t *testing.T) {
 	runExecution(t, client, ex, flakyHash, 0)
 }
 
+func TestExecuteAndWait(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+
+	const hash = uncachedHash
+	stream1, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: &pb.Digest{Hash: hash},
+	})
+	assert.NoError(t, err)
+	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
+
+	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
+		Name: op.Name,
+	})
+	assert.NoError(t, err)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_QUEUED)
+
+	assert.Equal(t, hash, ex.Receive().Hash)
+
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_EXECUTING)
+
+	ex.Finish(&pb.Digest{Hash: hash})
+	op1 := receiveUpdate(t, stream1, hash, pb.ExecutionStage_COMPLETED)
+	op2 := receiveUpdate(t, stream2, hash, pb.ExecutionStage_COMPLETED)
+	checkExitCode(t, op1, 0)
+	checkExitCode(t, op2, 0)
+}
+
 func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash string, expectedExitCode int) {
 	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
 		ActionDigest: &pb.Digest{Hash: hash},
@@ -69,11 +98,7 @@ func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash st
 	receiveUpdate(t, stream, hash, pb.ExecutionStage_EXECUTING)
 	ex.Finish(&pb.Digest{Hash: hash})
 	op := receiveUpdate(t, stream, hash, pb.ExecutionStage_COMPLETED)
-	response := &pb.ExecuteResponse{}
-	err = ptypes.UnmarshalAny(op.GetResponse(), response)
-	assert.NoError(t, err)
-	assert.NotNil(t, response.Result)
-	assert.EqualValues(t, expectedExitCode, response.Result.ExitCode)
+	checkExitCode(t, op, expectedExitCode)
 }
 
 func receiveUpdate(t *testing.T, stream pb.Execution_ExecuteClient, expectedHash string, expectedStage pb.ExecutionStage_Value) *longrunning.Operation {
@@ -83,6 +108,14 @@ func receiveUpdate(t *testing.T, stream pb.Execution_ExecuteClient, expectedHash
 	assert.Equal(t, expectedHash, metadata.ActionDigest.Hash)
 	log.Debug("Received (hopefully) %s update", expectedStage)
 	return op
+}
+
+func checkExitCode(t *testing.T, op *longrunning.Operation, expectedExitCode int) {
+	response := &pb.ExecuteResponse{}
+	err := ptypes.UnmarshalAny(op.GetResponse(), response)
+	assert.NoError(t, err)
+	assert.NotNil(t, response.Result)
+	assert.EqualValues(t, expectedExitCode, response.Result.ExitCode)
 }
 
 func TestWaitExecution(t *testing.T) {
