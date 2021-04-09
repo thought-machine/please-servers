@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -22,99 +23,185 @@ import (
 const (
 	uncachedHash = "1234"
 	failedHash   = "3456"
+	flakyHash    = "5678"
+)
+
+var (
+	flakyFail = true // determines whether flakyHash passes or fails
+	queueID   = 1    // id of queues created in the next call to setupServers
 )
 
 func TestUncached(t *testing.T) {
-	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
+	client, ex, s := setupServers(t)
 	defer s.Stop()
-
-	digest := &pb.Digest{Hash: uncachedHash}
-	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
-		ActionDigest: digest,
-	})
-	assert.NoError(t, err)
-
-	_, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	assert.Equal(t, digest.Hash, ex.Receive().Hash)
-
-	_, metadata = recv(stream)
-	assert.Equal(t, pb.ExecutionStage_EXECUTING, metadata.Stage)
-	assert.EqualValues(t, digest.Hash, metadata.ActionDigest.Hash)
-
-	ex.Finish(digest)
-	op, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_COMPLETED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	response := &pb.ExecuteResponse{}
-	err = ptypes.UnmarshalAny(op.GetResponse(), response)
-	assert.NoError(t, err)
-	assert.NotNil(t, response.Result)
-	assert.EqualValues(t, 0, response.Result.ExitCode)
+	runExecution(t, client, ex, uncachedHash, 0)
 }
 
-func TestWaitExecution(t *testing.T) {
-	// TODO(peterebden): We should really be using omem:// but the semantics are in some way different
-	//                   that this test fails. I suspect this is a sign of some bad assumption here
-	//                   (it tends to be more immediate then mem since it doesn't have the 250ms cooldown
-	//                   thing and instead just blocks for arbitrary periods of time).
-	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
+func TestFlaky(t *testing.T) {
+	client, ex, s := setupServers(t)
 	defer s.Stop()
 
-	digest := &pb.Digest{Hash: uncachedHash}
-	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
-		ActionDigest: digest,
+	flakyFail = true
+	runExecution(t, client, ex, flakyHash, 1)
+	flakyFail = false
+	runExecution(t, client, ex, flakyHash, 0)
+}
+
+func TestTwiceFlaky(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+
+	flakyFail = true
+	runExecution(t, client, ex, flakyHash, 1)
+	runExecution(t, client, ex, flakyHash, 1)
+	flakyFail = false
+	runExecution(t, client, ex, flakyHash, 0)
+}
+
+func TestExecuteAndWait(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+
+	const hash = uncachedHash
+	stream1, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
+	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
 
-	op, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	assert.Equal(t, digest.Hash, ex.Receive().Hash)
-
-	// Now dial it up with WaitExecution, we should get the responses back on that too.
 	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
 		Name: op.Name,
 	})
 	assert.NoError(t, err)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_QUEUED)
 
-	// We re-receive the QUEUED notification on this stream.
-	_, metadata = recv(stream2)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.EqualValues(t, digest.Hash, metadata.ActionDigest.Hash)
+	assert.Equal(t, hash, ex.Receive().Hash)
 
-	_, metadata = recv(stream2)
-	assert.Equal(t, pb.ExecutionStage_EXECUTING, metadata.Stage)
-	assert.EqualValues(t, digest.Hash, metadata.ActionDigest.Hash)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_EXECUTING)
 
-	ex.Finish(digest)
-	op, metadata = recv(stream2)
-	assert.Equal(t, pb.ExecutionStage_COMPLETED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	response := &pb.ExecuteResponse{}
-	err = ptypes.UnmarshalAny(op.GetResponse(), response)
-	assert.NoError(t, err)
-	assert.NotNil(t, response.Result)
-	assert.EqualValues(t, 0, response.Result.ExitCode)
+	ex.Finish(&pb.Digest{Hash: hash})
+	op1 := receiveUpdate(t, stream1, hash, pb.ExecutionStage_COMPLETED)
+	op2 := receiveUpdate(t, stream2, hash, pb.ExecutionStage_COMPLETED)
+	checkExitCode(t, op1, 0)
+	checkExitCode(t, op2, 0)
 }
 
-func setupServers(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
+func TestExecuteAndWaitTwice(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+
+	const hash = uncachedHash
+	stream1, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: &pb.Digest{Hash: hash},
+	})
+	assert.NoError(t, err)
+	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
+
+	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
+		Name: op.Name,
+	})
+	assert.NoError(t, err)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_QUEUED)
+
+	stream3, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
+		Name: op.Name,
+	})
+	assert.NoError(t, err)
+	receiveUpdate(t, stream3, hash, pb.ExecutionStage_QUEUED)
+
+	assert.Equal(t, hash, ex.Receive().Hash)
+
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_EXECUTING)
+	receiveUpdate(t, stream3, hash, pb.ExecutionStage_EXECUTING)
+
+	ex.Finish(&pb.Digest{Hash: hash})
+	op1 := receiveUpdate(t, stream1, hash, pb.ExecutionStage_COMPLETED)
+	op2 := receiveUpdate(t, stream2, hash, pb.ExecutionStage_COMPLETED)
+	op3 := receiveUpdate(t, stream3, hash, pb.ExecutionStage_COMPLETED)
+	checkExitCode(t, op1, 0)
+	checkExitCode(t, op2, 0)
+	checkExitCode(t, op3, 0)
+}
+
+func TestExecuteAndWaitLater(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+
+	const hash = uncachedHash
+	stream1, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: &pb.Digest{Hash: hash},
+	})
+	assert.NoError(t, err)
+	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
+
+	assert.Equal(t, hash, ex.Receive().Hash)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
+
+	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
+		Name: op.Name,
+	})
+	assert.NoError(t, err)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_EXECUTING)
+
+	ex.Finish(&pb.Digest{Hash: hash})
+	op1 := receiveUpdate(t, stream1, hash, pb.ExecutionStage_COMPLETED)
+	op2 := receiveUpdate(t, stream2, hash, pb.ExecutionStage_COMPLETED)
+	checkExitCode(t, op1, 0)
+	checkExitCode(t, op2, 0)
+}
+
+func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash string, expectedExitCode int) {
+	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: &pb.Digest{Hash: hash},
+	})
+	assert.NoError(t, err)
+
+	receiveUpdate(t, stream, hash, pb.ExecutionStage_QUEUED)
+	assert.Equal(t, hash, ex.Receive().Hash)
+	receiveUpdate(t, stream, hash, pb.ExecutionStage_EXECUTING)
+	ex.Finish(&pb.Digest{Hash: hash})
+	op := receiveUpdate(t, stream, hash, pb.ExecutionStage_COMPLETED)
+	checkExitCode(t, op, expectedExitCode)
+}
+
+func receiveUpdate(t *testing.T, stream pb.Execution_ExecuteClient, expectedHash string, expectedStage pb.ExecutionStage_Value) *longrunning.Operation {
+	log.Debug("Waiting for %s update...", expectedStage)
+	op, metadata := recv(stream)
+	assert.Equal(t, expectedStage, metadata.Stage)
+	assert.Equal(t, expectedHash, metadata.ActionDigest.Hash)
+	log.Debug("Received (hopefully) %s update", expectedStage)
+	return op
+}
+
+func checkExitCode(t *testing.T, op *longrunning.Operation, expectedExitCode int) {
+	response := &pb.ExecuteResponse{}
+	err := ptypes.UnmarshalAny(op.GetResponse(), response)
+	assert.NoError(t, err)
+	assert.NotNil(t, response.Result)
+	assert.EqualValues(t, expectedExitCode, response.Result.ExitCode)
+}
+
+func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
+	requests := fmt.Sprintf("omem://requests%d", queueID)
+	responses := fmt.Sprintf("omem://responses%d", queueID)
+	queueID++
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
-		Port: port,
+		Port: 0,
 	}, "", requests, responses, responses, "", true)
 	require.NoError(t, err)
 	go s.Serve(lis)
-	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
 }
 
 func TestGetExecutions(t *testing.T) {
-	port := 9999
+	port := 9990
 	opts := grpcutil.Opts{
 		Host:      "127.0.0.1",
 		Port:      port,
@@ -129,7 +216,7 @@ func TestGetExecutions(t *testing.T) {
 	bpb.RegisterBootstrapServer(s, srv)
 	go s.Serve(lis)
 
-	jobs, err := getExecutions(opts, "127.0.0.1:9999", false)
+	jobs, err := getExecutions(opts, "127.0.0.1:9990", false)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
@@ -197,6 +284,7 @@ func (ex *executor) Receive() *pb.Digest {
 		Metadata: metadata,
 	})
 	ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
+	msg.Ack()
 	return req.ActionDigest
 }
 
@@ -206,7 +294,7 @@ func (ex *executor) Finish(digest *pb.Digest) {
 		Stage:        pb.ExecutionStage_COMPLETED,
 		ActionDigest: digest,
 	})
-	if digest.Hash == failedHash {
+	if digest.Hash == failedHash || (digest.Hash == flakyHash && flakyFail) {
 		response, _ := ptypes.MarshalAny(&pb.ExecuteResponse{
 			Result: &pb.ActionResult{
 				ExitCode: 1,
@@ -231,4 +319,9 @@ func (ex *executor) Finish(digest *pb.Digest) {
 		})
 		ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
 	}
+}
+
+func TestMain(m *testing.M) {
+	grpcutil.Silence()
+	os.Exit(m.Run())
 }

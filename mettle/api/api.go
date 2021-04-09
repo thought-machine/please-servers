@@ -250,10 +250,9 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	j, present := s.jobs[digest.Hash]
-	if !present {
-		if !create {
-			return nil
-		}
+	if !present && !create {
+		return nil
+	} else if !present || (!j.Successful() && create) {
 		any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 			Stage:        pb.ExecutionStage_QUEUED,
 			ActionDigest: digest,
@@ -263,6 +262,8 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 		log.Debug("Created job for %s", digest.Hash)
 		totalRequests.Inc()
 		currentRequests.Inc()
+	} else {
+		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	j.Streams = append(j.Streams, ch)
@@ -330,13 +331,8 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 	}
 	if log.IsEnabledFor(logging.DEBUG) {
-		switch result := op.Result.(type) {
-		case *longrunning.Operation_Response:
-			response := &pb.ExecuteResponse{}
-			if err := ptypes.UnmarshalAny(result.Response, response); err == nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
-				log.Debug("Got a failed update for %s: %s", metadata.ActionDigest.Hash, response.Status.Message)
-			}
-		case *longrunning.Operation_Error:
+		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
+			log.Debug("Got a failed update for %s: %s", metadata.ActionDigest.Hash, response.Status.Message)
 		}
 	}
 	worker := common.WorkerName(msg)
@@ -394,4 +390,26 @@ type job struct {
 	Current   *longrunning.Operation
 	SentFirst bool
 	Done      bool
+}
+
+// Successful returns true if this job represents a successfully completed execution
+func (j *job) Successful() bool {
+	if !j.Done || j.Current == nil {
+		return false
+	}
+	resp := unmarshalResponse(j.Current)
+	return resp != nil && resp.Result != nil && resp.Result.ExitCode == 0
+}
+
+// unmarshalResponse retrieves the REAPI ExecuteResponse from a longrunning.Operation if it exists.
+func unmarshalResponse(op *longrunning.Operation) *pb.ExecuteResponse {
+	if result, ok := op.Result.(*longrunning.Operation_Response); ok {
+		response := &pb.ExecuteResponse{}
+		if err := ptypes.UnmarshalAny(result.Response, response); err != nil {
+			log.Warning("Failed to unmarshal response: %s", err)
+			return nil
+		}
+		return response
+	}
+	return nil
 }
