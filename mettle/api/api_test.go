@@ -32,13 +32,13 @@ var (
 )
 
 func TestUncached(t *testing.T) {
-	client, ex, s := setupServers(t, 9996)
+	client, ex, s := setupServers(t)
 	defer s.Stop()
 	runExecution(t, client, ex, uncachedHash, 0)
 }
 
 func TestFlaky(t *testing.T) {
-	client, ex, s := setupServers(t, 9996)
+	client, ex, s := setupServers(t)
 	defer s.Stop()
 
 	flakyFail = true
@@ -48,7 +48,7 @@ func TestFlaky(t *testing.T) {
 }
 
 func TestTwiceFlaky(t *testing.T) {
-	client, ex, s := setupServers(t, 9996)
+	client, ex, s := setupServers(t)
 	defer s.Stop()
 
 	flakyFail = true
@@ -90,7 +90,7 @@ func TestWaitExecution(t *testing.T) {
 	//                   that this test fails. I suspect this is a sign of some bad assumption here
 	//                   (it tends to be more immediate then mem since it doesn't have the 250ms cooldown
 	//                   thing and instead just blocks for arbitrary periods of time).
-	client, ex, s := setupServersWithQueues(t, 9999, "mem://requests0", "mem://responses0")
+	client, ex, s := setupServersWithQueues(t, "mem://requests0", "mem://responses0")
 	defer s.Stop()
 
 	digest := &pb.Digest{Hash: uncachedHash}
@@ -130,29 +130,29 @@ func TestWaitExecution(t *testing.T) {
 	assert.EqualValues(t, 0, response.Result.ExitCode)
 }
 
-func setupServers(t *testing.T, port int) (pb.ExecutionClient, *executor, *grpc.Server) {
+func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	requests := fmt.Sprintf("omem://requests%d", queueID)
 	responses := fmt.Sprintf("omem://responses%d", queueID)
 	queueID++
-	return setupServersWithQueues(t, port, requests, responses)
+	return setupServersWithQueues(t, requests, responses)
 }
 
-func setupServersWithQueues(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
+func setupServersWithQueues(t *testing.T, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
-		Port: port,
+		Port: 0,
 	}, "", requests, responses, responses, "", true)
 	require.NoError(t, err)
 	go s.Serve(lis)
-	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
 }
 
 func TestGetExecutions(t *testing.T) {
-	port := 9999
+	port := 9990
 	opts := grpcutil.Opts{
 		Host:      "127.0.0.1",
 		Port:      port,
@@ -167,7 +167,7 @@ func TestGetExecutions(t *testing.T) {
 	bpb.RegisterBootstrapServer(s, srv)
 	go s.Serve(lis)
 
-	jobs, err := getExecutions(opts, "127.0.0.1:9999", false)
+	jobs, err := getExecutions(opts, "127.0.0.1:9990", false)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(jobs))
 	assert.Equal(t, "Unfinished Operation", jobs["1234"].Current.Name)
