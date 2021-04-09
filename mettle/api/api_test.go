@@ -22,36 +22,53 @@ import (
 const (
 	uncachedHash = "1234"
 	failedHash   = "3456"
+	flakyHash    = "5678"
+)
+
+var (
+	flakyFail = true // determines whether flakyHash passes or fails
 )
 
 func TestUncached(t *testing.T) {
 	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
 	defer s.Stop()
+	runExecution(t, client, ex, uncachedHash, 0)
+}
 
-	digest := &pb.Digest{Hash: uncachedHash}
+func TestFlaky(t *testing.T) {
+	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
+	defer s.Stop()
+
+	flakyFail = true
+	runExecution(t, client, ex, flakyHash, 1)
+	flakyFail = false
+	runExecution(t, client, ex, flakyHash, 0)
+}
+
+func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash string, expectedExitCode int) {
 	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
-		ActionDigest: digest,
+		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
 
 	_, metadata := recv(stream)
 	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	assert.Equal(t, digest.Hash, ex.Receive().Hash)
+	assert.Equal(t, hash, metadata.ActionDigest.Hash)
+	assert.Equal(t, hash, ex.Receive().Hash)
 
 	_, metadata = recv(stream)
 	assert.Equal(t, pb.ExecutionStage_EXECUTING, metadata.Stage)
-	assert.EqualValues(t, digest.Hash, metadata.ActionDigest.Hash)
+	assert.EqualValues(t, hash, metadata.ActionDigest.Hash)
 
-	ex.Finish(digest)
+	ex.Finish(&pb.Digest{Hash: hash})
 	op, metadata := recv(stream)
 	assert.Equal(t, pb.ExecutionStage_COMPLETED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
+	assert.Equal(t, hash, metadata.ActionDigest.Hash)
 	response := &pb.ExecuteResponse{}
 	err = ptypes.UnmarshalAny(op.GetResponse(), response)
 	assert.NoError(t, err)
 	assert.NotNil(t, response.Result)
-	assert.EqualValues(t, 0, response.Result.ExitCode)
+	assert.EqualValues(t, expectedExitCode, response.Result.ExitCode)
 }
 
 func TestWaitExecution(t *testing.T) {
@@ -206,7 +223,7 @@ func (ex *executor) Finish(digest *pb.Digest) {
 		Stage:        pb.ExecutionStage_COMPLETED,
 		ActionDigest: digest,
 	})
-	if digest.Hash == failedHash {
+	if digest.Hash == failedHash || (digest.Hash == flakyHash && flakyFail) {
 		response, _ := ptypes.MarshalAny(&pb.ExecuteResponse{
 			Result: &pb.ActionResult{
 				ExitCode: 1,
@@ -219,6 +236,7 @@ func (ex *executor) Finish(digest *pb.Digest) {
 			Result:   &longrunning.Operation_Response{Response: response},
 		})
 		ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
+		flakyFail = !flakyFail
 	} else {
 		response, _ := ptypes.MarshalAny(&pb.ExecuteResponse{
 			Result: &pb.ActionResult{},
