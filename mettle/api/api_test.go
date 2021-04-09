@@ -58,42 +58,31 @@ func TestTwiceFlaky(t *testing.T) {
 	runExecution(t, client, ex, flakyHash, 0)
 }
 
-func TestRunAndResume(t *testing.T) {
-	client, ex, s := setupServers(t, 9996)
-	defer s.Stop()
-
-	flakyFail = true
-	runExecution(t, client, ex, flakyHash, 1)
-	runExecution(t, client, ex, flakyHash, 1)
-	flakyFail = false
-	runExecution(t, client, ex, flakyHash, 0)
-}
-
 func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash string, expectedExitCode int) {
 	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
 		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
 
-	receiveUpdate := func(expectedStage pb.ExecutionStage_Value) *longrunning.Operation {
-		log.Debug("Waiting for %s update...", expectedStage)
-		op, metadata := recv(stream)
-		assert.Equal(t, expectedStage, metadata.Stage)
-		assert.Equal(t, hash, metadata.ActionDigest.Hash)
-		log.Debug("Received (hopefully) %s update", expectedStage)
-		return op
-	}
-
-	receiveUpdate(pb.ExecutionStage_QUEUED)
+	receiveUpdate(t, stream, hash, pb.ExecutionStage_QUEUED)
 	assert.Equal(t, hash, ex.Receive().Hash)
-	receiveUpdate(pb.ExecutionStage_EXECUTING)
+	receiveUpdate(t, stream, hash, pb.ExecutionStage_EXECUTING)
 	ex.Finish(&pb.Digest{Hash: hash})
-	op := receiveUpdate(pb.ExecutionStage_COMPLETED)
+	op := receiveUpdate(t, stream, hash, pb.ExecutionStage_COMPLETED)
 	response := &pb.ExecuteResponse{}
 	err = ptypes.UnmarshalAny(op.GetResponse(), response)
 	assert.NoError(t, err)
 	assert.NotNil(t, response.Result)
 	assert.EqualValues(t, expectedExitCode, response.Result.ExitCode)
+}
+
+func receiveUpdate(t *testing.T, stream pb.Execution_ExecuteClient, expectedHash string, expectedStage pb.ExecutionStage_Value) *longrunning.Operation {
+	log.Debug("Waiting for %s update...", expectedStage)
+	op, metadata := recv(stream)
+	assert.Equal(t, expectedStage, metadata.Stage)
+	assert.Equal(t, expectedHash, metadata.ActionDigest.Hash)
+	log.Debug("Received (hopefully) %s update", expectedStage)
+	return op
 }
 
 func TestWaitExecution(t *testing.T) {
