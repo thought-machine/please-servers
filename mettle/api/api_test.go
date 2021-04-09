@@ -28,19 +28,42 @@ const (
 
 var (
 	flakyFail = true // determines whether flakyHash passes or fails
+	queueID   = 1    // id of queues created in the next call to setupServers
 )
 
 func TestUncached(t *testing.T) {
-	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
+	client, ex, s := setupServers(t, 9996)
 	defer s.Stop()
 	runExecution(t, client, ex, uncachedHash, 0)
 }
 
 func TestFlaky(t *testing.T) {
-	client, ex, s := setupServers(t, 9996, "omem://requests2", "omem://responses2")
+	client, ex, s := setupServers(t, 9996)
 	defer s.Stop()
 
 	flakyFail = true
+	runExecution(t, client, ex, flakyHash, 1)
+	flakyFail = false
+	runExecution(t, client, ex, flakyHash, 0)
+}
+
+func TestTwiceFlaky(t *testing.T) {
+	client, ex, s := setupServers(t, 9996)
+	defer s.Stop()
+
+	flakyFail = true
+	runExecution(t, client, ex, flakyHash, 1)
+	runExecution(t, client, ex, flakyHash, 1)
+	flakyFail = false
+	runExecution(t, client, ex, flakyHash, 0)
+}
+
+func TestRunAndResume(t *testing.T) {
+	client, ex, s := setupServers(t, 9996)
+	defer s.Stop()
+
+	flakyFail = true
+	runExecution(t, client, ex, flakyHash, 1)
 	runExecution(t, client, ex, flakyHash, 1)
 	flakyFail = false
 	runExecution(t, client, ex, flakyHash, 0)
@@ -78,7 +101,7 @@ func TestWaitExecution(t *testing.T) {
 	//                   that this test fails. I suspect this is a sign of some bad assumption here
 	//                   (it tends to be more immediate then mem since it doesn't have the 250ms cooldown
 	//                   thing and instead just blocks for arbitrary periods of time).
-	client, ex, s := setupServers(t, 9999, "mem://requests3", "mem://responses3")
+	client, ex, s := setupServersWithQueues(t, 9999, "mem://requests0", "mem://responses0")
 	defer s.Stop()
 
 	digest := &pb.Digest{Hash: uncachedHash}
@@ -118,7 +141,14 @@ func TestWaitExecution(t *testing.T) {
 	assert.EqualValues(t, 0, response.Result.ExitCode)
 }
 
-func setupServers(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
+func setupServers(t *testing.T, port int) (pb.ExecutionClient, *executor, *grpc.Server) {
+	requests := fmt.Sprintf("omem://requests%d", queueID)
+	responses := fmt.Sprintf("omem://responses%d", queueID)
+	queueID++
+	return setupServersWithQueues(t, port, requests, responses)
+}
+
+func setupServersWithQueues(t *testing.T, port int, requests, responses string) (pb.ExecutionClient, *executor, *grpc.Server) {
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
 	s, lis, err := serve(grpcutil.Opts{
@@ -239,7 +269,6 @@ func (ex *executor) Finish(digest *pb.Digest) {
 			Result:   &longrunning.Operation_Response{Response: response},
 		})
 		ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
-		flakyFail = !flakyFail
 	} else {
 		response, _ := ptypes.MarshalAny(&pb.ExecuteResponse{
 			Result: &pb.ActionResult{},
