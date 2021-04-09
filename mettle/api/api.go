@@ -403,8 +403,7 @@ func (j *job) Successful() bool {
 
 // unmarshalResponse retrieves the REAPI ExecuteResponse from a longrunning.Operation if it exists.
 func unmarshalResponse(op *longrunning.Operation) *pb.ExecuteResponse {
-	switch result := op.Result.(type) {
-	case *longrunning.Operation_Response:
+	if result, ok := op.Result.(*longrunning.Operation_Response); ok {
 		response := &pb.ExecuteResponse{}
 		if err := ptypes.UnmarshalAny(result.Response, response); err != nil {
 			log.Warning("Failed to unmarshal response: %s", err)
