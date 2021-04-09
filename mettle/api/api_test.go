@@ -118,51 +118,6 @@ func checkExitCode(t *testing.T, op *longrunning.Operation, expectedExitCode int
 	assert.EqualValues(t, expectedExitCode, response.Result.ExitCode)
 }
 
-func TestWaitExecution(t *testing.T) {
-	// TODO(peterebden): We should really be using omem:// but the semantics are in some way different
-	//                   that this test fails. I suspect this is a sign of some bad assumption here
-	//                   (it tends to be more immediate then mem since it doesn't have the 250ms cooldown
-	//                   thing and instead just blocks for arbitrary periods of time).
-	client, ex, s := setupServersWithQueues(t, "mem://requests0", "mem://responses0")
-	defer s.Stop()
-
-	digest := &pb.Digest{Hash: uncachedHash}
-	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
-		ActionDigest: digest,
-	})
-	assert.NoError(t, err)
-
-	op, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	assert.Equal(t, digest.Hash, ex.Receive().Hash)
-
-	// Now dial it up with WaitExecution, we should get the responses back on that too.
-	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
-		Name: op.Name,
-	})
-	assert.NoError(t, err)
-
-	// We re-receive the QUEUED notification on this stream.
-	_, metadata = recv(stream2)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.EqualValues(t, digest.Hash, metadata.ActionDigest.Hash)
-
-	_, metadata = recv(stream2)
-	assert.Equal(t, pb.ExecutionStage_EXECUTING, metadata.Stage)
-	assert.EqualValues(t, digest.Hash, metadata.ActionDigest.Hash)
-
-	ex.Finish(digest)
-	op, metadata = recv(stream2)
-	assert.Equal(t, pb.ExecutionStage_COMPLETED, metadata.Stage)
-	assert.Equal(t, digest.Hash, metadata.ActionDigest.Hash)
-	response := &pb.ExecuteResponse{}
-	err = ptypes.UnmarshalAny(op.GetResponse(), response)
-	assert.NoError(t, err)
-	assert.NotNil(t, response.Result)
-	assert.EqualValues(t, 0, response.Result.ExitCode)
-}
-
 func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	requests := fmt.Sprintf("omem://requests%d", queueID)
 	responses := fmt.Sprintf("omem://responses%d", queueID)
