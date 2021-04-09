@@ -125,6 +125,33 @@ func TestExecuteAndWaitTwice(t *testing.T) {
 	checkExitCode(t, op3, 0)
 }
 
+func TestExecuteAndWaitLater(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+
+	const hash = uncachedHash
+	stream1, err := client.Execute(context.Background(), &pb.ExecuteRequest{
+		ActionDigest: &pb.Digest{Hash: hash},
+	})
+	assert.NoError(t, err)
+	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
+
+	assert.Equal(t, hash, ex.Receive().Hash)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
+
+	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
+		Name: op.Name,
+	})
+	assert.NoError(t, err)
+	receiveUpdate(t, stream2, hash, pb.ExecutionStage_EXECUTING)
+
+	ex.Finish(&pb.Digest{Hash: hash})
+	op1 := receiveUpdate(t, stream1, hash, pb.ExecutionStage_COMPLETED)
+	op2 := receiveUpdate(t, stream2, hash, pb.ExecutionStage_COMPLETED)
+	checkExitCode(t, op1, 0)
+	checkExitCode(t, op2, 0)
+}
+
 func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash string, expectedExitCode int) {
 	stream, err := client.Execute(context.Background(), &pb.ExecuteRequest{
 		ActionDigest: &pb.Digest{Hash: hash},
