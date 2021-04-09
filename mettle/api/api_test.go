@@ -216,6 +216,7 @@ func (ex *executor) Receive() *pb.Digest {
 		Metadata: metadata,
 	})
 	ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
+	msg.Ack()
 	return req.ActionDigest
 }
 
