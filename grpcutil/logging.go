@@ -63,6 +63,11 @@ func init() {
 	grpclog.SetLoggerV2(&grpcLogMabob{})
 }
 
+// Silence quietens logging from gRPC.
+func Silence() {
+	logging.SetLevel(logging.WARNING, "grpcutil")
+}
+
 // LogUnaryRequests is a gRPC interceptor that logs outcomes of unary requests.
 func LogUnaryRequests(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	start := time.Now()

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -36,7 +37,7 @@ func TestUncached(t *testing.T) {
 }
 
 func TestFlaky(t *testing.T) {
-	client, ex, s := setupServers(t, 9996, "omem://requests1", "omem://responses1")
+	client, ex, s := setupServers(t, 9996, "omem://requests2", "omem://responses2")
 	defer s.Stop()
 
 	flakyFail = true
@@ -51,19 +52,20 @@ func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash st
 	})
 	assert.NoError(t, err)
 
-	_, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_QUEUED, metadata.Stage)
-	assert.Equal(t, hash, metadata.ActionDigest.Hash)
+	receiveUpdate := func(expectedStage pb.ExecutionStage_Value) *longrunning.Operation {
+		log.Debug("Waiting for %s update...", expectedStage)
+		op, metadata := recv(stream)
+		assert.Equal(t, expectedStage, metadata.Stage)
+		assert.Equal(t, hash, metadata.ActionDigest.Hash)
+		log.Debug("Received (hopefully) %s update", expectedStage)
+		return op
+	}
+
+	receiveUpdate(pb.ExecutionStage_QUEUED)
 	assert.Equal(t, hash, ex.Receive().Hash)
-
-	_, metadata = recv(stream)
-	assert.Equal(t, pb.ExecutionStage_EXECUTING, metadata.Stage)
-	assert.EqualValues(t, hash, metadata.ActionDigest.Hash)
-
+	receiveUpdate(pb.ExecutionStage_EXECUTING)
 	ex.Finish(&pb.Digest{Hash: hash})
-	op, metadata := recv(stream)
-	assert.Equal(t, pb.ExecutionStage_COMPLETED, metadata.Stage)
-	assert.Equal(t, hash, metadata.ActionDigest.Hash)
+	op := receiveUpdate(pb.ExecutionStage_COMPLETED)
 	response := &pb.ExecuteResponse{}
 	err = ptypes.UnmarshalAny(op.GetResponse(), response)
 	assert.NoError(t, err)
@@ -249,4 +251,9 @@ func (ex *executor) Finish(digest *pb.Digest) {
 		})
 		ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
 	}
+}
+
+func TestMain(m *testing.M) {
+	grpcutil.Silence()
+	os.Exit(m.Run())
 }
