@@ -21,7 +21,7 @@ import (
 var log = logging.MustGetLogger()
 
 type StorageOpts struct {
-	Storage   string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+	Storage   string `short:"s" long:"url" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 	TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	TokenFile string `long:"token_file" description:"File containing a pre-shared token to authenticate to storage server with."`
 }
@@ -42,7 +42,7 @@ var opts = struct {
 			URL string `long:"url" description:"URL for communicating with other API servers"`
 			TLS bool   `long:"tls" description:"Use TLS for communication between api servers"`
 		} `group:"Options controlling communication with other API servers for bootstrapping zero-downtime deployments." namespace:"api"`
-		Storage StorageOpts   `group:"Options controlling communication with the CAS server"`
+		Storage StorageOpts   `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		GRPC    grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues  struct {
 			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
@@ -66,7 +66,7 @@ var opts = struct {
 		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
 		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
 		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
-		Storage         StorageOpts             `group:"Options controlling communication with the CAS server"`
+		Storage         StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		Queues          struct {
 			RequestQueue  string         `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue string         `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
@@ -89,7 +89,7 @@ var opts = struct {
 		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
 		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
 		Storage         struct {
-			Storage []string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+			Storage []string `short:"s" long:"storage_url" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
 		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`

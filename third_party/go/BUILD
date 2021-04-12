@@ -30,7 +30,7 @@ go_module(
 go_module(
     name = "go-flags",
     module = "github.com/thought-machine/go-flags",
-    version = "v1.5.0",
+    version = "v1.5.1",
     deps = [
         ":unix",
     ],
