@@ -425,6 +425,8 @@ func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, er
 			return nil, status.Errorf(codes.InvalidArgument, "Unsupported platform property %s", prop.Name)
 		} else if !contains(allowed, prop.Value) {
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid platform property value %s, must be one of: %s", prop.Name, strings.Join(allowed, ", "))
+		} else {
+			log.Debug("Valid platform property %s: %s (from %s)", prop.Name, prop.Value, allowed)
 		}
 	}
 	return m, nil
