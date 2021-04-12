@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4"
 	"github.com/thought-machine/http-admin"
 )
 

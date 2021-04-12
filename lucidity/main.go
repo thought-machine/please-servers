@@ -4,7 +4,7 @@ package main
 import (
 	"time"
 
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4"
 
 	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"

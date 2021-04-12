@@ -375,6 +375,8 @@ github.com/peterebden/go-cli-init/v2 v2.0.1 h1:POBDqBYGT+5uys+dsDguVP2E2zxEQJgGu
 github.com/peterebden/go-cli-init/v2 v2.0.1/go.mod h1:wNaBFQ2a+rkWYSkHWKl6KV85sNANGYk78xAoqwhdkaQ=
 github.com/peterebden/go-cli-init/v3 v3.1.1 h1:v++Pw2h1AS6hPqe08cFBKmi7o//PpA5BXlgKSaO4npM=
 github.com/peterebden/go-cli-init/v3 v3.1.1/go.mod h1:E8DpXYHJznMKpoeY2KgmQapSXBZEWqQ/WAblwEG7RWo=
+github.com/peterebden/go-cli-init/v4 v4.0.1 h1:EeHkmZKZr6GmH2evhhrER/DpEZ3vbGm8dynaZBbLBSg=
+github.com/peterebden/go-cli-init/v4 v4.0.1/go.mod h1:/IxPVIqMNfdW6QXCapCvM5S87yqWC0v2r0zV60pzp28=
 github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c h1:nfjG02IJeP17A39l0R69McRe9pe0GL5qZcEjJLnSAT8=
 github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c/go.mod h1:HRIMlnGKKev+xk7cb/nfjbV0nuB2gcfTpRRRQBa6Tew=
 github.com/peterebden/go-sri v1.1.1 h1:KK8yZ5/NX8YzWUY9QvhrP220QsvEKANLLAgvw35AkyU=
