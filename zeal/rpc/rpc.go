@@ -22,7 +22,7 @@ import (
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/peterebden/go-cli-init/v4"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/peterebden/go-sri"
 	"github.com/prometheus/client_golang/prometheus"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -33,7 +33,7 @@ import (
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "zeal",

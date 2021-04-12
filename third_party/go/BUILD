@@ -249,6 +249,10 @@ go_module(
 
 go_module(
     name = "cli-init",
+    install = [
+        "flags",
+        "logging",
+    ],
     module = "github.com/peterebden/go-cli-init/v4",
     version = "v4.0.1",
     deps = [

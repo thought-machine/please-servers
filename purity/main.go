@@ -6,13 +6,13 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v4"
+	"github.com/peterebden/go-cli-init/v4/logging"
 
 	flags "github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 var opts = struct {
 	Usage   string

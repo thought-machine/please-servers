@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/peterebden/go-cli-init/v4"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	pb "github.com/thought-machine/please-servers/proto/lucidity"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 var liveWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",

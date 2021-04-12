@@ -17,7 +17,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/go-multierror"
-	"github.com/peterebden/go-cli-init/v4"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -25,7 +25,7 @@ import (
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 // We use eternity to indicate cases where we don't care about max blob age.
 const eternity = 1000000 * time.Hour

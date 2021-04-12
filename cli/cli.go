@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/peterebden/go-cli-init/v4"
+	"github.com/peterebden/go-cli-init/v4/flags"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/thought-machine/http-admin"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 var actionRe = regexp.MustCompile("([0-9a-fA-F]+)/([0-9]+)/?")
 var shortActionRe = regexp.MustCompile("([0-9a-fA-F]+)")
@@ -20,25 +21,25 @@ var currencyRe = regexp.MustCompile(`([A-Z]{3})([0-9]+(?:\.[0-9]+))`)
 
 // LoggingOpts are a common set of logging options that we use across the repo.
 type LoggingOpts struct {
-	Verbosity     cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
-	FileVerbosity cli.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
-	LogFile       string        `long:"log_file" description:"File to additionally log output to"`
-	Structured    bool          `long:"structured_logs" env:"STRUCTURED_LOGS" description:"Output logs in structured (JSON) format"`
+	Verbosity     logging.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
+	FileVerbosity logging.Verbosity `long:"file_verbosity" default:"debug" description:"Verbosity of file logging output"`
+	LogFile       string            `long:"log_file" description:"File to additionally log output to"`
+	Structured    bool              `long:"structured_logs" env:"STRUCTURED_LOGS" description:"Output logs in structured (JSON) format"`
 }
 
 // AdminOpts is a re-export of the admin type so servers don't need to import it directly.
 type AdminOpts = admin.Opts
 
 // ParseFlagsOrDie parses incoming flags and sets up logging etc.
-func ParseFlagsOrDie(name string, opts interface{}, loggingOpts *LoggingOpts) (string, cli.LogLevelInfo) {
-	cmd := cli.ParseFlagsOrDie(name, opts)
-	return cmd, cli.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
+func ParseFlagsOrDie(name string, opts interface{}, loggingOpts *LoggingOpts) (string, logging.LogLevelInfo) {
+	cmd := flags.ParseFlagsOrDie(name, opts)
+	return cmd, logging.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
 }
 
 // ServeAdmin starts the admin HTTP server.
 // It will block forever so the caller may well want to use a goroutine.
-func ServeAdmin(opts AdminOpts, info cli.LogLevelInfo) {
-	opts.Logger = cli.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+func ServeAdmin(opts AdminOpts, info logging.LogLevelInfo) {
+	opts.Logger = logging.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.LogInfo = info
 	go admin.Serve(opts)
 }
@@ -124,4 +125,4 @@ func (c *Currency) UnmarshalFlag(in string) error {
 }
 
 // MustGetLogger is a re-export of the same function from the CLI library.
-var MustGetLogger = cli.MustGetLogger
+var MustGetLogger = logging.MustGetLogger

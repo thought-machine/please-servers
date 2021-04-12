@@ -33,7 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-multierror"
 	"github.com/klauspost/compress/zstd"
-	"github.com/peterebden/go-cli-init/v4"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
@@ -50,7 +50,7 @@ import (
 
 const timeout = 2 * time.Minute
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
