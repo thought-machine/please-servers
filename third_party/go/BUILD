@@ -249,8 +249,12 @@ go_module(
 
 go_module(
     name = "cli-init",
-    module = "github.com/peterebden/go-cli-init/v3",
-    version = "v3.1.1",
+    install = [
+        "flags",
+        "logging",
+    ],
+    module = "github.com/peterebden/go-cli-init/v4",
+    version = "v4.0.1",
     deps = [
         ":go-flags",
         ":humanize",

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"gocloud.dev/pubsub"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 	"google.golang.org/grpc/codes"
@@ -26,7 +26,7 @@ import (
 	_ "gocloud.dev/pubsub/mempubsub"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 // For hacking around the fact that mempubsub doesn't allow reopening the same subscription (each call creates a new one)
 // In production use this makes no real difference since we never open more than one per process.

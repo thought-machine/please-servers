@@ -4,29 +4,30 @@ package main
 import (
 	"time"
 
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4/flags"
+	"github.com/peterebden/go-cli-init/v4/logging"
 	"google.golang.org/grpc"
 
-	flags "github.com/thought-machine/please-servers/cli"
+	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/flair/rpc"
 	"github.com/thought-machine/please-servers/flair/trie"
 	"github.com/thought-machine/please-servers/grpcutil"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 var opts = struct {
 	Usage            string
-	Logging          flags.LoggingOpts `group:"Options controlling logging output"`
+	Logging          cli.LoggingOpts   `group:"Options controlling logging output"`
 	GRPC             grpcutil.Opts     `group:"Options controlling the gRPC server"`
 	Geometry         map[string]string `short:"g" long:"geometry" required:"true" description:"CAS server geometry to forward requests to (e.g. 0-f:127.0.0.1:443"`
 	AssetGeometry    map[string]string `short:"a" long:"asset_geometry" description:"Asset server geometry to forward requests to. If not given then the remote asset API will be unavailable."`
 	ExecutorGeometry map[string]string `short:"e" long:"executor_geometry" description:"Executor server geometry to forward request to. If not given then the executor API will be unavailable."`
 	Replicas         int               `short:"r" long:"replicas" default:"1" description:"Number of servers to replicate reads/writes to"`
 	ConnTLS          bool              `long:"tls" description:"Use TLS for connecting to other servers"`
-	Timeout          cli.Duration      `long:"timeout" default:"20s" description:"Default timeout for all RPCs"`
+	Timeout          flags.Duration    `long:"timeout" default:"20s" description:"Default timeout for all RPCs"`
 	CA               string            `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
-	Admin            flags.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin            cli.AdminOpts     `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Flair is a proxy server used to forward requests to Elan.
@@ -44,8 +45,8 @@ want to have more than the minimum number of instances of it (hopefully more tha
 }
 
 func main() {
-	_, info := flags.ParseFlagsOrDie("Flair", &opts, &opts.Logging)
-	go flags.ServeAdmin(opts.Admin, info)
+	_, info := cli.ParseFlagsOrDie("Flair", &opts, &opts.Logging)
+	go cli.ServeAdmin(opts.Admin, info)
 	cr := newReplicator(opts.Geometry, opts.Replicas)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
 	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)

@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4/logging"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 // CompressionThreshold is the minimum size (in bytes) for the client to consider any blob
 // for compression. Empirical evidence suggests zstd typically makes it worse at sizes under

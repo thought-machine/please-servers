@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v3"
+	cli "github.com/peterebden/go-cli-init/v4/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"

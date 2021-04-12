@@ -13,30 +13,30 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/protobuf/proto"
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4/logging"
 
-	flags "github.com/thought-machine/please-servers/cli"
+	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 var opts = struct {
-	Usage     string
-	Verbosity cli.Verbosity `short:"v" long:"verbosity" default:"notice" description:"Verbosity of output (higher number = more output)"`
-	Storage   struct {
+	Usage   string
+	Logging cli.LoggingOpts `group:"Options controlling logging output"`
+	Storage struct {
 		InstanceName string `short:"i" long:"instance" default:"mettle" description:"Instance name"`
 		Storage      string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS          bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling connection to the CAS server"`
 	Diff struct {
-		Before flags.Action `short:"b" long:"before" required:"true" description:"'Before' action hash"`
-		After  flags.Action `short:"a" long:"after" required:"true" description:"'After' action hash"`
+		Before cli.Action `short:"b" long:"before" required:"true" description:"'Before' action hash"`
+		After  cli.Action `short:"a" long:"after" required:"true" description:"'After' action hash"`
 	} `command:"diff" description:"Show differences between two actions"`
 	Show struct {
 		Args struct {
-			Actions []flags.Action `positional-arg-name:"action" required:"true" description:"Hashes of actions to display"`
+			Actions []cli.Action `positional-arg-name:"action" required:"true" description:"Hashes of actions to display"`
 		} `positional-args:"true"`
 	} `command:"show" description:"Show detail about an action or series of them"`
 	TopN struct {
@@ -63,8 +63,7 @@ also isn't a server so #dealwithit
 }
 
 func main() {
-	cmd := cli.ParseFlagsOrDie("Discern", &opts)
-	cli.InitLogging(opts.Verbosity)
+	cmd, _ := cli.ParseFlagsOrDie("Discern", &opts, &opts.Logging)
 	if cmd == "topn" {
 		if err := topn(); err != nil {
 			log.Fatalf("Failed to find action results: %s", err)

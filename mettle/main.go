@@ -8,16 +8,17 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/peterebden/go-cli-init/v3"
+	"github.com/peterebden/go-cli-init/v4/flags"
+	"github.com/peterebden/go-cli-init/v4/logging"
 
-	flags "github.com/thought-machine/please-servers/cli"
+	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/mettle/common"
 	"github.com/thought-machine/please-servers/mettle/worker"
 )
 
-var log = cli.MustGetLogger()
+var log = logging.MustGetLogger()
 
 type StorageOpts struct {
 	Storage   string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
@@ -26,16 +27,16 @@ type StorageOpts struct {
 }
 
 type CacheOpts struct {
-	Dir    string       `long:"dir" description:"Directory to cache blobs in"`
-	Prefix []string     `long:"prefix" description:"Path prefix for cache items to store"`
-	Part   []string     `long:"part" description:"Cache any paths with a component with this name in them"`
-	MaxMem cli.ByteSize `long:"max_size" default:"100M" description:"Max size of in-memory blob cache"`
+	Dir    string         `long:"dir" description:"Directory to cache blobs in"`
+	Prefix []string       `long:"prefix" description:"Path prefix for cache items to store"`
+	Part   []string       `long:"part" description:"Cache any paths with a component with this name in them"`
+	MaxMem flags.ByteSize `long:"max_size" default:"100M" description:"Max size of in-memory blob cache"`
 }
 
 var opts = struct {
 	Usage        string
-	Logging      flags.LoggingOpts `group:"Options controlling logging output"`
-	InstanceName string            `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
+	Logging      cli.LoggingOpts `group:"Options controlling logging output"`
+	InstanceName string          `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 	API          struct {
 		API struct {
 			URL string `long:"url" description:"URL for communicating with other API servers"`
@@ -50,41 +51,41 @@ var opts = struct {
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
-		Dir             string                    `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		NoClean         bool                      `long:"noclean" description:"Don't clean workdirs after actions complete"`
-		Name            string                    `short:"n" long:"name" description:"Name of this worker"`
-		Browser         string                    `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Lucidity        string                    `long:"lucidity" description:"URL of Lucidity server to report to"`
-		Sandbox         string                    `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		AltSandbox      string                    `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
-		Timeout         cli.Duration              `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
-		MinDiskSpace    cli.ByteSize              `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
-		MemoryThreshold float64                   `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
-		VersionFile     string                    `long:"version_file" description:"File containing version tag"`
-		Costs           map[string]flags.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
-		Cache           CacheOpts                 `group:"Options controlling caching" namespace:"cache"`
-		Storage         StorageOpts               `group:"Options controlling communication with the CAS server"`
+		Dir             string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		NoClean         bool                    `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Name            string                  `short:"n" long:"name" description:"Name of this worker"`
+		Browser         string                  `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Lucidity        string                  `long:"lucidity" description:"URL of Lucidity server to report to"`
+		Sandbox         string                  `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		AltSandbox      string                  `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
+		Timeout         flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
+		MinDiskSpace    flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		MemoryThreshold float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
+		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
+		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
+		Storage         StorageOpts             `group:"Options controlling communication with the CAS server"`
 		Queues          struct {
-			RequestQueue  string       `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-			ResponseQueue string       `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
-			AckExtension  cli.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcprpubsub queues."`
+			RequestQueue  string         `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue string         `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+			AckExtension  flags.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcprpubsub queues."`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
-		GRPC            grpcutil.Opts             `group:"Options controlling the gRPC server"`
-		Dir             string                    `short:"d" long:"dir" default:"plz-out/mettle" description:"Directory to run actions in"`
-		NoClean         bool                      `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
-		NumWorkers      int                       `short:"n" long:"num_workers" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
-		Browser         string                    `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Lucidity        string                    `long:"lucidity" description:"URL of Lucidity server to report to"`
-		Sandbox         string                    `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		AltSandbox      string                    `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
-		Timeout         cli.Duration              `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
-		MinDiskSpace    cli.ByteSize              `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
-		MemoryThreshold float64                   `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
-		VersionFile     string                    `long:"version_file" description:"File containing version tag"`
-		Costs           map[string]flags.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
-		Cache           CacheOpts                 `group:"Options controlling caching" namespace:"cache"`
+		GRPC            grpcutil.Opts           `group:"Options controlling the gRPC server"`
+		Dir             string                  `short:"d" long:"dir" default:"plz-out/mettle" description:"Directory to run actions in"`
+		NoClean         bool                    `long:"noclean" env:"METTLE_NO_CLEAN" description:"Don't clean workdirs after actions complete"`
+		NumWorkers      int                     `short:"n" long:"num_workers" env:"METTLE_NUM_WORKERS" description:"Number of workers to run in parallel"`
+		Browser         string                  `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Lucidity        string                  `long:"lucidity" description:"URL of Lucidity server to report to"`
+		Sandbox         string                  `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		AltSandbox      string                  `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
+		Timeout         flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
+		MinDiskSpace    flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		MemoryThreshold float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
+		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
+		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
 		Storage         struct {
 			Storage []string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -92,18 +93,18 @@ var opts = struct {
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	One struct {
 		Args struct {
-			Actions []flags.Action `positional-arg-name:"action" required:"true" description:"The action digest to run"`
+			Actions []cli.Action `positional-arg-name:"action" required:"true" description:"The action digest to run"`
 		} `positional-args:"true"`
-		Dir         string       `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		Sandbox     string       `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		AltSandbox  string       `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
-		Timeout     cli.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
-		ProfileFile string       `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
-		MemProfile  string       `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
-		Cache       CacheOpts    `group:"Options controlling caching" namespace:"cache"`
-		Storage     StorageOpts  `group:"Options controlling communication with the CAS server"`
+		Dir         string         `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		Sandbox     string         `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		AltSandbox  string         `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
+		Timeout     flags.Duration `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
+		ProfileFile string         `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
+		MemProfile  string         `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
+		Cache       CacheOpts      `group:"Options controlling caching" namespace:"cache"`
+		Storage     StorageOpts    `group:"Options controlling communication with the CAS server"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
-	Admin flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Mettle is an implementation of the execution service of the Remote Execution API.
@@ -144,9 +145,9 @@ func main() {
 	const requests = "omem://requests"
 	const responses = "omem://responses"
 
-	cmd, info := flags.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
+	cmd, info := cli.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
 	if cmd != "one" {
-		go flags.ServeAdmin(opts.Admin, info)
+		go cli.ServeAdmin(opts.Admin, info)
 	}
 
 	if cmd == "dual" {

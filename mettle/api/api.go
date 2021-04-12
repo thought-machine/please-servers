@@ -11,7 +11,7 @@ import (
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/peterebden/go-cli-init/v3"
+	clilogging "github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/prometheus/client_golang/prometheus"
 	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
@@ -26,7 +26,7 @@ import (
 	"github.com/thought-machine/please-servers/mettle/common"
 )
 
-var log = cli.MustGetLogger()
+var log = clilogging.MustGetLogger()
 
 const timeout = 10 * time.Second
 
