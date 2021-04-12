@@ -6,9 +6,10 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/peterebden/go-cli-init/v4/flags"
 	"github.com/peterebden/go-cli-init/v4/logging"
 
-	flags "github.com/thought-machine/please-servers/cli"
+	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
 )
 
@@ -16,7 +17,7 @@ var log = logging.MustGetLogger()
 
 var opts = struct {
 	Usage   string
-	Logging flags.LoggingOpts `group:"Options controlling logging output"`
+	Logging cli.LoggingOpts `group:"Options controlling logging output"`
 	GC      struct {
 		URL          string `short:"u" long:"url" required:"true" description:"URL for the storage server"`
 		InstanceName string `short:"i" long:"instance_name" default:"purity-gc" description:"Name of this execution instance"`
@@ -24,18 +25,18 @@ var opts = struct {
 		TLS          bool   `long:"tls" description:"Use TLS for communicating with the storage server"`
 	} `group:"Options controlling GC settings"`
 	One struct {
-		DryRun            bool         `long:"dry_run" description:"Don't actually clean anything, just log what we'd do"`
-		MinAge            cli.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
-		ReplicationFactor int          `long:"replication_factor" description:"Min number of replicas to expect for a blob"`
+		DryRun            bool           `long:"dry_run" description:"Don't actually clean anything, just log what we'd do"`
+		MinAge            flags.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
+		ReplicationFactor int            `long:"replication_factor" description:"Min number of replicas to expect for a blob"`
 	} `command:"one" description:"Run just once and terminate after"`
 	Periodic struct {
-		Frequency         cli.Duration `long:"frequency" default:"1h" description:"Length of time to wait between updates"`
-		MinAge            cli.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
-		ReplicationFactor int          `long:"replication_factor" description:"Min number of replicas to expect for a blob"`
+		Frequency         flags.Duration `long:"frequency" default:"1h" description:"Length of time to wait between updates"`
+		MinAge            flags.Duration `long:"min_age" required:"true" description:"Minimum age of artifacts that will be considered for purification"`
+		ReplicationFactor int            `long:"replication_factor" description:"Min number of replicas to expect for a blob"`
 	} `command:"periodic" description:"Run continually, triggering GCs at a regular interval"`
 	Delete struct {
 		Args struct {
-			Actions []flags.Action `positional-arg-name:"actions" required:"true" description:"Actions to delete"`
+			Actions []cli.Action `positional-arg-name:"actions" required:"true" description:"Actions to delete"`
 		} `positional-args:"true" required:"true"`
 	} `command:"delete" description:"Deletes one or more build actions from the server."`
 	Clean struct {
@@ -45,8 +46,8 @@ var opts = struct {
 		ReplicationFactor int  `long:"replication_factor" required:"true" description:"Min number of replicas to expect for a blob"`
 		DryRun            bool `long:"dry_run" description:"Don't actually do anything, just log what we'd do"`
 	} `command:"replicate" description:"Re-replicates any underreplicated blobs"`
-	Admin       flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
-	ProfileFile string          `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
+	Admin       cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	ProfileFile string        `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 }{
 	Usage: `
 Purity is a service to implement GC logic for Elan.
@@ -61,9 +62,9 @@ retains the "personal characteristics" theme.
 }
 
 func main() {
-	cmd, info := flags.ParseFlagsOrDie("Purity", &opts, &opts.Logging)
+	cmd, info := cli.ParseFlagsOrDie("Purity", &opts, &opts.Logging)
 	if cmd == "periodic" {
-		go flags.ServeAdmin(opts.Admin, info)
+		go cli.ServeAdmin(opts.Admin, info)
 	}
 	if err := run(cmd); err != nil {
 		log.Fatalf("Failed: %s", err)
@@ -87,7 +88,7 @@ func run(cmd string) error {
 	} else if cmd == "periodic" {
 		gc.RunForever(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, time.Duration(opts.Periodic.MinAge), time.Duration(opts.Periodic.Frequency), opts.One.ReplicationFactor)
 	} else if cmd == "delete" {
-		return gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, flags.AllToProto(opts.Delete.Args.Actions))
+		return gc.Delete(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, cli.AllToProto(opts.Delete.Args.Actions))
 	} else if cmd == "clean" {
 		return gc.Clean(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Clean.DryRun)
 	} else if cmd == "replicate" {
