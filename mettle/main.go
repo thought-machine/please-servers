@@ -49,6 +49,7 @@ var opts = struct {
 			ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
 			PreResponseQueue    string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 		} `group:"Options controlling the pub/sub queues"`
+		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
 		Dir             string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
@@ -90,6 +91,7 @@ var opts = struct {
 			Storage []string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
+		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	One struct {
 		Args struct {
@@ -160,11 +162,11 @@ func main() {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
 			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0)
 		}
-		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, "", false)
+		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, "", false, opts.Dual.AllowedPlatform)
 	} else if cmd == "worker" {
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension))
 	} else if cmd == "api" {
-		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.API.URL, opts.API.API.TLS)
+		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.API.URL, opts.API.API.TLS, opts.API.AllowedPlatform)
 	} else if err := one(); err != nil {
 		log.Fatalf("%s", err)
 	}

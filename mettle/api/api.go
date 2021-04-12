@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,15 +50,15 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -67,6 +68,11 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		responses:    common.MustOpenSubscription(responseQueue),
 		preResponses: common.MustOpenTopic(preResponseQueue),
 		jobs:         map[string]*job{},
+		platform:     allowedPlatform,
+	}
+	log.Notice("Allowed platform values:")
+	for k, v := range allowedPlatform {
+		log.Notice("    %s: %s", k, strings.Join(v, ", "))
 	}
 
 	go srv.Receive()
@@ -91,6 +97,7 @@ type server struct {
 	responses    *pubsub.Subscription
 	preResponses *pubsub.Topic
 	jobs         map[string]*job
+	platform     map[string][]string
 	mutex        sync.Mutex
 }
 
@@ -167,6 +174,9 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServer) error {
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
+	}
+	if err := s.validatePlatform(req); err != nil {
+		return err
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
 		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
@@ -382,6 +392,29 @@ func (s *server) deleteJob(hash string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	delete(s.jobs, hash)
+}
+
+func (s *server) validatePlatform(req *pb.ExecuteRequest) error {
+	if len(s.platform) == 0 || req.Platform == nil {
+		return nil // If nothing is set, everything is permitted.
+	}
+	for _, prop := range req.Platform.Properties {
+		if allowed, present := s.platform[prop.Name]; !present {
+			return status.Errorf(codes.InvalidArgument, "Unsupported platform property %s", prop.Name)
+		} else if !contains(allowed, prop.Value) {
+			return status.Errorf(codes.InvalidArgument, "Invalid platform property value %s, must be one of: %s", prop.Name, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, straw := range haystack {
+		if straw == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // A job represents a single execution request.
