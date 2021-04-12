@@ -254,7 +254,7 @@ go_module(
         "logging",
     ],
     module = "github.com/peterebden/go-cli-init/v4",
-    version = "v4.0.1",
+    version = "v4.0.2",
     deps = [
         ":go-flags",
         ":humanize",
