@@ -142,15 +142,14 @@ updated blobs dominating much of the data downloaded.
 }
 
 func main() {
-	const requests = "omem://requests"
-	const responses = "omem://responses"
-
 	cmd, info := cli.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
 	if cmd != "one" {
 		go cli.ServeAdmin(opts.Admin, info)
 	}
 
 	if cmd == "dual" {
+		const requests = "mem://requests"
+		const responses = "mem://responses"
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)

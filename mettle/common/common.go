@@ -107,7 +107,7 @@ func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byt
 				message.OrderingKey = key
 				return nil
 			}
-			var om *omempubsub.OrderedMessage
+			var om *mempubsub.OrderedMessage
 			if asFunc(om) {
 				om.Key = key
 			}

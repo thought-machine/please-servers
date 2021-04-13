@@ -117,8 +117,8 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 // RunOne runs one single request, returning any error received.
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
-	topic := common.MustOpenTopic("omem://requests")
-	w, err := initialiseWorker(instanceName, "omem://requests", "omem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
+	topic := common.MustOpenTopic("mem://requests")
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
 	if err != nil {
 		return err
 	}

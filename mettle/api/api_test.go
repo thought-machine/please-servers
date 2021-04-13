@@ -184,8 +184,8 @@ func checkExitCode(t *testing.T, op *longrunning.Operation, expectedExitCode int
 }
 
 func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
-	requests := fmt.Sprintf("omem://requests%d", queueID)
-	responses := fmt.Sprintf("omem://responses%d", queueID)
+	requests := fmt.Sprintf("mem://requests%d", queueID)
+	responses := fmt.Sprintf("mem://responses%d", queueID)
 	queueID++
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
