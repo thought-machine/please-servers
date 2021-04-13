@@ -52,7 +52,7 @@ var opts = struct {
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
-		Dir             string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		Dir             string                  `short:"d" long:"dir" default:"plz-out/mettle" description:"Directory to run actions in"`
 		NoClean         bool                    `long:"noclean" description:"Don't clean workdirs after actions complete"`
 		Name            string                  `short:"n" long:"name" description:"Name of this worker"`
 		Browser         string                  `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
