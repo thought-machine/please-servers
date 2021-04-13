@@ -37,6 +37,9 @@ var log = logging.MustGetLogger()
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
 
+// Used as a sentinel in FindMissingBlobs.
+var notFound = status.Error(codes.NotFound, "some blobs not found")
+
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator, timeout time.Duration) {
 	srv := &server{
@@ -173,18 +176,17 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 		}
 	}
 	resp := &pb.FindMissingBlobsResponse{}
-	type countedDigest struct {
-		Digest *pb.Digest
-		Count  int
-	}
 	var g errgroup.Group
 	var mutex sync.Mutex
 	for srv, b := range blobs {
 		srv := srv
 		b := b
 		g.Go(func() error {
-			missing := make(map[string]countedDigest, len(b))
-			if err := s.replicator.SequentialAck(srv.Start, func(srv *trie.Server) (bool, error) {
+			var mutex2 sync.Mutex
+			found := make(map[string]struct{}, len(b))
+			// This call is best-effort; if it fails we fail to populate found, and return more blobs
+			// as missing. That should not be a problem for the callers who will then simply upload them.
+			s.replicator.Parallel(srv.Start, func(srv *trie.Server) error {
 				ctx, cancel := context.WithTimeout(ctx, s.timeout)
 				defer cancel()
 				r, err := srv.CAS.FindMissingBlobs(ctx, &pb.FindMissingBlobsRequest{
@@ -192,25 +194,26 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 					BlobDigests:  b,
 				})
 				if err != nil {
-					return true, err
+					return err
 				}
-				mutex.Lock()
-				defer mutex.Unlock()
-				for _, d := range r.MissingBlobDigests {
-					missing[d.Hash] = countedDigest{
-						Digest: d,
-						Count:  missing[d.Hash].Count + 1,
+				missing := map[string]struct{}{}
+				for _, dg := range r.MissingBlobDigests {
+					missing[dg.Hash] = struct{}{}
+				}
+				mutex2.Lock()
+				defer mutex2.Unlock()
+				for _, dg := range b {
+					if _, present := missing[dg.Hash]; !present {
+						found[dg.Hash] = struct{}{}
 					}
 				}
-				return len(r.MissingBlobDigests) > 0, nil
-			}); err != nil {
-				return err
-			}
+				return nil
+			})
 			mutex.Lock()
 			defer mutex.Unlock()
-			for _, dg := range missing {
-				if dg.Count == s.replicator.Replicas {
-					resp.MissingBlobDigests = append(resp.MissingBlobDigests, dg.Digest)
+			for _, dg := range b {
+				if _, present := found[dg.Hash]; !present {
+					resp.MissingBlobDigests = append(resp.MissingBlobDigests, dg)
 				}
 			}
 			return nil
