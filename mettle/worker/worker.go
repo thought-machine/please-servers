@@ -259,10 +259,10 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
 	}
 	if ackExtension > 0 {
-		if !strings.HasPrefix(requestQueue, "gcprpubsub://") {
+		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
 			return nil, fmt.Errorf("Cannot specify a non-zero ack extension on subscription %s", requestQueue)
 		}
-		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcprpubsub://")
+		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcppubsub://")
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix, cacheParts)
