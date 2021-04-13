@@ -37,9 +37,6 @@ var log = logging.MustGetLogger()
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
 
-// Used as a sentinel in FindMissingBlobs.
-var notFound = status.Error(codes.NotFound, "some blobs not found")
-
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorReplicator *trie.Replicator, timeout time.Duration) {
 	srv := &server{
