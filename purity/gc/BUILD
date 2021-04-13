@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//proto:purity",
         "//rexclient",
+        "//rexclient/preflight",
         "//third_party/go:cli-init",
         "//third_party/go:go-multierror",
         "//third_party/go:grpc",

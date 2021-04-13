@@ -23,6 +23,7 @@ import (
 
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 	"github.com/thought-machine/please-servers/rexclient"
+	"github.com/thought-machine/please-servers/rexclient/preflight"
 )
 
 var log = logging.MustGetLogger()
@@ -78,8 +79,10 @@ func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
 		return err
 	} else if err := gc.MarkReferencedBlobs(); err != nil {
 		return err
+	} else if err := gc.RemoveBrokenBlobs(); err != nil {
+		return err
 	}
-	return gc.RemoveBrokenBlobs()
+	return gc.UploadPreflightBlobs()
 }
 
 // Sizes returns the sizes of the top N actions.
@@ -104,6 +107,15 @@ func Replicate(url, instanceName, tokenFile string, tls bool, replicationFactor 
 		return err
 	}
 	return gc.ReplicateBlobs(replicationFactor)
+}
+
+// Load loads the preflight blobs into the CAS.
+func Load(url, instanceName, tokenFile string, tls bool) error {
+	gc, err := newCollector(url, instanceName, tokenFile, tls, false, eternity)
+	if err != nil {
+		return err
+	}
+	return gc.UploadPreflightBlobs()
 }
 
 // BlobUsage returns the a series of blobs for analysis of how much they're used.
@@ -495,7 +507,7 @@ func (c *collector) RemoveBlobs() error {
 }
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
-	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
+	return (ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64) && ar.Hash != preflight.Hash
 }
 
 func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
@@ -640,6 +652,19 @@ func (c *collector) underreplicatedDigests(blobs map[string]int, sizes map[strin
 		}
 	}
 	return ret
+}
+
+func (c *collector) UploadPreflightBlobs() error {
+	log.Notice("Uploading preflight blobs...")
+	m := map[digest.Digest][]byte{}
+	for _, blob := range preflight.Data() {
+		m[digest.NewFromBlob(blob)] = blob
+	}
+	if err := c.client.BatchWriteBlobs(context.Background(), m); err != nil {
+		return err
+	}
+	log.Notice("Done!")
+	return nil
 }
 
 func (c *collector) BlobUsage() ([]Blob, error) {

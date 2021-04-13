@@ -46,6 +46,8 @@ var opts = struct {
 		ReplicationFactor int  `long:"replication_factor" required:"true" description:"Min number of replicas to expect for a blob"`
 		DryRun            bool `long:"dry_run" description:"Don't actually do anything, just log what we'd do"`
 	} `command:"replicate" description:"Re-replicates any underreplicated blobs"`
+	Load struct {
+	} `command:"load" description:"Loads the set of preflight blobs into the CAS"`
 	Admin       cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 	ProfileFile string        `long:"profile_file" hidden:"true" description:"Write a CPU profile to this file"`
 }{
@@ -93,6 +95,8 @@ func run(cmd string) error {
 		return gc.Clean(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Clean.DryRun)
 	} else if cmd == "replicate" {
 		return gc.Replicate(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS, opts.Replicate.ReplicationFactor, opts.Replicate.DryRun)
+	} else if cmd == "load" {
+		return gc.Load(opts.GC.URL, opts.GC.InstanceName, opts.GC.TokenFile, opts.GC.TLS)
 	}
 	return nil
 }

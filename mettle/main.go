@@ -16,6 +16,7 @@ import (
 	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/mettle/common"
 	"github.com/thought-machine/please-servers/mettle/worker"
+	"github.com/thought-machine/please-servers/rexclient/preflight"
 )
 
 var log = logging.MustGetLogger()
@@ -63,6 +64,7 @@ var opts = struct {
 		MemoryThreshold float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
 		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
+		Preflight       bool                    `long:"preflight" description:"Run a preflight check action before starting"`
 		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
 		Storage         StorageOpts             `group:"Options controlling communication with the CAS server"`
 		Queues          struct {
@@ -162,6 +164,12 @@ func main() {
 		}
 		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, "", false)
 	} else if cmd == "worker" {
+		if opts.Worker.Preflight {
+			log.Notice("Running preflight check")
+			if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, false, opts.Worker.Storage.TLS, preflight.Digest); err != nil {
+				log.Fatalf("Preflight action run failed: %s", err)
+			}
+		}
 		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.API.URL, opts.API.API.TLS)
