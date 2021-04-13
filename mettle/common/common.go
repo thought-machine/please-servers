@@ -18,12 +18,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/thought-machine/please-servers/mettle/omempubsub"
-
 	// Must import the schemes we want to use.
-	_ "github.com/thought-machine/please-servers/mettle/gcprpubsub"
-	_ "gocloud.dev/pubsub/gcppubsub"
-	_ "gocloud.dev/pubsub/mempubsub"
+	_ "github.com/thought-machine/please-servers/mettle/gcppubsub"
+	"github.com/thought-machine/please-servers/mettle/mempubsub"
 )
 
 var log = logging.MustGetLogger()
@@ -39,6 +36,13 @@ const workerKey = "build.please.mettle.worker"
 // MustOpenSubscription opens a subscription, which must have been created ahead of time.
 // It dies on any errors.
 func MustOpenSubscription(url string) *pubsub.Subscription {
+	url = renameURL(url)
+	if strings.HasPrefix(url, "gcprpubsub://") {
+		url = "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
+	} else if strings.HasPrefix(url, "gcprpubsub://") {
+		url = "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
+	}
+
 	subMutex.Lock()
 	defer subMutex.Unlock()
 	if sub, present := subscriptions[url]; present {
@@ -58,6 +62,7 @@ func MustOpenSubscription(url string) *pubsub.Subscription {
 
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 func MustOpenTopic(url string) *pubsub.Topic {
+	url = renameURL(url)
 	ctx, cancel := context.WithCancel(context.Background())
 	t, err := pubsub.OpenTopic(ctx, url)
 	if err != nil {
@@ -66,6 +71,16 @@ func MustOpenTopic(url string) *pubsub.Topic {
 	log.Debug("Opened topic %s", url)
 	handleSignals(cancel, t)
 	return t
+}
+
+// renameURL maps from old names (omem and gcprpubsub) to new ones (mem and gcppubsub)
+func renameURL(url string) string {
+	if strings.HasPrefix(url, "gcprpubsub://") {
+		return "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
+	} else if strings.HasPrefix(url, "gcprpubsub://") {
+		return "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
+	}
+	return url
 }
 
 func handleSignals(cancel context.CancelFunc, s Shutdownable) {
