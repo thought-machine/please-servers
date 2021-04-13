@@ -1,4 +1,4 @@
-// Package gcprpubsub is a copy of gcppubsub from the gocloud library.
+// Package gcppubsub is a copy of gcppubsub from the gocloud library.
 //
 // The main difference is it allows exposing the ReceivedMessage type
 // via As. This allows a caller to use the ModifyAckDeadline API to
@@ -6,17 +6,17 @@
 //
 // The max batch size is also reduced to one.
 //
-// It registers for the scheme gcprpubsub.
+// It registers for the scheme gcppubsub.
 //
 // As
 //
-// gcprpubsub exposes the following types for As:
+// gcppubsub exposes the following types for As:
 //  - Topic: *raw.PublisherClient
 //  - Subscription: *raw.SubscriberClient
 //  - Message.BeforeSend: *pb.PubsubMessage
 //  - Message: *pb.PubsubMessage, *pb.ReceivedMessage
 //  - Error: *google.golang.org/grpc/status.Status
-package gcpackpubsub
+package gcppubsub
 
 import (
 	"context"
@@ -137,14 +137,14 @@ func (o *lazyCredsOpener) OpenSubscriptionURL(ctx context.Context, u *url.URL) (
 	return opener.OpenSubscriptionURL(ctx, u)
 }
 
-// Scheme is the URL scheme gcprpubsub registers its URLOpeners under on pubsub.DefaultMux.
-const Scheme = "gcprpubsub"
+// Scheme is the URL scheme gcppubsub registers its URLOpeners under on pubsub.DefaultMux.
+const Scheme = "gcppubsub"
 
-// URLOpener opens GCP Pub/Sub URLs like "gcprpubsub://projects/myproject/topics/mytopic" for
-// topics or "gcprpubsub://projects/myproject/subscriptions/mysub" for subscriptions.
+// URLOpener opens GCP Pub/Sub URLs like "gcppubsub://projects/myproject/topics/mytopic" for
+// topics or "gcppubsub://projects/myproject/subscriptions/mysub" for subscriptions.
 //
-// The shortened forms "gcprpubsub://myproject/mytopic" for topics or
-// "gcprpubsub://myproject/mysub" for subscriptions are also supported.
+// The shortened forms "gcppubsub://myproject/mytopic" for topics or
+// "gcppubsub://myproject/mysub" for subscriptions are also supported.
 //
 // No URL parameters are supported.
 type URLOpener struct {

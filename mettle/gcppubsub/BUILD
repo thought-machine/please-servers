@@ -1,5 +1,5 @@
 go_library(
-    name = "gcprpubsub",
+    name = "gcppubsub",
     srcs = ["gcppubsub.go"],
     visibility = ["//mettle/..."],
     deps = [

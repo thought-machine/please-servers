@@ -37,12 +37,6 @@ const workerKey = "build.please.mettle.worker"
 // It dies on any errors.
 func MustOpenSubscription(url string) *pubsub.Subscription {
 	url = renameURL(url)
-	if strings.HasPrefix(url, "gcprpubsub://") {
-		url = "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
-	} else if strings.HasPrefix(url, "gcprpubsub://") {
-		url = "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
-	}
-
 	subMutex.Lock()
 	defer subMutex.Unlock()
 	if sub, present := subscriptions[url]; present {
