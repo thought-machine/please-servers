@@ -68,7 +68,7 @@ var opts = struct {
 		Queues          struct {
 			RequestQueue  string         `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue string         `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
-			AckExtension  flags.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcprpubsub queues."`
+			AckExtension  flags.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcppubsub queues."`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
 	Dual struct {
@@ -142,15 +142,14 @@ updated blobs dominating much of the data downloaded.
 }
 
 func main() {
-	const requests = "omem://requests"
-	const responses = "omem://responses"
-
 	cmd, info := cli.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
 	if cmd != "one" {
 		go cli.ServeAdmin(opts.Admin, info)
 	}
 
 	if cmd == "dual" {
+		const requests = "mem://requests"
+		const responses = "mem://responses"
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(requests)
 		common.MustOpenTopic(responses)

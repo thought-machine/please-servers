@@ -1,4 +1,4 @@
-// Package omempubsub provides an in-memory pubsub implementation with a concept of ordering.
+// Package mempubsub provides an in-memory pubsub implementation with a concept of ordering.
 // It registers for the scheme "omem".
 // It supports at-least-once semantics.
 //
@@ -7,10 +7,10 @@
 //
 // As
 //
-// omempubsub exposes the following types for As:
+// mempubsub exposes the following types for As:
 //  - Message.BeforeSend: *OrderedMessage
 //  - Message: *OrderedMessage
-package omempubsub
+package mempubsub
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 )
 
 // Scheme is the URL scheme mempubsub registers its URLOpeners under on pubsub.DefaultMux.
-const Scheme = "omem"
+const Scheme = "mem"
 
 func init() {
 	uo := &urlOpener{}

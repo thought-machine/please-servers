@@ -117,8 +117,8 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 // RunOne runs one single request, returning any error received.
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
-	topic := common.MustOpenTopic("omem://requests")
-	w, err := initialiseWorker(instanceName, "omem://requests", "omem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
+	topic := common.MustOpenTopic("mem://requests")
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
 	if err != nil {
 		return err
 	}
@@ -259,10 +259,10 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
 	}
 	if ackExtension > 0 {
-		if !strings.HasPrefix(requestQueue, "gcprpubsub://") {
+		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
 			return nil, fmt.Errorf("Cannot specify a non-zero ack extension on subscription %s", requestQueue)
 		}
-		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcprpubsub://")
+		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcppubsub://")
 	}
 	if cacheDir != "" {
 		w.fileCache = newCache(cacheDir, cachePrefix, cacheParts)
