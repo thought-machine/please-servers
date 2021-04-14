@@ -30,7 +30,7 @@ go_module(
 go_module(
     name = "go-flags",
     module = "github.com/thought-machine/go-flags",
-    version = "v1.5.0",
+    version = "v1.5.1",
     deps = [
         ":unix",
     ],
@@ -254,7 +254,7 @@ go_module(
         "logging",
     ],
     module = "github.com/peterebden/go-cli-init/v4",
-    version = "v4.0.1",
+    version = "v4.0.2",
     deps = [
         ":go-flags",
         ":humanize",

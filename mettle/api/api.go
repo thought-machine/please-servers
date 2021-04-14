@@ -4,9 +4,12 @@ package api
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/golang/protobuf/proto"
@@ -24,6 +27,7 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 var log = clilogging.MustGetLogger()
@@ -49,17 +53,22 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
+	}
+	log.Notice("Contacting CAS server on %s...", storageURL)
+	client, err := rexclient.New(name, storageURL, storageTLS, "")
+	if err != nil {
+		return nil, nil, err
 	}
 	srv := &server{
 		name:         name,
@@ -67,6 +76,12 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		responses:    common.MustOpenSubscription(responseQueue),
 		preResponses: common.MustOpenTopic(preResponseQueue),
 		jobs:         map[string]*job{},
+		platform:     allowedPlatform,
+		client:       client,
+	}
+	log.Notice("Allowed platform values:")
+	for k, v := range allowedPlatform {
+		log.Notice("    %s: %s", k, strings.Join(v, ", "))
 	}
 
 	go srv.Receive()
@@ -85,12 +100,13 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 }
 
 type server struct {
-	bpb.BootstrapServer
 	name         string
+	client       *client.Client
 	requests     *pubsub.Topic
 	responses    *pubsub.Subscription
 	preResponses *pubsub.Topic
 	jobs         map[string]*job
+	platform     map[string][]string
 	mutex        sync.Mutex
 }
 
@@ -168,6 +184,10 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
+	platform, err := s.validatePlatform(req)
+	if err != nil {
+		return err
+	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
 		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
 	} else {
@@ -196,7 +216,10 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	b, _ = proto.Marshal(req)
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := s.requests.Send(ctx, &pubsub.Message{Body: b}); err != nil {
+	if err := s.requests.Send(ctx, &pubsub.Message{
+		Body:     b,
+		Metadata: platform,
+	}); err != nil {
 		log.Error("Failed to submit work to stream: %s", err)
 		return err
 	}
@@ -382,6 +405,41 @@ func (s *server) deleteJob(hash string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	delete(s.jobs, hash)
+}
+
+// validatePlatform fetches the platform requirements for this request and checks them.
+func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, error) {
+	action := &pb.Action{}
+	if err := s.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(req.ActionDigest), action); err != nil {
+		return nil, err
+	}
+	if action.Platform == nil {
+		return map[string]string{}, nil
+	}
+	m := make(map[string]string, len(action.Platform.Properties))
+	for _, prop := range action.Platform.Properties {
+		m[prop.Name] = prop.Value
+		if len(s.platform) == 0 {
+			continue // If nothing is specified as allowed, everything is permitted.
+		}
+		if allowed, present := s.platform[prop.Name]; !present {
+			return nil, status.Errorf(codes.InvalidArgument, "Unsupported platform property %s", prop.Name)
+		} else if !contains(allowed, prop.Value) {
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid platform property value %s, must be one of: %s", prop.Name, strings.Join(allowed, ", "))
+		} else {
+			log.Debug("Valid platform property %s: %s (from %s)", prop.Name, prop.Value, allowed)
+		}
+	}
+	return m, nil
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, straw := range haystack {
+		if straw == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // A job represents a single execution request.
