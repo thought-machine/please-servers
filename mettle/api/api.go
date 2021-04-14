@@ -65,6 +65,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	if name == "" {
 		name = "mettle API server"
 	}
+	log.Notice("Contacting CAS server on %s...", storageURL)
 	client, err := rexclient.New(name, storageURL, storageTLS, "")
 	if err != nil {
 		return nil, nil, err

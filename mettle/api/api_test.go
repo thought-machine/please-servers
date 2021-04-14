@@ -13,8 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
+	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -184,6 +187,7 @@ func checkExitCode(t *testing.T, op *longrunning.Operation, expectedExitCode int
 }
 
 func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
+	casaddr := setupCASServer()
 	requests := fmt.Sprintf("mem://requests%d", queueID)
 	responses := fmt.Sprintf("mem://responses%d", queueID)
 	queueID++
@@ -192,12 +196,24 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: 0,
-	}, "", requests, responses, responses, "", true)
+	}, "", requests, responses, responses, "", true, map[string][]string{}, casaddr, false)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	require.NoError(t, err)
 	return pb.NewExecutionClient(conn), newExecutor(requests, responses), s
+}
+
+func setupCASServer() string {
+	srv := cas{}
+	lis, s := grpcutil.NewServer(grpcutil.Opts{
+		Host: "127.0.0.1",
+		Port: 0,
+	})
+	bs.RegisterByteStreamServer(s, srv)
+	pb.RegisterCapabilitiesServer(s, srv)
+	go s.Serve(lis)
+	return lis.Addr().String()
 }
 
 func TestGetExecutions(t *testing.T) {
@@ -319,6 +335,31 @@ func (ex *executor) Finish(digest *pb.Digest) {
 		})
 		ex.responses.Send(context.Background(), &pubsub.Message{Body: b})
 	}
+}
+
+// A cas is a fake implementation of the CAS server.
+type cas struct{}
+
+func (c cas) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
+	return status.Errorf(codes.NotFound, "blob %s not found", req.ResourceName)
+}
+
+func (c cas) Write(srv bs.ByteStream_WriteServer) error {
+	return status.Errorf(codes.Unimplemented, "bytestream.Write not implemented")
+}
+
+func (c cas) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusRequest) (*bs.QueryWriteStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "bytestream.QueryWriteStatus not implemented")
+}
+
+func (c cas) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
+	return &pb.ServerCapabilities{
+		CacheCapabilities: &pb.CacheCapabilities{
+			DigestFunction: []pb.DigestFunction_Value{
+				pb.DigestFunction_SHA256,
+			},
+		},
+	}, nil
 }
 
 func TestMain(m *testing.M) {
