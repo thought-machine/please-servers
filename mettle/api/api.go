@@ -173,11 +173,12 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	} else {
 		log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
 	}
-	// N.B. We never try a cache lookup here because Please always tells us not to; it's not
-	//      clear to me that is ever useful (because a good client will try to optimise by
-	//      not uploading sources unnecessarily, and to work out that it can not do that it
-	//      needs to contact the action cache itself anyway).
-	ch := s.eventStream(req.ActionDigest, true)
+	// TODO(peterebden): Try a cache lookup here now we have access to Elan.
+	ch, created := s.eventStream(req.ActionDigest, true)
+	if !created {
+		// We didn't create a new execution, so don't need to send a request for a new build.
+		return s.streamEvents(req.ActionDigest, ch, stream)
+	}
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
 	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
@@ -223,7 +224,7 @@ func (s *server) contextMetadata(ctx context.Context) *pb.RequestMetadata {
 func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution_WaitExecutionServer) error {
 	log.Info("Received a request to wait for %s", req.Name)
 	digest := &pb.Digest{Hash: req.Name}
-	ch := s.eventStream(digest, false)
+	ch, _ := s.eventStream(digest, false)
 	if ch == nil {
 		log.Warning("Request for execution %s which is not in progress", req.Name)
 		return status.Errorf(codes.NotFound, "No execution in progress for %s", req.Name)
@@ -246,13 +247,15 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 }
 
 // eventStream registers an event stream for a job.
-func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning.Operation {
+// The second return value indicates if we created a new execution or are resuming an existing one.
+func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunning.Operation, bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	j, present := s.jobs[digest.Hash]
+	created := false
 	if !present && !create {
-		return nil
-	} else if !present || (!j.Successful() && create) {
+		return nil, created
+	} else if !present || (j.Done && create) {
 		any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
 			Stage:        pb.ExecutionStage_QUEUED,
 			ActionDigest: digest,
@@ -262,6 +265,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 		log.Debug("Created job for %s", digest.Hash)
 		totalRequests.Inc()
 		currentRequests.Inc()
+		created = true
 	} else {
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
@@ -277,7 +281,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) <-chan *longrunning
 		// amount of time until we receive the next real update.
 		ch <- j.Current
 	}
-	return ch
+	return ch, created
 }
 
 // stopStream de-registers the given event stream for a job.
@@ -390,15 +394,6 @@ type job struct {
 	Current   *longrunning.Operation
 	SentFirst bool
 	Done      bool
-}
-
-// Successful returns true if this job represents a successfully completed execution
-func (j *job) Successful() bool {
-	if !j.Done || j.Current == nil {
-		return false
-	}
-	resp := unmarshalResponse(j.Current)
-	return resp != nil && resp.Result != nil && resp.Result.ExitCode == 0
 }
 
 // unmarshalResponse retrieves the REAPI ExecuteResponse from a longrunning.Operation if it exists.
