@@ -364,13 +364,16 @@ func (s *server) process(msg *pubsub.Message) {
 			log.Error("Received a done response with neither response nor error field set: %#v", result)
 		}
 	}
-	if log.IsEnabledFor(logging.DEBUG) {
-		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
-			log.Debug("Got a failed update for %s: %s", metadata.ActionDigest.Hash, response.Status.Message)
-		}
-	}
 	worker := common.WorkerName(msg)
-	log.Notice("Got an update for %s from %s, now %s", metadata.ActionDigest.Hash, worker, metadata.Stage)
+	if metadata.Stage == pb.ExecutionStage_COMPLETE {
+		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
+			log.Errorf("Worker %s got a failed update for %s: %s", worker, metadata.ActionDigest.Hash, response.Status.Message)
+		} else {
+			log.Notice("Got an update for %s from %s, completed successfully", metadata.ActionDigest.Hash, worker)
+		}
+	} else {
+		log.Notice("Got an update for %s from %s, now %s message: %s", metadata.ActionDigest.Hash, worker, metadata.Stage)
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if j, present := s.jobs[metadata.ActionDigest.Hash]; !present {
