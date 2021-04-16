@@ -38,6 +38,9 @@ const timeout = 10 * time.Second
 // can no longer answer WaitExecution requests for them.
 const retentionTime = 5 * time.Minute
 
+// expiryTime is the period after which we expire an action that hasn't progressed.
+const expiryTime = 1 * time.Hour
+
 var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
@@ -87,9 +90,12 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	go srv.Receive()
 	if jobs, err := getExecutions(opts, apiURL, connTLS); err != nil {
 		log.Warningf("Failed to get inflight executions: %s", err)
-	} else {
+	} else if len(jobs) > 0 {
 		srv.jobs = jobs
 		log.Notice("Updated server with %d inflight executions", len(srv.jobs))
+		for id := range jobs {
+			go srv.expireJob(id)
+		}
 	}
 
 	lis, s := grpcutil.NewServer(opts)
@@ -199,6 +205,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		// We didn't create a new execution, so don't need to send a request for a new build.
 		return s.streamEvents(req.ActionDigest, ch, stream)
 	}
+	go s.expireJob(req.ActionDigest.Hash)
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
 	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
@@ -396,19 +403,51 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 		if op.Done {
 			log.Info("Job %s completed by %s", metadata.ActionDigest.Hash, worker)
-			go s.deleteJob(metadata.ActionDigest.Hash)
+			go s.deleteJobAfter(metadata.ActionDigest.Hash, retentionTime)
 			currentRequests.Dec()
 		}
 	}
 }
 
+// deleteJobAfter waits for a period then removes the given job from memory.
+func (s *server) deleteJobAfter(hash string, after time.Duration) {
+	time.Sleep(after)
+	log.Debug("Removing job %s", hash)
+	s.deleteJob(hash)
+}
+
 // deleteJob waits for a period then removes the given job from memory.
 func (s *server) deleteJob(hash string) {
-	time.Sleep(retentionTime)
-	log.Debug("Removing job %s", hash)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	delete(s.jobs, hash)
+}
+
+// expireJob expires an action that hasn't progressed.
+func (s *server) expireJob(hash string) {
+	t := time.NewTicker(expiryTime)
+	defer t.Stop()
+	for range t.C {
+		if j, exists := s.getJob(hash); !exists {
+			return
+		} else if len(j.Streams) == 0 {
+			if j.Done {
+				log.Debug("Expiring completed job %s", hash)
+			} else {
+				log.Warning("Expiring job %s with no listeners", hash)
+			}
+			s.deleteJob(hash)
+			return
+		}
+	}
+}
+
+// getJob returns a single job.
+func (s *server) getJob(hash string) (*job, bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	j, present := s.jobs[hash]
+	return j, present
 }
 
 // validatePlatform fetches the platform requirements for this request and checks them.
