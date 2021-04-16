@@ -448,14 +448,6 @@ func (s *server) maybeExpireJob(hash string) bool {
 	return false
 }
 
-// getJob returns a single job.
-func (s *server) getJob(hash string) (*job, bool) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	j, present := s.jobs[hash]
-	return j, present
-}
-
 // validatePlatform fetches the platform requirements for this request and checks them.
 func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, error) {
 	action := &pb.Action{}
