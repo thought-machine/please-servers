@@ -403,21 +403,16 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 		if op.Done {
 			log.Info("Job %s completed by %s", metadata.ActionDigest.Hash, worker)
-			go s.deleteJobAfter(metadata.ActionDigest.Hash, retentionTime)
+			go s.deleteJob(metadata.ActionDigest.Hash)
 			currentRequests.Dec()
 		}
 	}
 }
 
-// deleteJobAfter waits for a period then removes the given job from memory.
-func (s *server) deleteJobAfter(hash string, after time.Duration) {
-	time.Sleep(after)
-	log.Debug("Removing job %s", hash)
-	s.deleteJob(hash)
-}
-
 // deleteJob waits for a period then removes the given job from memory.
 func (s *server) deleteJob(hash string) {
+	time.Sleep(retentionTime)
+	log.Debug("Removing job %s", hash)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	delete(s.jobs, hash)
@@ -428,18 +423,29 @@ func (s *server) expireJob(hash string) {
 	t := time.NewTicker(expiryTime)
 	defer t.Stop()
 	for range t.C {
-		if j, exists := s.getJob(hash); !exists {
-			return
-		} else if len(j.Streams) == 0 {
-			if j.Done {
-				log.Debug("Expiring completed job %s", hash)
-			} else {
-				log.Warning("Expiring job %s with no listeners", hash)
-			}
-			s.deleteJob(hash)
+		if s.maybeExpireJob(hash) {
 			return
 		}
 	}
+}
+
+// maybeExpireJob checks a single job and expires it if nobody is waiting for an update.
+// It returns true if the job was expired.
+func (s *server) maybeExpireJob(hash string) bool {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if j, present := s.jobs[hash]; !present {
+		return true
+	} else if len(j.Streams) == 0 {
+		if j.Done {
+			log.Debug("Expiring completed job %s", hash)
+		} else {
+			log.Warning("Expiring job %s with no listeners", hash)
+		}
+		delete(s.jobs, hash)
+		return true
+	}
+	return false
 }
 
 // getJob returns a single job.
