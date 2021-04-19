@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"gopkg.in/op/go-logging.v1"
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/mettle/common"
@@ -365,7 +364,7 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 	}
 	worker := common.WorkerName(msg)
-	if metadata.Stage == pb.ExecutionStage_COMPLETE {
+	if metadata.Stage == pb.ExecutionStage_COMPLETED {
 		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
 			log.Warning("Got an update for %s from %s, failed update: %s", metadata.ActionDigest.Hash, worker, response.Status.Message)
 		} else {
