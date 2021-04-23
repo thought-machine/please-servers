@@ -11,6 +11,7 @@ service Bootstrap {
 message Job {
     string ID = 1;
     bytes Current = 2;
+    int64 LastUpdate = 5;
     bool SentFirst = 3;
     bool Done = 4;
 }

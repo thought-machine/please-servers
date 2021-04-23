@@ -40,6 +40,20 @@ func TestUncached(t *testing.T) {
 	runExecution(t, client, ex, uncachedHash, 0)
 }
 
+func TestCreateNewInsteadOfResume(t *testing.T) {
+	client, ex, s := setupServers(t)
+	defer s.Stop()
+	runExecution(t, client, ex, uncachedHash, 0)
+
+	// Temporarily set this to zero so we don't have to wait ten minutes in this test.
+	old := resumptionTime
+	resumptionTime = 0
+	defer func() { resumptionTime = old }()
+
+	// We should now get a complete new execution since this job counts as 'expired'
+	runExecution(t, client, ex, uncachedHash, 0)
+}
+
 func TestFlaky(t *testing.T) {
 	client, ex, s := setupServers(t)
 	defer s.Stop()

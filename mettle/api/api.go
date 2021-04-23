@@ -40,6 +40,9 @@ const retentionTime = 5 * time.Minute
 // expiryTime is the period after which we expire an action that hasn't progressed.
 const expiryTime = 1 * time.Hour
 
+// resumptionTime is the maximum age of jobs that we permit to be resumed.
+var resumptionTime = 10 * time.Minute
+
 var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
@@ -124,10 +127,11 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 	for k, v := range s.jobs {
 		current, _ := proto.Marshal(v.Current)
 		job := &bpb.Job{
-			ID:        k,
-			Current:   current,
-			SentFirst: v.SentFirst,
-			Done:      v.Done,
+			ID:         k,
+			Current:    current,
+			LastUpdate: v.LastUpdate.Unix(),
+			SentFirst:  v.SentFirst,
+			Done:       v.Done,
 		}
 		executions = append(executions, job)
 	}
@@ -166,9 +170,10 @@ func getExecutions(opts grpcutil.Opts, apiURL string, connTLS bool) (map[string]
 			continue
 		}
 		jobs[j.ID] = &job{
-			Current:   current,
-			SentFirst: j.SentFirst,
-			Done:      j.Done,
+			Current:    current,
+			LastUpdate: time.Unix(j.LastUpdate, 0),
+			SentFirst:  j.SentFirst,
+			Done:       j.Done,
 		}
 	}
 	return jobs, nil
@@ -289,18 +294,25 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 			Stage:        pb.ExecutionStage_QUEUED,
 			ActionDigest: digest,
 		})
-		j = &job{Current: &longrunning.Operation{Metadata: any}}
+		j = &job{
+			Current:    &longrunning.Operation{Metadata: any},
+			LastUpdate: time.Now(),
+		}
 		s.jobs[digest.Hash] = j
 		log.Debug("Created job for %s", digest.Hash)
 		totalRequests.Inc()
 		currentRequests.Inc()
+		created = true
+	} else if create && time.Since(j.LastUpdate) >= resumptionTime {
+		// In this path we think the job is too old to be relevant; we don't actually create
+		// a new job, but we tell the caller we did so it triggers a new execution.
 		created = true
 	} else {
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	j.Streams = append(j.Streams, ch)
-	if create {
+	if created {
 		// This request is creating a new stream, clear out any existing current job info; it is now
 		// at best irrelevant and at worst outdated.
 		j.Current = nil
@@ -378,7 +390,10 @@ func (s *server) process(msg *pubsub.Message) {
 	if j, present := s.jobs[metadata.ActionDigest.Hash]; !present {
 		// This is legit, we are getting an update about a job someone else started.
 		log.Debug("Update for %s is for a previously unknown job", metadata.ActionDigest.Hash)
-		s.jobs[metadata.ActionDigest.Hash] = &job{Current: op}
+		s.jobs[metadata.ActionDigest.Hash] = &job{
+			Current:    op,
+			LastUpdate: time.Now(),
+		}
 	} else if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
 		// Only send QUEUED messages if they're the first one. This prevents us from
 		// re-broadcasting a QUEUED message after something's already started executing.
@@ -390,6 +405,7 @@ func (s *server) process(msg *pubsub.Message) {
 			j.Done = true
 		}
 		j.Current = op
+		j.LastUpdate = time.Now()
 		for _, stream := range j.Streams {
 			// Invoke this in a goroutine so we do not block.
 			go func(ch chan<- *longrunning.Operation) {
@@ -422,18 +438,18 @@ func (s *server) deleteJob(hash string) {
 
 // expireJob expires an action that hasn't progressed.
 func (s *server) expireJob(hash string) {
-	t := time.NewTicker(expiryTime)
-	defer t.Stop()
-	for range t.C {
-		if s.maybeExpireJob(hash) {
-			return
-		}
+	time.Sleep(expiryTime)
+	if s.maybeExpireJob(hash, false) {
+		return
 	}
+	time.Sleep(expiryTime)
+	s.maybeExpireJob(hash, true)
 }
 
-// maybeExpireJob checks a single job and expires it if nobody is waiting for an update.
+// maybeExpireJob checks a single job and expires it if nobody is waiting for an update,
+// or expires it regardless if force=true.
 // It returns true if the job was expired.
-func (s *server) maybeExpireJob(hash string) bool {
+func (s *server) maybeExpireJob(hash string, force bool) bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if j, present := s.jobs[hash]; !present {
@@ -444,6 +460,10 @@ func (s *server) maybeExpireJob(hash string) bool {
 		} else {
 			log.Warning("Expiring job %s with no listeners", hash)
 		}
+		delete(s.jobs, hash)
+		return true
+	} else if force {
+		log.Warning("Force expiring job %s with %d listeners", hash, len(j.Streams))
 		delete(s.jobs, hash)
 		return true
 	}
@@ -487,10 +507,11 @@ func contains(haystack []string, needle string) bool {
 
 // A job represents a single execution request.
 type job struct {
-	Streams   []chan *longrunning.Operation
-	Current   *longrunning.Operation
-	SentFirst bool
-	Done      bool
+	Streams    []chan *longrunning.Operation
+	Current    *longrunning.Operation
+	LastUpdate time.Time
+	SentFirst  bool
+	Done       bool
 }
 
 // unmarshalResponse retrieves the REAPI ExecuteResponse from a longrunning.Operation if it exists.
