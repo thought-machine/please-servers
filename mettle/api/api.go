@@ -39,7 +39,10 @@ const timeout = 10 * time.Second
 const retentionTime = 5 * time.Minute
 
 // expiryTime is the period after which we expire an action that hasn't progressed.
-var expiryTime = 1 * time.Hour
+const expiryTime = 1 * time.Hour
+
+// resumptionTime is the maximum age of jobs that we permit to be resumed.
+var resumptionTime = 10 * time.Minute
 
 var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
@@ -301,7 +304,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		totalRequests.Inc()
 		currentRequests.Inc()
 		created = true
-	} else if create && time.Since(j.LastUpdate) >= expiryTime {
+	} else if create && time.Since(j.LastUpdate) >= resumptionTime {
 		// In this path we think the job is too old to be relevant; we don't actually create
 		// a new job, but we tell the caller we did so it triggers a new execution.
 		created = true
