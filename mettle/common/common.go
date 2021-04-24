@@ -103,14 +103,16 @@ func PublishWithOrderingKey(ctx context.Context, topic *pubsub.Topic, body []byt
 		Body: body,
 		BeforeSend: func(asFunc func(interface{}) bool) error {
 			var message *pspb.PubsubMessage
-			if asFunc(message) {
+			if asFunc(&message) {
 				message.OrderingKey = key
 				return nil
 			}
 			var om *mempubsub.OrderedMessage
-			if asFunc(om) {
+			if asFunc(&om) {
 				om.Key = key
+				return nil
 			}
+			log.Warning("Failed to set ordering key on message")
 			return nil
 		},
 		Metadata: map[string]string{workerKey: workerName},
