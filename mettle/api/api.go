@@ -378,12 +378,12 @@ func (s *server) process(msg *pubsub.Message) {
 	worker := common.WorkerName(msg)
 	if metadata.Stage == pb.ExecutionStage_COMPLETED {
 		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
-			log.Warning("Got an update for %s from %s, failed update: %s", metadata.ActionDigest.Hash, worker, response.Status.Message)
+			log.Warning("Got an update for %s from %s, failed update: %s. Done: %v", metadata.ActionDigest.Hash, worker, response.Status.Message, op.Done)
 		} else {
-			log.Notice("Got an update for %s from %s, completed successfully", metadata.ActionDigest.Hash, worker)
+			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", metadata.ActionDigest.Hash, worker, op.Done)
 		}
 	} else {
-		log.Notice("Got an update for %s from %s, now %s", metadata.ActionDigest.Hash, worker, metadata.Stage)
+		log.Notice("Got an update for %s from %s, now %s. Done: %v", metadata.ActionDigest.Hash, worker, metadata.Stage, op.Done)
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
