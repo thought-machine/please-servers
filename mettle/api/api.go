@@ -376,30 +376,34 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 	}
 	worker := common.WorkerName(msg)
+	key := metadata.ActionDigest.Hash
 	if metadata.Stage == pb.ExecutionStage_COMPLETED {
 		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
-			log.Warning("Got an update for %s from %s, failed update: %s. Done: %v", metadata.ActionDigest.Hash, worker, response.Status.Message, op.Done)
+			log.Warning("Got an update for %s from %s, failed update: %s. Done: %v", key, worker, response.Status.Message, op.Done)
 		} else {
-			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", metadata.ActionDigest.Hash, worker, op.Done)
+			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
 		}
 	} else {
-		log.Notice("Got an update for %s from %s, now %s. Done: %v", metadata.ActionDigest.Hash, worker, metadata.Stage, op.Done)
+		log.Notice("Got an update for %s from %s, now %s. Done: %v", key, worker, metadata.Stage, op.Done)
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if j, present := s.jobs[metadata.ActionDigest.Hash]; !present {
+	j, present := s.jobs[key]
+	if !present {
 		// This is legit, we are getting an update about a job someone else started.
-		log.Debug("Update for %s is for a previously unknown job", metadata.ActionDigest.Hash)
-		s.jobs[metadata.ActionDigest.Hash] = &job{
+		log.Debug("Update for %s is for a previously unknown job", key)
+		j = &job{
 			Current:    op,
 			LastUpdate: time.Now(),
 		}
-	} else if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
+		s.jobs[key] = j
+	}
+	if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
 		// Only send QUEUED messages if they're the first one. This prevents us from
 		// re-broadcasting a QUEUED message after something's already started executing.
 		j.SentFirst = true
 		if j.Done && !op.Done {
-			log.Warning("Got a progress message after completion for %s, discarding", metadata.ActionDigest.Hash)
+			log.Warning("Got a progress message after completion for %s, discarding", key)
 			return
 		} else if op.Done {
 			j.Done = true
@@ -412,7 +416,7 @@ func (s *server) process(msg *pubsub.Message) {
 				defer func() {
 					recover() // Avoid any chance of panicking from a 'send on closed channel'
 				}()
-				log.Debug("Dispatching update for %s", metadata.ActionDigest.Hash)
+				log.Debug("Dispatching update for %s", key)
 				ch <- op
 				if op.Done {
 					close(ch)
@@ -420,8 +424,8 @@ func (s *server) process(msg *pubsub.Message) {
 			}(stream)
 		}
 		if op.Done {
-			log.Info("Job %s completed by %s", metadata.ActionDigest.Hash, worker)
-			go s.deleteJob(metadata.ActionDigest.Hash)
+			log.Info("Job %s completed by %s", key, worker)
+			go s.deleteJob(key)
 			currentRequests.Dec()
 		}
 	}
