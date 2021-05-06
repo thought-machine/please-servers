@@ -497,7 +497,9 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
+		log.Notice("Error downloading directory. Code: %d", int(grpcstatus.Code(err)))
 		if grpcstatus.Code(err) == codes.NotFound {
+			log.Notice("Incrementing blobNotFoundErrors")
 			blobNotFoundErrors.Inc()
 		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
