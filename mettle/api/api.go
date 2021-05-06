@@ -311,7 +311,6 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
 	ch := make(chan *longrunning.Operation, 100)
-	j.Streams = append(j.Streams, ch)
 	if created {
 		// This request is creating a new stream, clear out any existing current job info; it is now
 		// at best irrelevant and at worst outdated.
@@ -321,6 +320,14 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
 		// amount of time until we receive the next real update.
 		ch <- j.Current
+	}
+	// Keep this stream if we are going to send further updates on it; don't if
+	// we are resuming an existing job that is already completed (in which case there will
+	// be no further update and no point for the receiver to keep waiting).
+	if created || j.Current == nil || !j.Done {
+		j.Streams = append(j.Streams, ch)
+	} else {
+		close(ch)
 	}
 	return ch, created
 }
