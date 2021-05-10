@@ -122,8 +122,9 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	if err != nil {
 		return err
 	}
-	defer w.Shutdown()
+	defer w.ShutdownQueues()
 
+	log.Notice("Queuing task for %s", digest.Hash)
 	b, _ := proto.Marshal(&pb.ExecuteRequest{
 		InstanceName: instanceName,
 		ActionDigest: digest,
@@ -131,6 +132,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
 		log.Fatalf("Failed to submit job to internal queue: %s", err)
 	}
+	log.Notice("Queued task for %s", digest.Hash)
 
 	if response, err := w.RunTask(context.Background()); err != nil {
 		return fmt.Errorf("Failed to run task: %s", err)
@@ -148,7 +150,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	if err != nil {
 		return err
 	}
-	defer w.Shutdown()
+	defer w.ShutdownQueues()
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
@@ -343,8 +345,8 @@ type worker struct {
 	limiter, iolimiter chan struct{}
 }
 
-// Shutdown shuts down the internal topic & subscription when done.
-func (w *worker) Shutdown() {
+// ShutdownQueues shuts down the internal topic & subscription when done.
+func (w *worker) ShutdownQueues() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := w.responses.Shutdown(ctx); err != nil {
