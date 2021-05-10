@@ -122,19 +122,18 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	if err != nil {
 		return err
 	}
-	// Have to do this async since mempubsub doesn't seem to store messages?
-	go func() {
-		time.Sleep(50 * time.Millisecond) // this is dodgy obvs
-		b, _ := proto.Marshal(&pb.ExecuteRequest{
-			InstanceName: instanceName,
-			ActionDigest: digest,
-		})
-		log.Notice("Sending request to build %s...", digest.Hash)
-		if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
-			log.Fatalf("Failed to submit job to internal queue: %s", err)
-		}
-		log.Notice("Sent request to build %s", digest.Hash)
-	}()
+	defer w.ShutdownQueues()
+
+	log.Notice("Queuing task for %s", digest.Hash)
+	b, _ := proto.Marshal(&pb.ExecuteRequest{
+		InstanceName: instanceName,
+		ActionDigest: digest,
+	})
+	if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
+		log.Fatalf("Failed to submit job to internal queue: %s", err)
+	}
+	log.Notice("Queued task for %s", digest.Hash)
+
 	if response, err := w.RunTask(context.Background()); err != nil {
 		return fmt.Errorf("Failed to run task: %s", err)
 	} else if response.Result == nil {
@@ -151,6 +150,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	if err != nil {
 		return err
 	}
+	defer w.ShutdownQueues()
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
@@ -160,8 +160,8 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		cancel()
 		w.Report(false, false, false, "Received signal %s, shutting down when ready...", sig)
 		sig = <-ch
-		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
+		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 	}()
 	for {
 		w.waitForFreeResources()
@@ -343,6 +343,18 @@ type worker struct {
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
+}
+
+// ShutdownQueues shuts down the internal topic & subscription when done.
+func (w *worker) ShutdownQueues() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := w.responses.Shutdown(ctx); err != nil {
+		log.Warning("Failed to shut down topic: %s", err)
+	}
+	if err := w.requests.Shutdown(ctx); err != nil {
+		log.Warning("Failed to shut down subscription: %s", err)
+	}
 }
 
 // RunTask runs a single task.
