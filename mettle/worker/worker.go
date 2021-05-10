@@ -122,6 +122,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	if err != nil {
 		return err
 	}
+	defer w.Shutdown()
 
 	b, _ := proto.Marshal(&pb.ExecuteRequest{
 		InstanceName: instanceName,
@@ -147,6 +148,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	if err != nil {
 		return err
 	}
+	defer w.Shutdown()
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
@@ -156,8 +158,8 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		cancel()
 		w.Report(false, false, false, "Received signal %s, shutting down when ready...", sig)
 		sig = <-ch
-		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
+		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 	}()
 	for {
 		w.waitForFreeResources()
@@ -339,6 +341,18 @@ type worker struct {
 
 	// For limiting parallelism during download / write actions
 	limiter, iolimiter chan struct{}
+}
+
+// Shutdown shuts down the internal topic & subscription when done.
+func (w *worker) Shutdown() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := w.responses.Shutdown(ctx); err != nil {
+		log.Warning("Failed to shut down topic: %s", err)
+	}
+	if err := w.requests.Shutdown(ctx); err != nil {
+		log.Warning("Failed to shut down subscription: %s", err)
+	}
 }
 
 // RunTask runs a single task.

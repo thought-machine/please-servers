@@ -57,13 +57,11 @@ func MustOpenSubscription(url string) *pubsub.Subscription {
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 func MustOpenTopic(url string) *pubsub.Topic {
 	url = renameURL(url)
-	ctx, cancel := context.WithCancel(context.Background())
-	t, err := pubsub.OpenTopic(ctx, url)
+	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open topic %s: %s", url, err)
 	}
 	log.Debug("Opened topic %s", url)
-	handleSignals(cancel, t)
 	return t
 }
 
