@@ -122,19 +122,15 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	if err != nil {
 		return err
 	}
-	// Have to do this async since mempubsub doesn't seem to store messages?
-	go func() {
-		time.Sleep(50 * time.Millisecond) // this is dodgy obvs
-		b, _ := proto.Marshal(&pb.ExecuteRequest{
-			InstanceName: instanceName,
-			ActionDigest: digest,
-		})
-		log.Notice("Sending request to build %s...", digest.Hash)
-		if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
-			log.Fatalf("Failed to submit job to internal queue: %s", err)
-		}
-		log.Notice("Sent request to build %s", digest.Hash)
-	}()
+
+	b, _ := proto.Marshal(&pb.ExecuteRequest{
+		InstanceName: instanceName,
+		ActionDigest: digest,
+	})
+	if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
+		log.Fatalf("Failed to submit job to internal queue: %s", err)
+	}
+
 	if response, err := w.RunTask(context.Background()); err != nil {
 		return fmt.Errorf("Failed to run task: %s", err)
 	} else if response.Result == nil {
