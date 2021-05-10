@@ -149,6 +149,7 @@ type subscription struct {
 	messages      chan *driver.Message
 	acks          sync.Map
 	ackDeadline   time.Duration
+	closed        bool
 }
 
 // NewSubscription creates a new subscription for the given topic.
@@ -241,7 +242,10 @@ func (*subscription) ErrorCode(err error) gcerrors.ErrorCode {
 
 // Close implements driver.Subscription.Close.
 func (s *subscription) Close() error {
-	close(s.messages)
+	if !s.closed {
+		s.closed = true
+		close(s.messages)
+	}
 	return nil
 }
 
