@@ -53,10 +53,10 @@ func (c *cache) Store(dir, src, key string) {
 }
 
 // StoreAny stores any one of the given files if they match any of the prefixes.
-func (c *cache) StoreAny(dir string, srcs []string, key string) {
-	for _, src := range srcs {
-		if c.shouldStore(dir, src) {
-			c.store(src, key)
+func (c *cache) StoreAny(dir string, files []fileNode, key string) {
+	for _, file := range files {
+		if c.shouldStore(dir, file.Name) {
+			c.store(file.Name, key)
 			return
 		}
 	}
