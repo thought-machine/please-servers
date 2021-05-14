@@ -36,8 +36,8 @@ const ioParallelism = 10
 const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 // A fileNode contains the minimal fields we need to write a pb.FileNode.
-type fileNode struct{
-	Name string
+type fileNode struct {
+	Name         string
 	IsExecutable bool
 }
 
@@ -85,7 +85,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 		}
 		dg := sdkdigest.NewFromProtoUnvalidated(file.Digest)
 		files[dg] = append(files[dg], fileNode{
-			Name: path.Join(root, file.Name),
+			Name:         path.Join(root, file.Name),
 			IsExecutable: file.IsExecutable},
 		)
 	}
@@ -226,7 +226,7 @@ func (w *worker) linkAll(files []fileNode) error {
 		return nil
 	}
 	done := map[string]struct{}{
-		files[0].Name: struct{}{},
+		files[0].Name: {},
 	}
 	for _, f := range files[1:] {
 		// This should technically not be necessary (REAPI says all child names must be unique)
