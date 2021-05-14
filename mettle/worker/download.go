@@ -222,9 +222,20 @@ func (w *worker) downloadFile(files []fileNode, dg sdkdigest.Digest) error {
 
 // linkAll hardlinks all the given files in the list (assuming the first has already been written)
 func (w *worker) linkAll(files []fileNode) error {
+	if len(files) == 1 {
+		return nil
+	}
+	done := map[string]struct{}{
+		files[0].Name: struct{}{},
+	}
 	for _, f := range files[1:] {
-		if err := os.Link(files[0].Name, f.Name); err != nil {
-			return err
+		// This should technically not be necessary (REAPI says all child names must be unique)
+		// but we have observed it happen occasionally, so let's defend against it for now.
+		if _, present := done[f.Name]; !present {
+			if err := os.Link(files[0].Name, f.Name); err != nil {
+				return err
+			}
+			done[f.Name] = struct{}{}
 		}
 	}
 	return nil
