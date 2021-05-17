@@ -35,6 +35,12 @@ const ioParallelism = 10
 // else lost the size for some reason (it will be more obvious to debug that mismatch than mysteriously empty files).
 const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
+// A fileNode contains the minimal fields we need to write a pb.FileNode.
+type fileNode struct {
+	Name         string
+	IsExecutable bool
+}
+
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
 func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	ts1 := time.Now()
@@ -47,7 +53,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	for _, dir := range dirs {
 		m[digestProto(dir).Hash] = dir
 	}
-	files := map[string]*pb.FileNode{}
+	files := map[sdkdigest.Digest][]fileNode{}
 	if err := w.createDirectory(m, files, w.dir, digest); err != nil {
 		return err
 	}
@@ -60,7 +66,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 }
 
 // createDirectory creates a directory & all its children
-func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string]*pb.FileNode, root string, digest *pb.Digest) error {
+func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, root string, digest *pb.Digest) error {
 	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
 		return err
 	}
@@ -77,7 +83,11 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string
 		} else if err := makeDirIfNeeded(root, file.Name); err != nil {
 			return err
 		}
-		files[path.Join(root, file.Name)] = file
+		dg := sdkdigest.NewFromProtoUnvalidated(file.Digest)
+		files[dg] = append(files[dg], fileNode{
+			Name:         path.Join(root, file.Name),
+			IsExecutable: file.IsExecutable},
+		)
 	}
 	for _, dir := range dir.Directories {
 		if err := common.CheckPath(dir.Name); err != nil {
@@ -100,84 +110,81 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[string
 }
 
 // downloadAllFiles downloads all the files for a single build action.
-func (w *worker) downloadAllFiles(files map[string]*pb.FileNode) error {
+func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode) error {
 	var g errgroup.Group
 
-	filenames := []string{}
+	fileNodes := map[sdkdigest.Digest][]fileNode{}
 	var totalSize int64
-	for filename, file := range files {
+	for dg, filenames := range files {
 		// Optimise out any empty files. The empty blob is surprisingly popular and obviously we always know what
 		// it will contain, so save the RPCs.
-		if file.Digest.SizeBytes == 0 && file.Digest.Hash == emptyHash {
-			fn := filename
-			f := file
+		if dg.Size == 0 && dg.Hash == emptyHash {
+			fns := filenames
+			dg := dg
 			g.Go(func() error {
-				return w.writeFile(fn, nil, f)
+				return w.writeFiles(fns, nil, dg)
 			})
 			continue
 		}
-		if w.fileCache != nil && w.fileCache.Retrieve(file.Digest.Hash, filename, fileMode(file.IsExecutable)) {
+		if w.fileCache != nil && w.fileCache.Retrieve(dg.Hash, filenames[0].Name, fileMode(filenames[0].IsExecutable)) {
 			cacheHits.Inc()
-			w.cachedBytes += file.Digest.SizeBytes
+			w.cachedBytes += dg.Size
+			if err := w.linkAll(filenames); err != nil {
+				return err
+			}
 			continue
 		}
-		if file.Digest.SizeBytes > maxBlobBatchSize {
+		if dg.Size > maxBlobBatchSize {
 			// This blob is big enough that it must always be done on its own.
-			w.downloadedBytes += file.Digest.SizeBytes
-			fn := filename
-			f := file
-			g.Go(func() error { return w.downloadFile(fn, f) })
+			w.downloadedBytes += dg.Size
+			fns := filenames
+			dg := dg
+			g.Go(func() error { return w.downloadFile(fns, dg) })
 			continue
 		}
 		// Check cache for this blob (we never cache blobs that are big enough not to be batchable)
-		if blob, present := w.cache.Get(file.Digest.Hash); present {
+		if blob, present := w.cache.Get(dg.Hash); present {
 			cacheHits.Inc()
-			w.cachedBytes += file.Digest.SizeBytes
-			fn := filename
-			f := file
+			w.cachedBytes += dg.Size
+			fns := filenames
+			dg := dg
 			g.Go(func() error {
-				return w.writeFile(fn, blob.([]byte), f)
+				return w.writeFiles(fns, blob.([]byte), dg)
 			})
 			continue
 		}
 		cacheMisses.Inc()
-		if totalSize+file.Digest.SizeBytes > maxBlobBatchSize {
+		if totalSize+dg.Size > maxBlobBatchSize {
 			// This blob on its own is OK but will exceed the total.
 			// Download what we have so far then deal with it.
-			fs := filenames[:]
-			g.Go(func() error { return w.downloadFiles(fs, files) })
-			filenames = []string{}
+			fns := fileNodes
+			g.Go(func() error { return w.downloadFiles(fns) })
+			fileNodes = map[sdkdigest.Digest][]fileNode{}
 			totalSize = 0
 		}
-		filenames = append(filenames, filename)
-		totalSize += file.Digest.SizeBytes
-		w.downloadedBytes += file.Digest.SizeBytes
+		fileNodes[dg] = filenames
+		totalSize += dg.Size
+		w.downloadedBytes += dg.Size
 	}
 	// If we have anything left over, handle them now.
-	if len(filenames) != 0 {
-		g.Go(func() error { return w.downloadFiles(filenames, files) })
+	if len(fileNodes) != 0 {
+		g.Go(func() error { return w.downloadFiles(fileNodes) })
 	}
 	return g.Wait()
 }
 
 // downloadFiles downloads a set of files to disk in a batch.
 // The total size must be lower than whatever limits are considered relevant.
-func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode) error {
+func (w *worker) downloadFiles(files map[sdkdigest.Digest][]fileNode) error {
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
-	log.Debug("Downloading batch of %d files...", len(filenames))
-	digests := make([]sdkdigest.Digest, 0, len(filenames))
-	compressors := make([]pb.Compressor_Value, 0, len(filenames))
-	digestToFilenames := make(map[string][]string, len(filenames))
-	for _, f := range filenames {
-		d := files[f].Digest
-		filenames, present := digestToFilenames[d.Hash]
-		if !present {
-			digests = append(digests, sdkdigest.NewFromProtoUnvalidated(d))
-			compressors = append(compressors, w.compressor(f, d.SizeBytes))
-		}
-		digestToFilenames[d.Hash] = append(filenames, f)
+	log.Debug("Downloading batch of %d files...", len(files))
+	digests := make([]sdkdigest.Digest, 0, len(files))
+	compressors := make([]pb.Compressor_Value, 0, len(files))
+	for dg, filenames := range files {
+		digests = append(digests, dg)
+		compressors = append(compressors, w.compressor(filenames, dg.Size))
 	}
 	responses, err := w.client.BatchDownload(digests, compressors)
 	if err != nil {
@@ -187,11 +194,9 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 		return grpcstatus.Errorf(codes.InvalidArgument, "Unexpected response, requested %d blobs, got %d", len(digests), len(responses))
 	}
 	for dg, data := range responses {
-		if filenames, present := digestToFilenames[dg.Hash]; !present {
+		if fileNodes, present := files[dg]; !present {
 			return grpcstatus.Errorf(codes.InvalidArgument, "Unknown digest %s in response", dg.Hash)
-			// The below isn't *quite* right since it assumes file modes are consistent across all files with a matching
-			// digest, which isn't actually what the protocol says....
-		} else if err := w.writeFiles(filenames, data, files[filenames[0]]); err != nil {
+		} else if err := w.writeFiles(fileNodes, data, dg); err != nil {
 			return err
 		}
 		w.cache.Set(dg.Hash, data, int64(len(data)))
@@ -200,44 +205,52 @@ func (w *worker) downloadFiles(filenames []string, files map[string]*pb.FileNode
 }
 
 // downloadFile downloads a single file to disk.
-func (w *worker) downloadFile(filename string, file *pb.FileNode) error {
+func (w *worker) downloadFile(files []fileNode, dg sdkdigest.Digest) error {
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
-	log.Debug("Downloading file of %d bytes...", file.Digest.SizeBytes)
-	if err := w.client.ReadToFile(sdkdigest.NewFromProtoUnvalidated(file.Digest), filename, w.compressor(filename, file.Digest.SizeBytes) != pb.Compressor_ZSTD); err != nil {
+	log.Debug("Downloading file of %d bytes...", dg.Size)
+	filename := files[0].Name
+	if err := w.client.ReadToFile(dg, filename, w.compressor(files, dg.Size) != pb.Compressor_ZSTD); err != nil {
 		return grpcstatus.Errorf(grpcstatus.Code(err), "Failed to download file: %s", err)
-	} else if err := os.Chmod(filename, fileMode(file.IsExecutable)); err != nil {
+	} else if err := os.Chmod(filename, fileMode(files[0].IsExecutable)); err != nil {
 		return fmt.Errorf("Failed to chmod file: %s", err)
 	}
-	w.fileCache.Store(w.dir, filename, file.Digest.Hash)
-	return nil
+	w.fileCache.Store(w.dir, filename, dg.Hash)
+	return w.linkAll(files)
 }
 
-// writeFile writes a blob to disk.
-func (w *worker) writeFile(filename string, data []byte, f *pb.FileNode) error {
-	w.iolimiter <- struct{}{}
-	defer func() { <-w.iolimiter }()
-	if err := ioutil.WriteFile(filename, data, fileMode(f.IsExecutable)); err != nil {
-		return err
+// linkAll hardlinks all the given files in the list (assuming the first has already been written)
+func (w *worker) linkAll(files []fileNode) error {
+	if len(files) == 1 {
+		return nil
 	}
-	w.fileCache.Store(w.dir, filename, f.Digest.Hash)
+	done := map[string]struct{}{
+		files[0].Name: {},
+	}
+	for _, f := range files[1:] {
+		// This should technically not be necessary (REAPI says all child names must be unique)
+		// but we have observed it happen occasionally, so let's defend against it for now.
+		if _, present := done[f.Name]; !present {
+			if err := os.Link(files[0].Name, f.Name); err != nil {
+				return err
+			}
+			done[f.Name] = struct{}{}
+		}
+	}
 	return nil
 }
 
 // writeFiles writes a blob to a series of files.
-func (w *worker) writeFiles(filenames []string, data []byte, f *pb.FileNode) error {
-	mode := fileMode(f.IsExecutable)
+func (w *worker) writeFiles(files []fileNode, data []byte, dg sdkdigest.Digest) error {
 	w.iolimiter <- struct{}{}
 	defer func() { <-w.iolimiter }()
-	// We could potentially be slightly smarter here by writing only the first file and linking others, although
-	// first attempts resulted in some odd "file exists" errors.
-	for _, fn := range filenames {
-		if err := ioutil.WriteFile(fn, data, mode); err != nil {
-			return err
-		}
+	if err := ioutil.WriteFile(files[0].Name, data, fileMode(files[0].IsExecutable)); err != nil {
+		return err
+	} else if err := w.linkAll(files); err != nil {
+		return err
 	}
-	w.fileCache.StoreAny(w.dir, filenames, f.Digest.Hash)
+	w.fileCache.StoreAny(w.dir, files, dg.Hash)
 	return nil
 }
 
@@ -263,8 +276,17 @@ func fileMode(isExecutable bool) os.FileMode {
 	return 0444
 }
 
-// compressor returns the compressor to use for a given filename
-func (w *worker) compressor(filename string, size int64) pb.Compressor_Value {
+// compressor returns the compressor to use for downloading the digest for a given set of files.
+func (w *worker) compressor(fileNodes []fileNode, size int64) pb.Compressor_Value {
+	// Using the first filename only here is a little suboptimal but we assume it won't
+	// typically matter (since it is only an optimisation to choose whether to request
+	// compression or not). We could potentially find another strategy in future if we
+	// decide this is significantly suboptimal.
+	return w.oneCompressor(fileNodes[0].Name, size)
+}
+
+// oneCompressor returns the compressor to use for a given filename
+func (w *worker) oneCompressor(filename string, size int64) pb.Compressor_Value {
 	if size >= rexclient.CompressionThreshold && shouldCompress(filename) {
 		return pb.Compressor_ZSTD
 	}
