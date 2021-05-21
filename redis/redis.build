@@ -81,4 +81,5 @@ for name, src in binaries.items():
             ":lib",
             ":linenoise",
         ],
+        visibility = ["/////redis:all"],
     )

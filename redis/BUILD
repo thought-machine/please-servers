@@ -5,3 +5,11 @@ github_repo(
     repo = "redis/redis",
     revision = "6.2.3",
 )
+
+sh_cmd(
+    name = "run_local",
+    cmd = "mkdir -p plz-out/redis && exec $(out_location ///redis/redis//:redis_server) redis/redis.conf",
+    data = [
+        "///redis/redis//:redis_server",
+    ],
+)
