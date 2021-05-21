@@ -1,0 +1,84 @@
+_release_h = """
+#define REDIS_GIT_SHA1 "00000000"
+#define REDIS_GIT_DIRTY "0"
+#define REDIS_BUILD_ID "plz"
+"""
+
+text_file(
+    name = "release_h",
+    out = "release.h",
+    content = _release_h,
+)
+
+c_library(
+    name = "lua",
+    srcs = glob(["deps/lua/src/*.c"], exclude = ["lua.c", "luac.c"]),
+    hdrs = glob(["deps/lua/src/*.h", "src/solarisfixes.h"]),
+    cflags = ["-Wno-implicit-function-declaration"],  # They do slightly the wrong thing with strncasecmp
+    includes = ["deps/lua/src"],
+    defines = ["LUA_USE_MKSTEMP"],
+)
+
+c_library(
+    name = "hiredis",
+    srcs = glob(["deps/hiredis/*.c"], exclude = ["dict.c", "test.c"]),
+    hdrs = glob(["deps/hiredis/*.h"]),
+    private_hdrs = ["deps/hiredis/dict.c"],
+    cflags = ["-Wno-unused-variable"],  # there's an unused 'ret' in release mode.
+    includes = ["deps/hiredis"],
+)
+
+c_library(
+    name = "lib",
+    srcs = glob(["src/*.c"], exclude = ["redis-benchmark.c", "redis-cli.c", "ae_*.c", "server.c"]),
+    hdrs = glob(["src/*.h"]),
+    private_hdrs = glob(["src/ae_*.c"]),
+    deps = [
+        ":hiredis",
+        ":lua",
+        ":release_h",
+    ],
+)
+
+c_library(
+    name = "linenoise",
+    srcs = glob(["deps/linenoise/*.c"], exclude = ["example.c"]),
+    hdrs = glob(["deps/linenoise/*.h"]),
+    cflags = [
+        "-Wno-implicit-function-declaration",  # strcasecmp this time
+        "-Wno-int-conversion",
+    ],
+    includes = ["deps/linenoise"],
+)
+
+c_library(
+    name = "hdr_histogram",
+    srcs = glob(["deps/hdr_histogram/*.c"]),
+    hdrs = glob(["deps/hdr_histogram/*.h"]),
+    includes = ["deps/hdr_histogram"],
+)
+
+binaries = {
+    "cli": "redis-cli.c",
+    "benchmark": "redis-benchmark.c",
+    "check-aof": "redis-check-aof.c",
+    "check-rdb": "redis-check-rdb.c",
+    "sentinel": "sentinel.c",
+    "server": "server.c",
+}
+
+for name, src in binaries.items():
+    c_binary(
+        name = f"redis_{name}",
+        srcs = ["src/" + src],
+        ldflags = [
+            "-lm",
+            "-lpthread",
+            "-ldl",
+        ],
+        deps = [
+            ":hdr_histogram",
+            ":lib",
+            ":linenoise",
+        ],
+    )
