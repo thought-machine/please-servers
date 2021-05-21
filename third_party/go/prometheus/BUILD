@@ -6,6 +6,7 @@ go_module(
         "prometheus",
         "prometheus/internal",
         "prometheus/promhttp",
+        "prometheus/push",
     ],
     module = "github.com/prometheus/client_golang",
     version = "v1.1.0",
