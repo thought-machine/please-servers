@@ -341,6 +341,7 @@ type worker struct {
 	metadata        *pb.ExecutedActionMetadata
 	downloadedBytes int64
 	cachedBytes     int64
+	redisBytes      int64
 	taskStartTime   time.Time
 	metadataFetch   time.Duration
 	dirCreation     time.Duration
@@ -375,6 +376,7 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	}
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
+	w.redisBytes = 0
 	response := w.runTask(msg)
 	msg.Ack()
 	err = w.update(pb.ExecutionStage_COMPLETED, response)
@@ -535,8 +537,9 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	}
 	fetchDurations.Observe(time.Since(start).Seconds())
 	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
-		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
-		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+		percentage := float64(w.downloadedBytes-w.redisBytes) * 100.0 / float64(total)
+		rpercentage := float64(w.redisBytes) * 100.0 / float64(total)
+		log.Notice("Prepared directory for %s; Downloaded: %s (%0.1f%%) Redis: %s (%0.1f%%) Total: %s", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes-w.redisBytes)), percentage, humanize.Bytes(uint64(w.redisBytes)), rpercentage, humanize.Bytes(uint64(total)))
 	} else {
 		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
 	}
