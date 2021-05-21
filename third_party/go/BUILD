@@ -708,3 +708,74 @@ go_module(
         ":oauth2",
     ],
 )
+
+go_module(
+    name = "redis",
+    module = "github.com/go-redis/redis/v8",
+    version = "v8.8.3",
+    deps = [
+        ":opentelemetry",
+        ":opentelemetry_metric",
+        ":opentelemetry_trace",
+    ],
+)
+
+go_mod_download(
+    name = "opentelemetry_download",
+    module = "go.opentelemetry.io/otel",
+    version = "v0.20.0",
+)
+
+go_module(
+    name = "opentelemetry",
+    download = ":opentelemetry_download",
+    install = [
+        ".",
+    ],
+    module = "go.opentelemetry.io/otel",
+    deps = [
+        ":opentelemetry_trace",
+    ],
+)
+
+go_module(
+    name = "opentelemetry_metric",
+    download = ":opentelemetry_download",
+    install = [
+        "metric",
+    ],
+    module = "go.opentelemetry.io/otel",
+    deps = [
+        ":opentelemetry_internal",
+    ],
+)
+
+go_module(
+    name = "opentelemetry_trace",
+    download = ":opentelemetry_download",
+    install = [
+        ".",
+    ],
+    module = "go.opentelemetry.io/otel/trace",
+    deps = [
+        ":opentelemetry_attribute",
+    ],
+)
+
+go_module(
+    name = "opentelemetry_internal",
+    download = ":opentelemetry_download",
+    install = [
+        "internal",
+    ],
+    module = "go.opentelemetry.io/otel",
+)
+
+go_module(
+    name = "opentelemetry_attribute",
+    download = ":opentelemetry_download",
+    install = [
+        "attribute",
+    ],
+    module = "go.opentelemetry.io/otel",
+)
