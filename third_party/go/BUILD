@@ -711,71 +711,46 @@ go_module(
 
 go_module(
     name = "redis",
+    install = [
+        "...",
+    ],
     module = "github.com/go-redis/redis/v8",
-    version = "v8.8.3",
+    version = "v8.3.3",
     deps = [
         ":opentelemetry",
-        ":opentelemetry_metric",
-        ":opentelemetry_trace",
+        ":rendezvous",
+        ":xxhash_v2",
     ],
 )
 
-go_mod_download(
-    name = "opentelemetry_download",
-    module = "go.opentelemetry.io/otel",
-    version = "v0.20.0",
-)
-
-go_module(
+go_get(
     name = "opentelemetry",
-    download = ":opentelemetry_download",
+    get = "go.opentelemetry.io/otel",
     install = [
         ".",
+        "api/global",
+        "api/global/internal",
+        "api/metric",
+        "api/metric/registry",
+        "api/trace",
+        "codes",
+        "internal/...",
+        "label",
+        "unit",
     ],
-    module = "go.opentelemetry.io/otel",
-    deps = [
-        ":opentelemetry_trace",
-    ],
+    licences = ["apache-2.0"],
+    revision = "v0.13.0",
 )
 
 go_module(
-    name = "opentelemetry_metric",
-    download = ":opentelemetry_download",
-    install = [
-        "metric",
-    ],
-    module = "go.opentelemetry.io/otel",
-    deps = [
-        ":opentelemetry_internal",
-    ],
+    name = "xxhash_v2",
+    module = "github.com/cespare/xxhash/v2",
+    version = "v2.1.1",
 )
 
-go_module(
-    name = "opentelemetry_trace",
-    download = ":opentelemetry_download",
-    install = [
-        ".",
-    ],
-    module = "go.opentelemetry.io/otel/trace",
-    deps = [
-        ":opentelemetry_attribute",
-    ],
-)
-
-go_module(
-    name = "opentelemetry_internal",
-    download = ":opentelemetry_download",
-    install = [
-        "internal",
-    ],
-    module = "go.opentelemetry.io/otel",
-)
-
-go_module(
-    name = "opentelemetry_attribute",
-    download = ":opentelemetry_download",
-    install = [
-        "attribute",
-    ],
-    module = "go.opentelemetry.io/otel",
+go_get(
+    name = "rendezvous",
+    get = "github.com/dgryski/go-rendezvous",
+    licences = ["mit"],
+    revision = "9f7001d12a5f0021fd3283525f888b5814ccee27",
 )

@@ -24,6 +24,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dustin/go-humanize"
+	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -108,17 +109,17 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redis string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redis, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
 
 // RunOne runs one single request, returning any error received.
-func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
+func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile, redis string, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
 	topic := common.MustOpenTopic("mem://requests")
-	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
+	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", tokenFile, redis, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
 	if err != nil {
 		return err
 	}
@@ -145,8 +146,8 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) error {
-	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension)
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redis string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) error {
+	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redis, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension)
 	if err != nil {
 		return err
 	}
@@ -184,7 +185,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redisURL string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -258,6 +259,11 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		instanceName:    instanceName,
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
 	}
+	if redisURL != "" {
+		w.redis = redis.NewClient(&redis.Options{
+			Addr: redisURL,
+		})
+	}
 	if ackExtension > 0 {
 		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
 			return nil, fmt.Errorf("Cannot specify a non-zero ack extension on subscription %s", requestQueue)
@@ -312,6 +318,7 @@ type worker struct {
 	rclient         *client.Client
 	lucidity        lpb.LucidityClient
 	lucidChan       chan *lpb.UpdateRequest
+	redis           *redis.Client
 	cache           *ristretto.Cache
 	instanceName    string
 	dir, rootDir    string
