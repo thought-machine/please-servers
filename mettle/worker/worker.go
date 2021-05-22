@@ -185,7 +185,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	}
 }
 
-func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redisURL string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) (*worker, error) {
+func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, tokenFile, redis string, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) (*worker, error) {
 	// Make sure we have a directory to run in
 	if err := os.MkdirAll(dir, os.ModeDir|0755); err != nil {
 		return nil, fmt.Errorf("Failed to create working directory: %s", err)
@@ -259,10 +259,9 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		instanceName:    instanceName,
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
 	}
-	if redisURL != "" {
-		w.redis = redis.NewClient(&redis.Options{
-			Addr: redisURL,
-		})
+	storer := newStorer(cachePrefix, cacheParts)
+	if redis != "" {
+		w.client = newRedisClient(client, redis, storer)
 	}
 	if ackExtension > 0 {
 		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
@@ -271,7 +270,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcppubsub://")
 	}
 	if cacheDir != "" {
-		w.fileCache = newCache(cacheDir, cachePrefix, cacheParts)
+		w.fileCache = newCache(cacheDir, storer)
 	}
 	if maxCacheSize > 0 {
 		c, err := ristretto.NewCache(&ristretto.Config{
