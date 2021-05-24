@@ -96,22 +96,22 @@ var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "blob_not_found_errors_total",
 })
 
-var metrics = map[prometheus.Collector]string {
-	totalBuilds: "builds_total",
-	currentBuilds: "builds_current",
-	executeDurations: "build_durations_secs",
-	fetchDurations: "fetch_durations_secs",
-	uploadDurations: "upload_durations_secs",
-	peakMemory: "peak_memory_usage_mb",
-	cpuUsage: "cpu_usage_per_sec",
-	cacheHits: "cache_hits_total",
-	cacheMisses: "cache_misses_total",
+var metrics = map[prometheus.Collector]string{
+	totalBuilds:        "builds_total",
+	currentBuilds:      "builds_current",
+	executeDurations:   "build_durations_secs",
+	fetchDurations:     "fetch_durations_secs",
+	uploadDurations:    "upload_durations_secs",
+	peakMemory:         "peak_memory_usage_mb",
+	cpuUsage:           "cpu_usage_per_sec",
+	cacheHits:          "cache_hits_total",
+	cacheMisses:        "cache_misses_total",
 	blobNotFoundErrors: "blob_not_found_errors_total",
 }
 
 func init() {
 	for metric := range metrics {
-	    prometheus.MustRegister(metric)
+		prometheus.MustRegister(metric)
 	}
 }
 
