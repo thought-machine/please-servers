@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -180,16 +179,6 @@ func (w *worker) downloadFiles(files map[sdkdigest.Digest][]fileNode) error {
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
 
-	if w.redis != nil {
-		remaining, err := w.downloadRedis(files)
-		if err != nil {
-			return err
-		} else if len(remaining) == 0 {
-			return nil // we fetched everything from Redis \o/
-		}
-		files = remaining
-	}
-
 	log.Debug("Downloading batch of %d files...", len(files))
 	digests := make([]sdkdigest.Digest, 0, len(files))
 	compressors := make([]pb.Compressor_Value, 0, len(files))
@@ -212,69 +201,7 @@ func (w *worker) downloadFiles(files map[sdkdigest.Digest][]fileNode) error {
 		}
 		w.cache.Set(dg.Hash, data, int64(len(data)))
 	}
-	if w.redis != nil {
-		// We can do this async, we don't need to wait for it to complete.
-		go w.uploadRedis(responses)
-	}
 	return nil
-}
-
-// downloadRedis downloads a batch of files from Redis to disk.
-// It returns the set of files still to download.
-func (w *worker) downloadRedis(files map[sdkdigest.Digest][]fileNode) (map[sdkdigest.Digest][]fileNode, error) {
-	log.Debug("Checking Redis for batch of %d files...", len(files))
-	keys := make([]string, 0, len(files))
-	dgs := make([]sdkdigest.Digest, 0, len(files))
-	for k := range files {
-		keys = append(keys, k.Hash)
-		dgs = append(dgs, k)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-	resp, err := w.redis.MGet(ctx, keys...).Result()
-	if err != nil {
-		log.Warning("Failed to retrieve blobs from Redis: %s", err)
-		return files, nil
-	}
-	if len(resp) != len(keys) {
-		log.Warning("Length mismatch in Redis response; got %d, expected %d", len(resp), len(keys))
-		// If the lengths don't match we don't know which is which so it's useless to us.
-		// This shouldn't happen but we don't want to assume it never does and blindly index...
-		return files, nil
-	}
-	remaining := make(map[sdkdigest.Digest][]fileNode, len(files))
-	for i, blob := range resp {
-		dg := dgs[i]
-		file := files[dg]
-		if blob == nil { // Redis didn't have it
-			remaining[dg] = file
-			continue
-		}
-		b, ok := blob.([]byte)
-		if !ok {
-			log.Warning("Failed to cast Redis response to []byte")
-			remaining[dg] = file
-			continue
-		}
-		if err := w.writeFiles(file, b, dg); err != nil {
-			return nil, err
-		}
-		w.redisBytes += dg.Size
-	}
-	return remaining, nil
-}
-
-// uploadRedis uploads a set of blobs to Redis.
-func (w *worker) uploadRedis(blobs map[sdkdigest.Digest][]byte) {
-	m := make(map[string]interface{}, len(blobs))
-	for k, v := range blobs {
-		m[k.Hash] = v
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-	if _, err := w.redis.MSet(ctx, m).Result(); err != nil {
-		log.Warning("Failed to set blobs in Redis: %s", err)
-	}
 }
 
 // downloadFile downloads a single file to disk.

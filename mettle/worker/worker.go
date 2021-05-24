@@ -24,7 +24,6 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dgraph-io/ristretto"
 	"github.com/dustin/go-humanize"
-	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -106,6 +105,9 @@ func init() {
 	prometheus.MustRegister(cacheHits)
 	prometheus.MustRegister(cacheMisses)
 	prometheus.MustRegister(blobNotFoundErrors)
+	prometheus.MustRegister(redisHits)
+	prometheus.MustRegister(redisMisses)
+	prometheus.MustRegister(redisBytesRead)
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
@@ -259,9 +261,8 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		instanceName:    instanceName,
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
 	}
-	storer := newStorer(cachePrefix, cacheParts)
 	if redis != "" {
-		w.client = newRedisClient(client, redis, storer)
+		w.client = newRedisClient(client, redis)
 	}
 	if ackExtension > 0 {
 		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
@@ -270,7 +271,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.ackExtensionSub = strings.TrimPrefix(requestQueue, "gcppubsub://")
 	}
 	if cacheDir != "" {
-		w.fileCache = newCache(cacheDir, storer)
+		w.fileCache = newCache(cacheDir, cachePrefix, cacheParts)
 	}
 	if maxCacheSize > 0 {
 		c, err := ristretto.NewCache(&ristretto.Config{
@@ -317,7 +318,6 @@ type worker struct {
 	rclient         *client.Client
 	lucidity        lpb.LucidityClient
 	lucidChan       chan *lpb.UpdateRequest
-	redis           *redis.Client
 	cache           *ristretto.Cache
 	instanceName    string
 	dir, rootDir    string
@@ -340,7 +340,6 @@ type worker struct {
 	metadata        *pb.ExecutedActionMetadata
 	downloadedBytes int64
 	cachedBytes     int64
-	redisBytes      int64
 	taskStartTime   time.Time
 	metadataFetch   time.Duration
 	dirCreation     time.Duration
@@ -375,7 +374,6 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	}
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
-	w.redisBytes = 0
 	response := w.runTask(msg)
 	msg.Ack()
 	err = w.update(pb.ExecutionStage_COMPLETED, response)
