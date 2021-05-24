@@ -96,17 +96,23 @@ var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "blob_not_found_errors_total",
 })
 
+var metrics = map[prometheus.Collector]string {
+	totalBuilds: "builds_total",
+	currentBuilds: "builds_current",
+	executeDurations: "build_durations_secs",
+	fetchDurations: "fetch_durations_secs",
+	uploadDurations: "upload_durations_secs",
+	peakMemory: "peak_memory_usage_mb",
+	cpuUsage: "cpu_usage_per_sec",
+	cacheHits: "cache_hits_total",
+	cacheMisses: "cache_misses_total",
+	blobNotFoundErrors: "blob_not_found_errors_total",
+}
+
 func init() {
-	prometheus.MustRegister(totalBuilds)
-	prometheus.MustRegister(currentBuilds)
-	prometheus.MustRegister(executeDurations)
-	prometheus.MustRegister(fetchDurations)
-	prometheus.MustRegister(uploadDurations)
-	prometheus.MustRegister(peakMemory)
-	prometheus.MustRegister(cpuUsage)
-	prometheus.MustRegister(cacheHits)
-	prometheus.MustRegister(cacheMisses)
-	prometheus.MustRegister(blobNotFoundErrors)
+	for metric := range metrics {
+	    prometheus.MustRegister(metric)
+	}
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
@@ -165,6 +171,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
 		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 	}()
+	go w.periodicallyPushMetrics()
 	for {
 		w.waitForFreeResources()
 		w.waitForLiveConnection()
@@ -924,6 +931,22 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash, w.name)
+}
+
+// periodicallyPushMetrics will push this worker's metrics to the gateway every 5 minutes.
+func (w *worker) periodicallyPushMetrics() {
+	if w.promGatewayURL != "" {
+		for {
+			for metric, metricName := range metrics {
+				if err := push.New(
+					w.promGatewayURL, metricName,
+				).Collector(metric).Format(expfmt.FmtText).Push(); err != nil {
+					log.Warningf("Error pushing %s to Prometheus pushgateway: %s", metricName, err)
+				}
+			}
+			time.Sleep(5 * 60 * time.Second)
+		}
+	}
 }
 
 // readBlobToProto reads an entire blob and deserialises it into a message.
