@@ -36,6 +36,7 @@ func newRedisClient(client elan.Client, url string) elan.Client {
 			Addr: url,
 		}),
 		timeout: 1 * time.Minute,
+		maxSize: 200 * 1012, // 200 Kelly-Bootle standard units
 	}
 }
 
@@ -43,6 +44,7 @@ type redisClient struct{
 	elan   elan.Client
 	redis  *redis.Client
 	timeout time.Duration
+	maxSize int64
 }
 
 func (r *redisClient) Healthcheck() error {
@@ -87,6 +89,7 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	// All we use Redis for is to filter down the missing set.
 	// This is approximate only and assumes that Redis always has a strict subset of the total keys.
 	missing := make([]*uploadinfo.Entry, 0, len(entries))
+	uploads := make([]interface{}, 0, 2*len(entries))
 	keys := make([]string, len(entries))
 	// Unfortunately there is no MEXISTS, so we reuse MGET but chuck away the values.
 	// We could also do lots of EXISTS in parallel but this seems simpler...
@@ -100,6 +103,19 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	for i, blob := range blobs {
 		if blob == nil {
 			missing = append(missing, entries[i])
+			e := entries[i]
+			if dg := e.Digest; dg.Size < r.maxSize && dg.Hash != emptyHash {
+				if e.Contents != nil {
+					uploads = append(uploads, keys[i], e.Contents)
+				} else {
+					b, err := os.ReadFile(e.Path)
+					if err != nil {
+						log.Warning("Failed to read file %s: %s", e.Path, err)
+						continue
+					}
+					uploads = append(uploads, keys[i], b)
+				}
+			}
 		}
 	}
 	numPresent := len(entries) - len(missing)
@@ -107,7 +123,20 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	if len(missing) == 0 {
 		return nil  // Redis had everything
 	}
-	return r.elan.UploadIfMissing(missing)
+	if err := r.elan.UploadIfMissing(missing); err != nil {
+		return err
+	}
+	if len(uploads) == 0 {
+		return nil
+	}
+	// Only upload Redis after we have successfully uploaded blobs to Elan, otherwise we could
+	// create an inconsistent situation.
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	if cmd := r.redis.MSet(ctx, uploads...); cmd.Val() != "OK" {
+		log.Warning("Failed to upload %d blobs to Redis: %s", len(uploads), cmd.Err())
+	}
+	return nil // We never propagate Redis errors regardless.
 }
 
 func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
@@ -170,16 +199,17 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 			}
 			continue
 		}
-		b, ok := blob.([]byte)
+		// Somewhat counter-intuitively they are always strings, regardless of what we set them as originally.
+		s, ok := blob.(string)
 		if !ok {
-			log.Warning("Failed to cast Redis response to []byte")
+			log.Warning("Failed to cast Redis response to string, was a %T", blob)
 			return nil
 		}
 		if metrics {
 			redisHits.Inc()
-			redisBytesRead.Add(float64(len(b)))
+			redisBytesRead.Add(float64(len(s)))
 		}
-		ret[i] = b
+		ret[i] = []byte(s)
 	}
 	return ret
 }
