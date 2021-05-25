@@ -534,8 +534,8 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	}
 	fetchDurations.Observe(time.Since(start).Seconds())
 	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
-        percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
-        log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
+		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
 	} else {
 		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
 	}

@@ -5,11 +5,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/go-redis/redis/v8"
+	"github.com/prometheus/client_golang/prometheus"
 
 	elan "github.com/thought-machine/please-servers/elan/rpc"
 )
@@ -31,7 +31,7 @@ var redisBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
 // All usage of Redis is best-effort only.
 func newRedisClient(client elan.Client, url string) elan.Client {
 	return &redisClient{
-		elan:  client,
+		elan: client,
 		redis: redis.NewClient(&redis.Options{
 			Addr: url,
 		}),
@@ -40,9 +40,9 @@ func newRedisClient(client elan.Client, url string) elan.Client {
 	}
 }
 
-type redisClient struct{
-	elan   elan.Client
-	redis  *redis.Client
+type redisClient struct {
+	elan    elan.Client
+	redis   *redis.Client
 	timeout time.Duration
 	maxSize int64
 }
@@ -80,7 +80,7 @@ func (r *redisClient) UpdateActionResult(ar *pb.UpdateActionResultRequest) (*pb.
 func (r *redisClient) updateActionResult(ar *pb.UpdateActionResultRequest) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	if err := r.redis.Set(ctx, "ar/" + ar.ActionDigest.Hash, ar.ActionResult, 0).Err(); err != nil {
+	if err := r.redis.Set(ctx, "ar/"+ar.ActionDigest.Hash, ar.ActionResult, 0).Err(); err != nil {
 		log.Warning("Failed to set action result in Redis: %s", err)
 	}
 }
@@ -121,7 +121,7 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	numPresent := len(entries) - len(missing)
 	log.Debug("UploadIfMissing: %d / %d in Redis", numPresent, len(entries))
 	if len(missing) == 0 {
-		return nil  // Redis had everything
+		return nil // Redis had everything
 	}
 	if err := r.elan.UploadIfMissing(missing); err != nil {
 		return err
@@ -219,7 +219,7 @@ func (r *redisClient) ReadToFile(dg digest.Digest, filename string, compressed b
 	defer cancel()
 	blob, err := r.redis.Get(ctx, dg.Hash).Bytes()
 	if err != nil {
-		if err != redis.Nil {  // Not found.
+		if err != redis.Nil { // Not found.
 			log.Warning("Error reading blob from Redis: %s", err)
 		}
 		redisMisses.Inc()
