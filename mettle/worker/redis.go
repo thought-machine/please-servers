@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"crypto/tls"
 	"os"
 	"time"
 
@@ -29,11 +30,17 @@ var redisBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
 
 // newRedisClient augments an existing elan.Client with a Redis connection.
 // All usage of Redis is best-effort only.
-func newRedisClient(client elan.Client, url string) elan.Client {
+func newRedisClient(client elan.Client, url, password string, useTLS bool) elan.Client {
+	var tlsConfig *tls.Config
+	if useTLS {
+		tlsConfig = &tls.Config{}
+	}
 	return &redisClient{
 		elan: client,
 		redis: redis.NewClient(&redis.Options{
-			Addr: url,
+			Addr:      url,
+			Password:  password,
+			TLSConfig: tlsConfig,
 		}),
 		timeout: 10 * time.Second,
 		maxSize: 200 * 1012, // 200 Kelly-Bootle standard units
@@ -68,8 +75,8 @@ func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	if err := r.redis.Set(ctx, dg.Hash, blob, 0); err != nil {
-		log.Warning("Failed to set blob in Redis: %s", err)
+	if cmd := r.redis.Set(ctx, dg.Hash, blob, 0); cmd.Val() != "OK" {
+		log.Warning("Failed to set blob in Redis: %s", cmd.Err())
 	}
 	return blob, nil
 }
@@ -80,17 +87,8 @@ func (r *redisClient) WriteBlob(blob []byte) (*pb.Digest, error) {
 
 func (r *redisClient) UpdateActionResult(ar *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
 	// We don't currently do anything with this, because we never try to read action results from
-	// Redis. If we do, uncomment the following line.
-	// go r.updateActionResult(ar)
+	// Redis.
 	return r.elan.UpdateActionResult(ar)
-}
-
-func (r *redisClient) updateActionResult(ar *pb.UpdateActionResultRequest) {
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-	if err := r.redis.Set(ctx, "ar/"+ar.ActionDigest.Hash, ar.ActionResult, 0).Err(); err != nil {
-		log.Warning("Failed to set action result in Redis: %s", err)
-	}
 }
 
 func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
