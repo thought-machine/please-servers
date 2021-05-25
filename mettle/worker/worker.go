@@ -520,17 +520,8 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
-		log.Notice("Error downloading directory. Code: %d", int(grpcstatus.Code(err)))
 		if grpcstatus.Code(err) == codes.NotFound {
-			log.Notice("Incrementing blobNotFoundErrors")
 			blobNotFoundErrors.Inc()
-			if w.promGatewayURL != "" {
-				if err := push.New(
-					w.promGatewayURL, "blob_not_found_errors_total",
-				).Collector(blobNotFoundErrors).Format(expfmt.FmtText).Push(); err != nil {
-					log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
-				}
-			}
 		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
@@ -936,12 +927,17 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 // periodicallyPushMetrics will push this worker's metrics to the gateway every 5 minutes.
 func (w *worker) periodicallyPushMetrics() {
 	if w.promGatewayURL != "" {
+		// Set up the metrics
+		var pushers []*push.Pusher
+		for metric, metricName := range metrics {
+			pusher := push.New(w.promGatewayURL, metricName).Collector(metric).Format(expfmt.FmtText)
+			pushers = append(pushers, pusher)
+		}
+		// Push to the gateway every 5 minutes
 		for {
-			for metric, metricName := range metrics {
-				if err := push.New(
-					w.promGatewayURL, metricName,
-				).Collector(metric).Format(expfmt.FmtText).Push(); err != nil {
-					log.Warningf("Error pushing %s to Prometheus pushgateway: %s", metricName, err)
+			for _, pusher := range pushers {
+				if err := pusher.Push(); err != nil {
+					log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
 				}
 			}
 			time.Sleep(5 * 60 * time.Second)
