@@ -35,7 +35,7 @@ func newRedisClient(client elan.Client, url string) elan.Client {
 		redis: redis.NewClient(&redis.Options{
 			Addr: url,
 		}),
-		timeout: 1 * time.Minute,
+		timeout: 10 * time.Second,
 		maxSize: 200 * 1012, // 200 Kelly-Bootle standard units
 	}
 }
@@ -55,14 +55,22 @@ func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	cmd := r.redis.Get(ctx, dg.Hash)
-	if err := cmd.Err(); err == redis.Nil {
-		// Blob doesn't exist in Redis
-		return r.elan.ReadBlob(dg)
-	} else if err != nil {
+	if err := cmd.Err(); err == nil {
+		blob, _ := cmd.Bytes()
+		return blob, nil
+	} else if err != redis.Nil {
 		log.Warning("Failed to read blob from Redis: %s", err)
-		return r.elan.ReadBlob(dg)
 	}
-	blob, _ := cmd.Bytes()
+	// If we get here, the blob didn't exist. Download it then write back to Redis.
+	blob, err := r.elan.ReadBlob(dg)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), r.timeout)
+	defer cancel()
+	if err := r.redis.Set(ctx, dg.Hash, blob, 0); err != nil {
+		log.Warning("Failed to set blob in Redis: %s", err)
+	}
 	return blob, nil
 }
 
@@ -102,8 +110,8 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	}
 	for i, blob := range blobs {
 		if blob == nil {
-			missing = append(missing, entries[i])
 			e := entries[i]
+			missing = append(missing, e)
 			if dg := e.Digest; dg.Size < r.maxSize && dg.Hash != emptyHash {
 				if e.Contents != nil {
 					uploads = append(uploads, keys[i], e.Contents)
