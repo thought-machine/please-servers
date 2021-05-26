@@ -900,7 +900,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	entries := make([]*uploadinfo.Entry, 0, len(m))
 	for _, e := range m {
-		e.Compressor = w.oneCompressor(e.Path, e.Digest.Size)
+		e.Compressor = w.entryCompressor(e)
 		entries = append(entries, e)
 	}
 	err = w.client.UploadIfMissing(entries)

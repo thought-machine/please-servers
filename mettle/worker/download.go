@@ -11,6 +11,7 @@ import (
 	"time"
 
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/sync/errgroup"
@@ -291,6 +292,18 @@ func (w *worker) oneCompressor(filename string, size int64) pb.Compressor_Value 
 		return pb.Compressor_ZSTD
 	}
 	return pb.Compressor_IDENTITY
+}
+
+// entryCompressor returns the compressor to use for an upload entry.
+func (w *worker) entryCompressor(ue *uploadinfo.Entry) pb.Compressor_Value {
+	if len(ue.Contents) > 0 {
+		// Contents are set, if it looks like we've compressed already, don't do it again.
+		if len(ue.Contents) < rexclient.CompressionThreshold || bytes.HasPrefix(ue.Contents, zstdMagic) {
+			return pb.Compressor_IDENTITY
+		}
+		return pb.Compressor_ZSTD
+	}
+	return w.oneCompressor(ue.Path, ue.Digest.Size)
 }
 
 // shouldCompress returns true if the given filename should be compressed.

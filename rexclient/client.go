@@ -73,5 +73,6 @@ func Uninitialised() *client.Client {
 	o := client.TreeSymlinkOpts{Preserved: true}
 	o.Apply(c)
 	client.CompressedBytestreamThreshold(CompressionThreshold).Apply(c)
+	client.UsePackName("mettle.pack").Apply(c)
 	return c
 }
