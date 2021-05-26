@@ -96,21 +96,21 @@ var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "blob_not_found_errors_total",
 })
 
-var metrics = map[prometheus.Collector]string{
-	totalBuilds:        "builds_total",
-	currentBuilds:      "builds_current",
-	executeDurations:   "build_durations_secs",
-	fetchDurations:     "fetch_durations_secs",
-	uploadDurations:    "upload_durations_secs",
-	peakMemory:         "peak_memory_usage_mb",
-	cpuUsage:           "cpu_usage_per_sec",
-	cacheHits:          "cache_hits_total",
-	cacheMisses:        "cache_misses_total",
-	blobNotFoundErrors: "blob_not_found_errors_total",
+var metrics = []prometheus.Collector{
+	totalBuilds,
+	currentBuilds,
+	executeDurations,
+	fetchDurations,
+	uploadDurations,
+	peakMemory,
+	cpuUsage,
+	cacheHits,
+	cacheMisses,
+	blobNotFoundErrors,
 }
 
 func init() {
-	for metric := range metrics {
+	for _, metric := range metrics {
 		prometheus.MustRegister(metric)
 	}
 }
@@ -928,17 +928,14 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 func (w *worker) periodicallyPushMetrics() {
 	if w.promGatewayURL != "" {
 		// Set up the metrics
-		var pushers []*push.Pusher
-		for metric, metricName := range metrics {
-			pusher := push.New(w.promGatewayURL, metricName).Collector(metric).Format(expfmt.FmtText)
-			pushers = append(pushers, pusher)
+		pusher := push.New(w.promGatewayURL, "mettle")
+		for _, metric := range metrics {
+			pusher = pusher.Collector(metric).Format(expfmt.FmtText)
 		}
 		// Push to the gateway every 5 minutes
 		for {
-			for _, pusher := range pushers {
-				if err := pusher.Push(); err != nil {
-					log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
-				}
+			if err := pusher.Push(); err != nil {
+				log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
 			}
 			time.Sleep(5 * 60 * time.Second)
 		}
