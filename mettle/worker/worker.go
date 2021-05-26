@@ -172,6 +172,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		log.Fatalf("Received another signal %s, shutting down immediately", sig)
 	}()
 	go w.periodicallyPushMetrics()
+	defer w.metricTicker.Stop()
 	for {
 		w.waitForFreeResources()
 		w.waitForLiveConnection()
@@ -267,6 +268,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		memoryThreshold: memoryThreshold,
 		instanceName:    instanceName,
 		costs:           map[string]*bbru.MonetaryResourceUsage_Expense{},
+		metricTicker:    time.NewTicker(5 * time.Minute),
 	}
 	if ackExtension > 0 {
 		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
@@ -339,6 +341,7 @@ type worker struct {
 	diskSpace       int64
 	memoryThreshold float64
 	costs           map[string]*bbru.MonetaryResourceUsage_Expense
+	metricTicker    *time.Ticker
 
 	// These properties are per-action and reset each time.
 	actionDigest    *pb.Digest
@@ -933,11 +936,10 @@ func (w *worker) periodicallyPushMetrics() {
 			pusher = pusher.Collector(metric).Format(expfmt.FmtText)
 		}
 		// Push to the gateway every 5 minutes
-		for {
+		for range w.metricTicker.C {
 			if err := pusher.Push(); err != nil {
 				log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
 			}
-			time.Sleep(5 * 60 * time.Second)
 		}
 	}
 }
