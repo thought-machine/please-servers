@@ -3,7 +3,7 @@ module github.com/thought-machine/please-servers
 go 1.16
 
 require (
-	cloud.google.com/go/pubsub v1.3.1 // indirect
+	cloud.google.com/go/pubsub v1.3.1
 	cloud.google.com/go/storage v1.10.0 // indirect
 	github.com/Workiva/go-datastructures v1.0.52 // indirect
 	github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c
@@ -19,7 +19,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/wire v0.4.0 // indirect
+	github.com/google/wire v0.4.0
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
@@ -35,7 +35,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/peterebden/go-cli-init/v2 v2.0.1
 	github.com/peterebden/go-cli-init/v3 v3.1.1
-	github.com/peterebden/go-cli-init/v4 v4.0.1 // indirect
+	github.com/peterebden/go-cli-init/v4 v4.0.1
 	github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c
 	github.com/peterebden/go-sri v1.1.1
 	github.com/pkg/errors v0.9.1 // indirect
@@ -43,7 +43,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.10.0 // indirect
+	github.com/prometheus/common v0.10.0
 	github.com/prometheus/procfs v0.1.3 // indirect
 	github.com/shirou/gopsutil v3.21.1+incompatible
 	github.com/sirupsen/logrus v1.6.0 // indirect
