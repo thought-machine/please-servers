@@ -708,3 +708,49 @@ go_module(
         ":oauth2",
     ],
 )
+
+go_module(
+    name = "redis",
+    install = [
+        "...",
+    ],
+    module = "github.com/go-redis/redis/v8",
+    version = "v8.3.3",
+    deps = [
+        ":opentelemetry",
+        ":rendezvous",
+        ":xxhash_v2",
+    ],
+)
+
+go_get(
+    name = "opentelemetry",
+    get = "go.opentelemetry.io/otel",
+    install = [
+        ".",
+        "api/global",
+        "api/global/internal",
+        "api/metric",
+        "api/metric/registry",
+        "api/trace",
+        "codes",
+        "internal/...",
+        "label",
+        "unit",
+    ],
+    licences = ["apache-2.0"],
+    revision = "v0.13.0",
+)
+
+go_module(
+    name = "xxhash_v2",
+    module = "github.com/cespare/xxhash/v2",
+    version = "v2.1.1",
+)
+
+go_get(
+    name = "rendezvous",
+    get = "github.com/dgryski/go-rendezvous",
+    licences = ["mit"],
+    revision = "9f7001d12a5f0021fd3283525f888b5814ccee27",
+)

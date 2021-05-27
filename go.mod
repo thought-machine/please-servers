@@ -13,6 +13,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgraph-io/ristretto v0.0.3
 	github.com/dustin/go-humanize v1.0.0
+	github.com/go-redis/redis/v8 v8.8.3 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
@@ -47,7 +48,7 @@ require (
 	github.com/shirou/gopsutil v3.21.1+incompatible
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/thought-machine/http-admin v1.1.0
 	github.com/thought-machine/please v13.4.0+incompatible
 	go.opencensus.io v0.22.4 // indirect
@@ -56,7 +57,7 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/build v0.0.0-20200714230912-6a30d041565f // indirect
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/text v0.3.3 // indirect
 	google.golang.org/api v0.30.0
 	google.golang.org/appengine v1.6.6 // indirect

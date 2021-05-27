@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"time"
 
 	"github.com/peterebden/go-cli-init/v4/flags"
@@ -24,6 +25,13 @@ type StorageOpts struct {
 	Storage   string `short:"s" long:"url" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 	TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	TokenFile string `long:"token_file" description:"File containing a pre-shared token to authenticate to storage server with."`
+}
+
+type RedisOpts struct {
+	URL          string `long:"url" description:"host:port of Redis server"`
+	Password     string `long:"password" description:"AUTH password"`
+	PasswordFile string `long:"password_file" description:"File containing AUTH password"`
+	TLS          bool   `long:"tls" description:"Use TLS for connecting to Redis"`
 }
 
 type CacheOpts struct {
@@ -68,6 +76,7 @@ var opts = struct {
 		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
 		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
 		Storage         StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
+		Redis           RedisOpts               `group:"Options controlling connection to Redis" namespace:"redis"`
 		Queues          struct {
 			RequestQueue  string         `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue string         `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
@@ -93,6 +102,7 @@ var opts = struct {
 			Storage []string `short:"s" long:"storage_url" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
+		Redis           RedisOpts           `group:"Options controlling connection to Redis" namespace:"redis"`
 		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	One struct {
@@ -107,6 +117,7 @@ var opts = struct {
 		MemProfile  string         `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
 		Cache       CacheOpts      `group:"Options controlling caching" namespace:"cache"`
 		Storage     StorageOpts    `group:"Options controlling communication with the CAS server"`
+		Redis       RedisOpts      `group:"Options controlling connection to Redis" namespace:"redis"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
 	Admin cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
@@ -162,11 +173,11 @@ func main() {
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
-			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0)
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, opts.Dual.Redis.URL, opts.Dual.Redis.ReadPassword(), opts.Dual.Redis.TLS, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0)
 		}
 		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, "", false, opts.Dual.AllowedPlatform, opts.Dual.Storage.Storage[0], opts.Dual.Storage.TLS)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, opts.Worker.Redis.URL, opts.Worker.Redis.ReadPassword(), opts.Worker.Redis.TLS, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension))
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.API.URL, opts.API.API.TLS, opts.API.AllowedPlatform, opts.API.Storage.Storage, opts.API.Storage.TLS)
 	} else if err := one(); err != nil {
@@ -195,9 +206,22 @@ func one() error {
 		defer pprof.WriteHeapProfile(f)
 	}
 	for _, action := range opts.One.Args.Actions {
-		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.AltSandbox, opts.One.Storage.TokenFile, opts.One.Cache.Prefix, opts.One.Cache.Part, false, opts.One.Storage.TLS, action.ToProto()); err != nil {
+		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.AltSandbox, opts.One.Storage.TokenFile, opts.One.Redis.URL, opts.One.Redis.ReadPassword(), opts.One.Redis.TLS, opts.One.Cache.Prefix, opts.One.Cache.Part, false, opts.One.Storage.TLS, action.ToProto()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (r RedisOpts) ReadPassword() string {
+	if r.Password != "" {
+		return r.Password
+	} else if r.PasswordFile == "" {
+		return ""
+	}
+	b, err := os.ReadFile(r.PasswordFile)
+	if err != nil {
+		log.Fatalf("Failed to read Redis password file: %s", err)
+	}
+	return strings.TrimSpace(string(b))
 }
