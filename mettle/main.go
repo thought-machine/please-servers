@@ -28,10 +28,10 @@ type StorageOpts struct {
 }
 
 type RedisOpts struct {
-	URL      string `long:"url" description:"host:port of Redis server"`
-	Password string `long:"password" description:"AUTH password"`
+	URL          string `long:"url" description:"host:port of Redis server"`
+	Password     string `long:"password" description:"AUTH password"`
 	PasswordFile string `long:"password_file" description:"File containing AUTH password"`
-	TLS      bool   `long:"tls" description:"Use TLS for connecting to Redis"`
+	TLS          bool   `long:"tls" description:"Use TLS for connecting to Redis"`
 }
 
 type CacheOpts struct {
@@ -212,7 +212,6 @@ func one() error {
 	}
 	return nil
 }
-
 
 func (r RedisOpts) ReadPassword() string {
 	if r.Password != "" {
