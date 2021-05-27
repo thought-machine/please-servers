@@ -20,6 +20,10 @@ var log = logging.MustGetLogger()
 //                   of small items.
 const CompressionThreshold = 1024
 
+// PackName is the node property name that we apply to a 'pack', a compressed tarball representing
+// everything under a directory which we can use to short-circuit the download of a large tree.
+const PackName = "mettle.pack"
+
 // New creates a new remote execution client.
 // It automatically handles some things like compression.
 func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, error) {
@@ -29,7 +33,7 @@ func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, 
 		NoSecurity:         !tls,
 		TransportCredsOnly: tls,
 		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold))
+	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold), client.UsePackName(PackName))
 	if err != nil {
 		log.Error("Error initialising remote execution client: %s", err)
 		return nil, err
@@ -73,6 +77,6 @@ func Uninitialised() *client.Client {
 	o := client.TreeSymlinkOpts{Preserved: true}
 	o.Apply(c)
 	client.CompressedBytestreamThreshold(CompressionThreshold).Apply(c)
-	client.UsePackName("mettle.pack").Apply(c)
+	client.UsePackName(PackName).Apply(c)
 	return c
 }

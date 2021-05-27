@@ -1,12 +1,14 @@
 package worker
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +32,9 @@ const downloadParallelism = 4
 
 // ioParallelism is the maximum number of parallel disk writes we'll allow.
 const ioParallelism = 10
+
+// zstdMagic is the magic number of zstd compressed data.
+var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
 
 // emptyHash is the sha256 hash of the empty file.
 // Technically checking the size is sufficient but we add this as well for general sanity in case something
@@ -55,7 +60,8 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 		m[digestProto(dir).Hash] = dir
 	}
 	files := map[sdkdigest.Digest][]fileNode{}
-	if err := w.createDirectory(m, files, w.dir, digest); err != nil {
+	packs := map[sdkdigest.Digest][]string{}
+	if err := w.createDirectory(m, files, packs, w.dir, digest); err != nil {
 		return err
 	}
 	ts3 := time.Now()
@@ -67,7 +73,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 }
 
 // createDirectory creates a directory & all its children
-func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, root string, digest *pb.Digest) error {
+func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, packs map[sdkdigest.Digest][]string, root string, digest *pb.Digest) error {
 	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
 		return err
 	}
@@ -93,7 +99,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	for _, dir := range dir.Directories {
 		if err := common.CheckPath(dir.Name); err != nil {
 			return err
-		} else if err := w.createDirectory(dirs, files, path.Join(root, dir.Name), dir.Digest); err != nil {
+		} else if err := w.createDirectory(dirs, files, packs, path.Join(root, dir.Name), dir.Digest); err != nil {
 			return err
 		}
 	}
@@ -311,4 +317,31 @@ func shouldCompress(filename string) bool {
 	return !(strings.HasSuffix(filename, ".zip") || strings.HasSuffix(filename, ".pex") ||
 		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz") ||
 		strings.HasSuffix(filename, ".bz2") || strings.HasSuffix(filename, ".xz"))
+}
+
+// packDigest returns the digest of a pack associated with the given directory, or an empty
+// digest if there isn't one.
+func packDigest(dir *pb.Directory) sdkdigest.Digest {
+	if dir.NodeProperties == nil {
+		return sdkdigest.Digest{}
+	}
+	for _, prop := range dir.NodeProperties.Properties {
+		if prop.Name == rexclient.PackName {
+			// Need to do a bit of parsing here
+			if idx := strings.IndexByte(prop.Value, '/'); idx != -1 {
+				size, err := strconv.Atoi(prop.Value[idx+1:])
+				if err != nil {
+					log.Warning("Can't parse size from pack %s: %s", prop.Value, err)
+					continue
+				}
+				return sdkdigest.Digest{
+					Hash: prop.Value[:idx],
+					Size: int64(size),
+				}
+			} else {
+				log.Warning("Invalid pack format: %s", prop.Value)
+			}
+		}
+	}
+	return sdkdigest.Digest{}
 }
