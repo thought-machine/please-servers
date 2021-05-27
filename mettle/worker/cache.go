@@ -45,6 +45,18 @@ func (c *cache) Retrieve(key, dest string, mode os.FileMode) bool {
 	return false
 }
 
+// RetrieveStream returns a file handle from the cache if it exists (or nil if not).
+func (c *cache) RetrieveStream(key string) io.ReadCloser {
+	f, err := os.Open(c.path(key))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Warning("Failed to retrieve %s from cache: %s", key, err)
+		}
+		return nil
+	}
+	return f
+}
+
 // Store stores a blob into the cache if it matches any of the prefixes.
 func (c *cache) Store(dir, src, key string) {
 	if c.shouldStore(dir, src) {

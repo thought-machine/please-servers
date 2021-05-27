@@ -65,7 +65,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 		return err
 	}
 	ts3 := time.Now()
-	err = w.downloadAllFiles(files)
+	err = w.downloadAllFiles(files, packs)
 	w.metadataFetch = ts2.Sub(ts1)
 	w.dirCreation = ts3.Sub(ts2)
 	w.fileDownload = time.Since(ts3)
@@ -83,6 +83,11 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	dir, present := dirs[digest.Hash]
 	if !present {
 		return fmt.Errorf("Missing directory %s", digest.Hash)
+	}
+	if dg := packDigest(dir); dg.Hash != "" {
+		log.Debug("Replacing dir %s with pack digest %s/%d", root, dg.Hash, dg.Size)
+		packs[dg] = append(packs[dg], root)
+		return nil
 	}
 	for _, file := range dir.Files {
 		if err := common.CheckPath(file.Name); err != nil {
@@ -117,7 +122,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 }
 
 // downloadAllFiles downloads all the files for a single build action.
-func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode) error {
+func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode, packs map[sdkdigest.Digest][]string) error {
 	var g errgroup.Group
 
 	fileNodes := map[sdkdigest.Digest][]fileNode{}
@@ -176,6 +181,13 @@ func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode) error {
 	// If we have anything left over, handle them now.
 	if len(fileNodes) != 0 {
 		g.Go(func() error { return w.downloadFiles(fileNodes) })
+	}
+	for dg, paths := range packs {
+		dg := dg
+		paths := paths
+		g.Go(func() error {
+			return w.downloadPack(dg, paths)
+		})
 	}
 	return g.Wait()
 }
