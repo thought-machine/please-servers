@@ -192,6 +192,40 @@ func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode, packs m
 	return g.Wait()
 }
 
+// downloadPack downloads a pack file to the given path
+func (w *worker) downloadPack(dg sdkdigest.Digest, paths []string) error {
+	if w.fileCache != nil {
+		if downloaded, err := w.downloadPackFromCache(dg, paths); err != nil {
+			return err
+		} else if downloaded {
+			return nil
+		}
+	}
+	w.limiter <- struct{}{}
+	defer func() { <-w.limiter }()
+	rc, err := w.client.StreamBlob(dg.ToProto())
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	return w.writePack(rc, paths)
+}
+
+// downloadPack downloads a pack file to the given path
+func (w *worker) downloadPackFromCache(dg sdkdigest.Digest, paths []string) (bool, error) {
+	w.iolimiter <- struct{}{}
+	defer func() { <-w.iolimiter }()
+	if rc := w.fileCache.RetrieveStream(dg.Hash); rc != nil {
+		defer rc.Close()
+		return true, w.writePack(rc, paths)
+	}
+	return false, nil
+}
+
+func (w *worker) writePack(r io.Reader, paths []string) error {
+
+}
+
 // downloadFiles downloads a set of files to disk in a batch.
 // The total size must be lower than whatever limits are considered relevant.
 func (w *worker) downloadFiles(files map[sdkdigest.Digest][]fileNode) error {

@@ -1,7 +1,9 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"fmt"
 	"time"
 
@@ -28,6 +30,16 @@ func (r *remoteClient) Healthcheck() error {
 		return fmt.Errorf("Server not in healthy state: %s", resp.Status)
 	}
 	return nil
+}
+
+func (r *remoteClient) StreamBlob(dg *pb.Digest) (io.ReadCloser, error) {
+	// TODO(peterebden): this kind of sucks. Unfortunately the SDK doesn't provide any useful
+	//                   function to do a similar thing :(
+	b, err := r.ReadBlob(dg)
+	if err != nil {
+		return nil, err
+	}
+	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
 func (r *remoteClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
