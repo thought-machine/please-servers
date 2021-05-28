@@ -187,6 +187,9 @@ func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_V
 // readBlobs reads a set of blobs from Redis. It returns nil on any failure.
 // On success some blobs may not have been available in Redis, in which case they'll be nil.
 func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
+	if len(keys) == 0 {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	resp, err := r.redis.MGet(ctx, keys...).Result()
