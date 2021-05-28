@@ -1,6 +1,9 @@
 go_library(
     name = "worker",
-    srcs = glob(["*.go"], exclude=["*_test.go"]),
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
     visibility = ["//mettle/..."],
     deps = [
         "//cli",
@@ -25,6 +28,7 @@ go_library(
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:ristretto",
         "//third_party/go:rpc",
+        "//third_party/go:zstd",
         "//third_party/go/gocloud",
         "//third_party/go/prometheus",
         "//third_party/go/prometheus:prometheus_common",

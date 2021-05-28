@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"archive/tar"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -16,6 +18,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
+	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -222,8 +225,53 @@ func (w *worker) downloadPackFromCache(dg sdkdigest.Digest, paths []string) (boo
 	return false, nil
 }
 
+// writePack writes a pack to the given set of paths.
 func (w *worker) writePack(r io.Reader, paths []string) error {
-
+	// Packs are always zstd-compressed tarballs.
+	zr, err := zstd.NewReader(r)
+	if err != nil {
+		return err
+	}
+	tr := tar.NewReader(zr)
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			for _, p := range paths {
+				if err := os.MkdirAll(path.Join(p, hdr.Name), 0755|os.ModeDir); err != nil {
+					return err
+				}
+			}
+		case tar.TypeReg:
+			p1 := path.Join(paths[0], hdr.Name)
+			if f, err := os.Create(p1); err != nil {
+				return err
+			} else if _, err := io.Copy(f, r); err != nil {
+				f.Close() // don't forget this!
+				return err
+			} else if err := f.Close(); err != nil {
+				return err
+			}
+			// Link the file into all the other locations
+			for _, p := range paths[1:] {
+				if err := os.Link(p1, path.Join(p, hdr.Name)); err != nil {
+					return err
+				}
+			}
+		case tar.TypeSymlink:
+			for _, p := range paths {
+				if err := os.Symlink(hdr.Linkname, path.Join(p, hdr.Name)); err != nil {
+					return err
+				}
+			}
+		}
+	}
 }
 
 // downloadFiles downloads a set of files to disk in a batch.

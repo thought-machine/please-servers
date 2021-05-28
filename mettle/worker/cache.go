@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"io"
 	"os"
 	"path"
 	"path/filepath"
