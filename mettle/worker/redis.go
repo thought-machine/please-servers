@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"os"
 	"time"
 
@@ -56,6 +57,11 @@ type redisClient struct {
 
 func (r *redisClient) Healthcheck() error {
 	return r.elan.Healthcheck()
+}
+
+func (r *redisClient) StreamBlob(dg *pb.Digest) (io.ReadCloser, error) {
+	// Currently we don't store streamed blobs in Redis. We might look into that later.
+	return r.elan.StreamBlob(dg)
 }
 
 func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {

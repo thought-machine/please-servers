@@ -211,7 +211,10 @@ func (w *worker) downloadPack(dg sdkdigest.Digest, paths []string) error {
 		return err
 	}
 	defer rc.Close()
-	return w.writePack(rc, paths)
+	if err := w.writePack(rc, paths); err != nil {
+		return fmt.Errorf("extracting pack for %s: %w", dg.Hash, err)
+	}
+	return nil
 }
 
 // downloadPack downloads a pack file to the given path
@@ -220,7 +223,10 @@ func (w *worker) downloadPackFromCache(dg sdkdigest.Digest, paths []string) (boo
 	defer func() { <-w.iolimiter }()
 	if rc := w.fileCache.RetrieveStream(dg.Hash); rc != nil {
 		defer rc.Close()
-		return true, w.writePack(rc, paths)
+		if err := w.writePack(rc, paths); err != nil {
+			return false, fmt.Errorf("extracting pack for %s: %w", dg.Hash, err)
+		}
+		return true, nil
 	}
 	return false, nil
 }
@@ -239,13 +245,13 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 			if err == io.EOF {
 				return nil
 			}
-			return err
+			return fmt.Errorf("extracting tarball: %w", err)
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			for _, p := range paths {
 				if err := os.MkdirAll(path.Join(p, hdr.Name), 0755|os.ModeDir); err != nil {
-					return err
+					return fmt.Errorf("creating directory: %w", err)
 				}
 			}
 		case tar.TypeReg:
