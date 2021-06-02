@@ -258,7 +258,7 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 			p1 := path.Join(paths[0], hdr.Name)
 			if f, err := os.OpenFile(p1, os.O_WRONLY|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
 				return err
-			} else if n, err := io.Copy(f, r); err != nil {
+			} else if n, err := io.Copy(f, tr); err != nil {
 				f.Close() // don't forget this!
 				return err
 			} else if err := f.Close(); err != nil {
@@ -278,6 +278,8 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 					return err
 				}
 			}
+		default:
+			return fmt.Errorf("Unknown type in pack for %s: %s", hdr.Name, hdr.Typeflag)
 		}
 	}
 }
