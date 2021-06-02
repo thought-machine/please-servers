@@ -76,6 +76,7 @@ func main() {
 		return
 	}
 	client := rexclient.MustNew(opts.Storage.InstanceName, opts.Storage.Storage, opts.Storage.TLS, "")
+	defer client.Close()
 	if cmd == "diff" {
 		diff(client)
 	} else {
@@ -208,6 +209,13 @@ func showDir(client *client.Client, dg *pb.Digest, indent string) {
 	if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(dg), dir); err != nil {
 		log.Error("[%s/%08d] %s: Not found!", dg.Hash, dg.SizeBytes, indent)
 		return
+	}
+	if dg := rexclient.PackDigest(dir); dg.Hash != "" {
+		if dgs, err := client.MissingBlobs(context.Background(), []digest.Digest{dg}); err != nil || len(dgs) > 0 {
+			log.Error("[%s/%08d] %s└─> Mettle pack not found!", dg.Hash, dg.Size, indent)
+		} else {
+			log.Notice("[%s/%08d] %s└─> Mettle pack", dg.Hash, dg.Size, indent)
+		}
 	}
 	for _, d := range dir.Directories {
 		log.Notice("[%s/%08d] %s%s/", d.Digest.Hash, d.Digest.SizeBytes, indent, d.Name)
