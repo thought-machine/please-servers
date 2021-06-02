@@ -408,6 +408,12 @@ func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
 		size += d.Digest.SizeBytes
 		digests = append(digests, d.Digest)
 	}
+	// If this directory has a pack associated, mark that too.
+	if pack := rexclient.PackDigest(d); pack.Hash != "" {
+		c.referencedBlobs[pack.Hash] = struct{}{}
+		size += pack.Size
+		digests = append(digests, pack.ToProto())
+	}
 	return size, digests
 }
 
