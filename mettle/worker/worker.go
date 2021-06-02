@@ -518,6 +518,15 @@ func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Co
 
 // prepareDir prepares the directory for executing this request.
 func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.Status {
+	if status := w.prepareDirWithPacks(action, command, true); status != nil {
+		log.Warning("Failed to prepare directory with packs, falling back to without: %s", status)
+		return w.prepareDirWithPacks(action, command, false)
+	}
+	return nil
+}
+
+// prepareDirWithPacks is like prepareDir but optionally uses pack files to optimise the download.
+func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, usePacks bool) *rpcstatus.Status {
 	log.Info("Preparing directory for %s", w.actionDigest.Hash)
 	defer func() {
 		w.metadata.InputFetchCompletedTimestamp = toTimestamp(time.Now())
@@ -528,7 +537,7 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	}
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
-	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
+	if err := w.downloadDirectory(action.InputRootDigest, usePacks); err != nil {
 		if grpcstatus.Code(err) == codes.NotFound {
 			blobNotFoundErrors.Inc()
 		}

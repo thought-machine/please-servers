@@ -46,6 +46,7 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 const timeout = 2 * time.Minute
@@ -438,7 +439,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	} else if req.RootDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "missing root_digest field")
 	}
-	dirs, err := s.getTree(req.RootDigest)
+	dirs, err := s.getTree(req.RootDigest, rexclient.ShouldStopAtPack(srv.Context()))
 	if err != nil {
 		return err
 	}

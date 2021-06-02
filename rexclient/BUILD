@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//grpcutil",
         "//third_party/go:cli-init",
+        "//third_party/go:grpc",
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
     ],
@@ -20,5 +21,6 @@ go_test(
         ":rexclient",
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
-        "//third_party/go:testify",    ],
+        "//third_party/go:testify",
+    ],
 )

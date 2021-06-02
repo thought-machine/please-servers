@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -51,9 +50,9 @@ type fileNode struct {
 }
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
-func (w *worker) downloadDirectory(digest *pb.Digest) error {
+func (w *worker) downloadDirectory(digest *pb.Digest, usePacks bool) error {
 	ts1 := time.Now()
-	dirs, err := w.client.GetDirectoryTree(digest)
+	dirs, err := w.client.GetDirectoryTree(digest, usePacks)
 	if err != nil {
 		return err
 	}
@@ -64,7 +63,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 	}
 	files := map[sdkdigest.Digest][]fileNode{}
 	packs := map[sdkdigest.Digest][]string{}
-	if err := w.createDirectory(m, files, packs, w.dir, digest); err != nil {
+	if err := w.createDirectory(m, files, packs, w.dir, digest, usePacks); err != nil {
 		return err
 	}
 	ts3 := time.Now()
@@ -76,7 +75,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 }
 
 // createDirectory creates a directory & all its children
-func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, packs map[sdkdigest.Digest][]string, root string, digest *pb.Digest) error {
+func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, packs map[sdkdigest.Digest][]string, root string, digest *pb.Digest, usePacks bool) error {
 	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
 		return err
 	}
@@ -87,10 +86,12 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	if !present {
 		return fmt.Errorf("Missing directory %s", digest.Hash)
 	}
-	if dg := packDigest(dir); dg.Hash != "" {
-		log.Debug("Replacing dir %s with pack digest %s/%d", root, dg.Hash, dg.Size)
-		packs[dg] = append(packs[dg], root)
-		return nil
+	if usePacks {
+		if dg := rexclient.PackDigest(dir); dg.Hash != "" {
+			log.Debug("Replacing dir %s with pack digest %s/%d", root, dg.Hash, dg.Size)
+			packs[dg] = append(packs[dg], root)
+			return nil
+		}
 	}
 	for _, file := range dir.Files {
 		if err := common.CheckPath(file.Name); err != nil {
@@ -107,7 +108,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	for _, dir := range dir.Directories {
 		if err := common.CheckPath(dir.Name); err != nil {
 			return err
-		} else if err := w.createDirectory(dirs, files, packs, path.Join(root, dir.Name), dir.Digest); err != nil {
+		} else if err := w.createDirectory(dirs, files, packs, path.Join(root, dir.Name), dir.Digest, usePacks); err != nil {
 			return err
 		}
 	}

@@ -167,6 +167,6 @@ func (e *elanClient) ReadToFile(dg digest.Digest, filename string, compressed bo
 	return err
 }
 
-func (e *elanClient) GetDirectoryTree(dg *pb.Digest) ([]*pb.Directory, error) {
-	return e.s.getTree(dg)
+func (e *elanClient) GetDirectoryTree(dg *pb.Digest, stopAtPack bool) ([]*pb.Directory, error) {
+	return e.s.getTree(dg, stopAtPack)
 }
