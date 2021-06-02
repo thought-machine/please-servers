@@ -256,13 +256,15 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 			}
 		case tar.TypeReg:
 			p1 := path.Join(paths[0], hdr.Name)
-			if f, err := os.Create(p1); err != nil {
+			if f, err := os.OpenFile(p1, os.O_WRONLY|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
 				return err
-			} else if _, err := io.Copy(f, r); err != nil {
+			} else if n, err := io.Copy(f, r); err != nil {
 				f.Close() // don't forget this!
 				return err
 			} else if err := f.Close(); err != nil {
 				return err
+			} else if n != hdr.Size {
+				return fmt.Errorf("Short read for %s: read %d bytes, expected %d", hdr.Name, n, hdr.Size)
 			}
 			// Link the file into all the other locations
 			for _, p := range paths[1:] {
