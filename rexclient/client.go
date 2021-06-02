@@ -20,10 +20,6 @@ var log = logging.MustGetLogger()
 //                   of small items.
 const CompressionThreshold = 1024
 
-// PackName is the node property name that we apply to a 'pack', a compressed tarball representing
-// everything under a directory which we can use to short-circuit the download of a large tree.
-const PackName = "mettle.pack"
-
 // New creates a new remote execution client.
 // It automatically handles some things like compression.
 func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, error) {

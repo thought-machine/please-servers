@@ -422,30 +422,3 @@ func shouldCompress(filename string) bool {
 		strings.HasSuffix(filename, ".jar") || strings.HasSuffix(filename, ".gz") ||
 		strings.HasSuffix(filename, ".bz2") || strings.HasSuffix(filename, ".xz"))
 }
-
-// packDigest returns the digest of a pack associated with the given directory, or an empty
-// digest if there isn't one.
-func packDigest(dir *pb.Directory) sdkdigest.Digest {
-	if dir.NodeProperties == nil {
-		return sdkdigest.Digest{}
-	}
-	for _, prop := range dir.NodeProperties.Properties {
-		if prop.Name == rexclient.PackName {
-			// Need to do a bit of parsing here
-			if idx := strings.IndexByte(prop.Value, '/'); idx != -1 {
-				size, err := strconv.Atoi(prop.Value[idx+1:])
-				if err != nil {
-					log.Warning("Can't parse size from pack %s: %s", prop.Value, err)
-					continue
-				}
-				return sdkdigest.Digest{
-					Hash: prop.Value[:idx],
-					Size: int64(size),
-				}
-			} else {
-				log.Warning("Invalid pack format: %s", prop.Value)
-			}
-		}
-	}
-	return sdkdigest.Digest{}
-}

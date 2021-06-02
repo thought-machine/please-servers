@@ -1,25 +1,23 @@
-package worker
+package rexclient
 
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
-
-	"github.com/thought-machine/please-servers/rexclient"
+	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPackDigest(t *testing.T) {
-	assert.Equal(t, packDigest(&pb.Directory{
+	assert.Equal(t, PackDigest(&pb.Directory{
 		NodeProperties: &pb.NodeProperties{
 			Properties: []*pb.NodeProperty{
 				{
-					Name: "bob",
+					Name:  "bob",
 					Value: "6e104986dd5b8b3b51d755276d77cc3b6034a89f8e856c3518d21ad9233be9a2/123",
 				},
 				{
-					Name: rexclient.PackName,
+					Name:  PackName,
 					Value: "b10bd3130c1c0c13552e64356445290992346ad995cc5c1388a1e6150bc21c07/156",
 				},
 			},
@@ -31,11 +29,11 @@ func TestPackDigest(t *testing.T) {
 }
 
 func TestPackDigestMissing(t *testing.T) {
-	assert.Equal(t, packDigest(&pb.Directory{
+	assert.Equal(t, PackDigest(&pb.Directory{
 		NodeProperties: &pb.NodeProperties{
 			Properties: []*pb.NodeProperty{
 				{
-					Name: "bob",
+					Name:  "bob",
 					Value: "6e104986dd5b8b3b51d755276d77cc3b6034a89f8e856c3518d21ad9233be9a2/123",
 				},
 			},
@@ -44,15 +42,15 @@ func TestPackDigestMissing(t *testing.T) {
 }
 
 func TestPackDigestNotParseable(t *testing.T) {
-	assert.Equal(t, packDigest(&pb.Directory{
+	assert.Equal(t, PackDigest(&pb.Directory{
 		NodeProperties: &pb.NodeProperties{
 			Properties: []*pb.NodeProperty{
 				{
-					Name: "bob",
+					Name:  "bob",
 					Value: "6e104986dd5b8b3b51d755276d77cc3b6034a89f8e856c3518d21ad9233be9a2/123",
 				},
 				{
-					Name: rexclient.PackName,
+					Name:  PackName,
 					Value: "b10bd3130c1c0c13552e64356445290992346ad995cc5c1388a1e6150bc21c07",
 				},
 			},
@@ -61,5 +59,5 @@ func TestPackDigestNotParseable(t *testing.T) {
 }
 
 func TestPackDigestNoMessage(t *testing.T) {
-	assert.Equal(t, packDigest(&pb.Directory{}), sdkdigest.Digest{})
+	assert.Equal(t, PackDigest(&pb.Directory{}), sdkdigest.Digest{})
 }
