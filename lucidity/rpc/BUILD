@@ -19,6 +19,7 @@ go_library(
 go_test(
     name = "rpc_test",
     srcs = ["rpc_test.go"],
+    resources = glob(["static/*.*"]),
     deps = [
         ":rpc",
         "//proto:lucidity",
