@@ -2,11 +2,11 @@ package rpc
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"mime"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +19,9 @@ import (
 )
 
 var log = logging.MustGetLogger()
+
+//go:embed static/*.*
+var embeddedData embed.FS
 
 var liveWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Namespace: "lucidity",
@@ -144,7 +147,7 @@ func (s *server) ServeAsset(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" || r.URL.Path == "" {
 		r.URL.Path = "index.html"
 	}
-	asset, err := Asset(strings.TrimPrefix(r.URL.Path, "/"))
+	asset, err := embeddedData.ReadFile(path.Join("static", r.URL.Path))
 	if err != nil {
 		log.Warning("404 for URL %s", r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)

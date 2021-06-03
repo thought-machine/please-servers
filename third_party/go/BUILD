@@ -19,15 +19,6 @@ go_module(
 )
 
 go_module(
-    name = "go-bindata",
-    binary = True,
-    install = ["..."],
-    module = "github.com/kevinburke/go-bindata",
-    strip = ["testdata"],
-    version = "46eb4c183bfc1ebb527d9d19bcded39476302eb8",
-)
-
-go_module(
     name = "go-flags",
     module = "github.com/thought-machine/go-flags",
     version = "v1.5.1",
