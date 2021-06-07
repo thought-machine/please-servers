@@ -282,7 +282,7 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 				}
 			}
 		default:
-			return fmt.Errorf("Unknown type in pack for %s: %s", hdr.Name, hdr.Typeflag)
+			return fmt.Errorf("Unknown type in pack for %s: %d", hdr.Name, hdr.Typeflag)
 		}
 	}
 }
