@@ -300,7 +300,7 @@ go_module(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "c48eaafbfef931ea036639c58eefe5960a3db8f5",
+    version = "d0d55ea13e2f1fba38b06806c8412b9c228c06c3",
 )
 
 go_module(
