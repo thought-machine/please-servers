@@ -208,12 +208,12 @@ func (w *worker) downloadPack(dg sdkdigest.Digest, paths []string) error {
 	}
 	w.limiter <- struct{}{}
 	defer func() { <-w.limiter }()
-	rc, err := w.client.StreamBlob(dg.ToProto())
+	// TODO(peterebden): Look into streaming this sometime.
+	b, err := w.client.ReadBlob(dg.ToProto())
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
-	if err := w.writePack(rc, paths); err != nil {
+	if err := w.writePack(bytes.NewReader(b), paths); err != nil {
 		return fmt.Errorf("extracting pack for %s: %w", dg.Hash, err)
 	}
 	packBytesRead.Add(float64(dg.Size))

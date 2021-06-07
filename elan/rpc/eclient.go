@@ -31,13 +31,6 @@ func (e *elanClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	return e.s.readAllBlob(ctx, "cas", dg, false, false)
 }
 
-func (e *elanClient) StreamBlob(dg *pb.Digest) (io.ReadCloser, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
-	defer cancel()
-	rc, _, err := e.s.readCompressed(ctx, "cas", dg, false, 0, -1)
-	return rc, err
-}
-
 func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
 	dg := digest.NewFromBlob(b).ToProto()
 	if dg.Hash == digest.Empty.Hash {

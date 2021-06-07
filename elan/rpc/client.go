@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"io"
 	"strings"
 	"time"
 
@@ -38,7 +37,6 @@ func New(url string, tls bool, tokenFile string) (Client, error) {
 type Client interface {
 	Healthcheck() error
 	ReadBlob(*pb.Digest) ([]byte, error)
-	StreamBlob(*pb.Digest) (io.ReadCloser, error)
 	WriteBlob([]byte) (*pb.Digest, error)
 	UpdateActionResult(*pb.UpdateActionResultRequest) (*pb.ActionResult, error)
 	UploadIfMissing([]*uploadinfo.Entry) error
