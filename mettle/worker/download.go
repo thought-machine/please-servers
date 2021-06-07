@@ -198,6 +198,7 @@ func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode, packs m
 
 // downloadPack downloads a pack file to the given path
 func (w *worker) downloadPack(dg sdkdigest.Digest, paths []string) error {
+	packsDownloaded.Inc()
 	if w.fileCache != nil {
 		if downloaded, err := w.downloadPackFromCache(dg, paths); err != nil {
 			return err
@@ -215,6 +216,7 @@ func (w *worker) downloadPack(dg sdkdigest.Digest, paths []string) error {
 	if err := w.writePack(rc, paths); err != nil {
 		return fmt.Errorf("extracting pack for %s: %w", dg.Hash, err)
 	}
+	packBytesRead.Add(float64(dg.Size))
 	return nil
 }
 

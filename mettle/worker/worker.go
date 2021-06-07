@@ -95,6 +95,14 @@ var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "blob_not_found_errors_total",
 })
+var packsDownloaded = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "packs_downloaded_total",
+})
+var packBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "pack_bytes_read_total",
+})
 
 var metrics = []prometheus.Collector{
 	totalBuilds,
@@ -110,6 +118,8 @@ var metrics = []prometheus.Collector{
 	redisHits,
 	redisMisses,
 	redisBytesRead,
+	packsDownloaded,
+	packBytesRead,
 }
 
 func init() {
