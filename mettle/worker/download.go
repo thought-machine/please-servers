@@ -249,6 +249,8 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 				return nil
 			}
 			return fmt.Errorf("extracting tarball: %w", err)
+		} else if err := common.CheckPath(hdr.Name); err != nil {
+			return err
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
