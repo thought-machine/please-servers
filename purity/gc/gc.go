@@ -16,6 +16,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
+	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v4/logging"
 	"google.golang.org/grpc/codes"
@@ -413,6 +414,14 @@ func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
 		c.referencedBlobs[pack.Hash] = struct{}{}
 		size += pack.Size
 		digests = append(digests, pack.ToProto())
+	}
+	// If the dir has any node properties, save a copy of one that doesn't.
+	if d.NodeProperties != nil {
+		d2 := proto.Clone(d).(*pb.Directory)
+		d2.NodeProperties = nil
+		ue, _ := uploadinfo.EntryFromProto(d2)
+		digests = append(digests, ue.Digest.ToProto())
+		size += ue.Digest.Size
 	}
 	return size, digests
 }
