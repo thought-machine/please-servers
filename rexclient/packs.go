@@ -36,9 +36,8 @@ func PackDigest(dir *pb.Directory) sdkdigest.Digest {
 					Hash: prop.Value[:idx],
 					Size: int64(size),
 				}
-			} else {
-				log.Warning("Invalid pack format: %s", prop.Value)
 			}
+			log.Warning("Invalid pack format: %s", prop.Value)
 		}
 	}
 	return sdkdigest.Digest{}
