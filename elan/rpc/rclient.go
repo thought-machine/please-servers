@@ -64,5 +64,8 @@ func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed 
 }
 
 func (r *remoteClient) GetDirectoryTree(dg *pb.Digest, stopAtPack bool) ([]*pb.Directory, error) {
-	return r.c.GetDirectoryTree(rexclient.StopAtPack(context.Background()), dg)
+	if stopAtPack {
+		return r.c.GetDirectoryTree(rexclient.StopAtPack(context.Background()), dg)
+	}
+	return r.c.GetDirectoryTree(context.Background(), dg)
 }
