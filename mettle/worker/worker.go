@@ -95,6 +95,14 @@ var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "blob_not_found_errors_total",
 })
+var packsDownloaded = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "packs_downloaded_total",
+})
+var packBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "pack_bytes_read_total",
+})
 
 var metrics = []prometheus.Collector{
 	totalBuilds,
@@ -110,6 +118,8 @@ var metrics = []prometheus.Collector{
 	redisHits,
 	redisMisses,
 	redisBytesRead,
+	packsDownloaded,
+	packBytesRead,
 }
 
 func init() {
@@ -518,6 +528,15 @@ func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Co
 
 // prepareDir prepares the directory for executing this request.
 func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.Status {
+	if status := w.prepareDirWithPacks(action, command, true); status != nil {
+		log.Warning("Failed to prepare directory with packs, falling back to without: %s", status)
+		return w.prepareDirWithPacks(action, command, false)
+	}
+	return nil
+}
+
+// prepareDirWithPacks is like prepareDir but optionally uses pack files to optimise the download.
+func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, usePacks bool) *rpcstatus.Status {
 	log.Info("Preparing directory for %s", w.actionDigest.Hash)
 	defer func() {
 		w.metadata.InputFetchCompletedTimestamp = toTimestamp(time.Now())
@@ -528,7 +547,7 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 	}
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
-	if err := w.downloadDirectory(action.InputRootDigest); err != nil {
+	if err := w.downloadDirectory(action.InputRootDigest, usePacks); err != nil {
 		if grpcstatus.Code(err) == codes.NotFound {
 			blobNotFoundErrors.Inc()
 		}
@@ -900,7 +919,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 	}
 	entries := make([]*uploadinfo.Entry, 0, len(m))
 	for _, e := range m {
-		e.Compressor = w.oneCompressor(e.Path, e.Digest.Size)
+		e.Compressor = w.entryCompressor(e)
 		entries = append(entries, e)
 	}
 	err = w.client.UploadIfMissing(entries)

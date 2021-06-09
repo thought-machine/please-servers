@@ -1,9 +1,12 @@
 package worker
 
 import (
+	"archive/tar"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -11,8 +14,10 @@ import (
 	"time"
 
 	sdkdigest "github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
+	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -30,6 +35,9 @@ const downloadParallelism = 4
 // ioParallelism is the maximum number of parallel disk writes we'll allow.
 const ioParallelism = 10
 
+// zstdMagic is the magic number of zstd compressed data.
+var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+
 // emptyHash is the sha256 hash of the empty file.
 // Technically checking the size is sufficient but we add this as well for general sanity in case something
 // else lost the size for some reason (it will be more obvious to debug that mismatch than mysteriously empty files).
@@ -42,9 +50,9 @@ type fileNode struct {
 }
 
 // downloadDirectory downloads & writes out a single Directory proto and all its children.
-func (w *worker) downloadDirectory(digest *pb.Digest) error {
+func (w *worker) downloadDirectory(digest *pb.Digest, usePacks bool) error {
 	ts1 := time.Now()
-	dirs, err := w.client.GetDirectoryTree(digest)
+	dirs, err := w.client.GetDirectoryTree(digest, usePacks)
 	if err != nil {
 		return err
 	}
@@ -54,11 +62,12 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 		m[digestProto(dir).Hash] = dir
 	}
 	files := map[sdkdigest.Digest][]fileNode{}
-	if err := w.createDirectory(m, files, w.dir, digest); err != nil {
+	packs := map[sdkdigest.Digest][]string{}
+	if err := w.createDirectory(m, files, packs, w.dir, digest, usePacks); err != nil {
 		return err
 	}
 	ts3 := time.Now()
-	err = w.downloadAllFiles(files)
+	err = w.downloadAllFiles(files, packs)
 	w.metadataFetch = ts2.Sub(ts1)
 	w.dirCreation = ts3.Sub(ts2)
 	w.fileDownload = time.Since(ts3)
@@ -66,7 +75,7 @@ func (w *worker) downloadDirectory(digest *pb.Digest) error {
 }
 
 // createDirectory creates a directory & all its children
-func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, root string, digest *pb.Digest) error {
+func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdigest.Digest][]fileNode, packs map[sdkdigest.Digest][]string, root string, digest *pb.Digest, usePacks bool) error {
 	if err := os.MkdirAll(root, os.ModeDir|0775); err != nil {
 		return err
 	}
@@ -76,6 +85,13 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	dir, present := dirs[digest.Hash]
 	if !present {
 		return fmt.Errorf("Missing directory %s", digest.Hash)
+	}
+	if usePacks {
+		if dg := rexclient.PackDigest(dir); dg.Hash != "" {
+			log.Debug("Replacing dir %s with pack digest %s/%d", root, dg.Hash, dg.Size)
+			packs[dg] = append(packs[dg], root)
+			return nil
+		}
 	}
 	for _, file := range dir.Files {
 		if err := common.CheckPath(file.Name); err != nil {
@@ -92,7 +108,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	for _, dir := range dir.Directories {
 		if err := common.CheckPath(dir.Name); err != nil {
 			return err
-		} else if err := w.createDirectory(dirs, files, path.Join(root, dir.Name), dir.Digest); err != nil {
+		} else if err := w.createDirectory(dirs, files, packs, path.Join(root, dir.Name), dir.Digest, usePacks); err != nil {
 			return err
 		}
 	}
@@ -110,7 +126,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 }
 
 // downloadAllFiles downloads all the files for a single build action.
-func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode) error {
+func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode, packs map[sdkdigest.Digest][]string) error {
 	var g errgroup.Group
 
 	fileNodes := map[sdkdigest.Digest][]fileNode{}
@@ -170,7 +186,107 @@ func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode) error {
 	if len(fileNodes) != 0 {
 		g.Go(func() error { return w.downloadFiles(fileNodes) })
 	}
+	for dg, paths := range packs {
+		dg := dg
+		paths := paths
+		g.Go(func() error {
+			return w.downloadPack(dg, paths)
+		})
+	}
 	return g.Wait()
+}
+
+// downloadPack downloads a pack file to the given path
+func (w *worker) downloadPack(dg sdkdigest.Digest, paths []string) error {
+	packsDownloaded.Inc()
+	if w.fileCache != nil {
+		if downloaded, err := w.downloadPackFromCache(dg, paths); err != nil {
+			return err
+		} else if downloaded {
+			return nil
+		}
+	}
+	w.limiter <- struct{}{}
+	defer func() { <-w.limiter }()
+	// TODO(peterebden): Look into streaming this sometime.
+	b, err := w.client.ReadBlob(dg.ToProto())
+	if err != nil {
+		return err
+	}
+	if err := w.writePack(bytes.NewReader(b), paths); err != nil {
+		return fmt.Errorf("extracting pack for %s: %w", dg.Hash, err)
+	}
+	packBytesRead.Add(float64(dg.Size))
+	return nil
+}
+
+// downloadPack downloads a pack file to the given path
+func (w *worker) downloadPackFromCache(dg sdkdigest.Digest, paths []string) (bool, error) {
+	w.iolimiter <- struct{}{}
+	defer func() { <-w.iolimiter }()
+	if rc := w.fileCache.RetrieveStream(dg.Hash); rc != nil {
+		defer rc.Close()
+		if err := w.writePack(rc, paths); err != nil {
+			return false, fmt.Errorf("extracting pack for %s: %w", dg.Hash, err)
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// writePack writes a pack to the given set of paths.
+func (w *worker) writePack(r io.Reader, paths []string) error {
+	// Packs are always zstd-compressed tarballs.
+	zr, err := zstd.NewReader(r)
+	if err != nil {
+		return err
+	}
+	tr := tar.NewReader(zr)
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("extracting tarball: %w", err)
+		} else if err := common.CheckPath(hdr.Name); err != nil {
+			return err
+		}
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			for _, p := range paths {
+				if err := os.MkdirAll(path.Join(p, hdr.Name), 0755|os.ModeDir); err != nil {
+					return fmt.Errorf("creating directory: %w", err)
+				}
+			}
+		case tar.TypeReg:
+			p1 := path.Join(paths[0], hdr.Name)
+			if f, err := os.OpenFile(p1, os.O_WRONLY|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
+				return err
+			} else if n, err := io.Copy(f, tr); err != nil {
+				f.Close() // don't forget this!
+				return err
+			} else if err := f.Close(); err != nil {
+				return err
+			} else if n != hdr.Size {
+				return fmt.Errorf("Short read for %s: read %d bytes, expected %d", hdr.Name, n, hdr.Size)
+			}
+			// Link the file into all the other locations
+			for _, p := range paths[1:] {
+				if err := os.Link(p1, path.Join(p, hdr.Name)); err != nil {
+					return err
+				}
+			}
+		case tar.TypeSymlink:
+			for _, p := range paths {
+				if err := os.Symlink(hdr.Linkname, path.Join(p, hdr.Name)); err != nil {
+					return err
+				}
+			}
+		default:
+			return fmt.Errorf("Unknown type in pack for %s: %d", hdr.Name, hdr.Typeflag)
+		}
+	}
 }
 
 // downloadFiles downloads a set of files to disk in a batch.
@@ -291,6 +407,18 @@ func (w *worker) oneCompressor(filename string, size int64) pb.Compressor_Value 
 		return pb.Compressor_ZSTD
 	}
 	return pb.Compressor_IDENTITY
+}
+
+// entryCompressor returns the compressor to use for an upload entry.
+func (w *worker) entryCompressor(ue *uploadinfo.Entry) pb.Compressor_Value {
+	if len(ue.Contents) > 0 {
+		// Contents are set, if it looks like we've compressed already, don't do it again.
+		if len(ue.Contents) < rexclient.CompressionThreshold || bytes.HasPrefix(ue.Contents, zstdMagic) {
+			return pb.Compressor_IDENTITY
+		}
+		return pb.Compressor_ZSTD
+	}
+	return w.oneCompressor(ue.Path, ue.Digest.Size)
 }
 
 // shouldCompress returns true if the given filename should be compressed.

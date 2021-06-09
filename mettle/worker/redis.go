@@ -240,7 +240,7 @@ func (r *redisClient) ReadToFile(dg digest.Digest, filename string, compressed b
 	return os.WriteFile(filename, blob, 0644)
 }
 
-func (r *redisClient) GetDirectoryTree(dg *pb.Digest) ([]*pb.Directory, error) {
+func (r *redisClient) GetDirectoryTree(dg *pb.Digest, usePacks bool) ([]*pb.Directory, error) {
 	// TODO(peterebden): Figure out how we are going to stitch Redis into this. There are a lot of       //                   little internal requests that we ideally want to be able to cache into Redis.
-	return r.elan.GetDirectoryTree(dg)
+	return r.elan.GetDirectoryTree(dg, usePacks)
 }

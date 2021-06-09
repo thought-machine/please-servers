@@ -12,6 +12,7 @@ go_library(
         "//third_party/go:go-multierror",
         "//third_party/go:grpc",
         "//third_party/go:humanize",
+        "//third_party/go:protobuf",
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
         "//third_party/go:terminal",

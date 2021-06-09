@@ -10,6 +10,8 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	hpb "google.golang.org/grpc/health/grpc_health_v1"
+
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 // This is the implementation backed by the SDK client. It's pretty simple since it was what we
@@ -61,6 +63,9 @@ func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed 
 	return err
 }
 
-func (r *remoteClient) GetDirectoryTree(dg *pb.Digest) ([]*pb.Directory, error) {
+func (r *remoteClient) GetDirectoryTree(dg *pb.Digest, stopAtPack bool) ([]*pb.Directory, error) {
+	if stopAtPack {
+		return r.c.GetDirectoryTree(rexclient.StopAtPack(context.Background()), dg)
+	}
 	return r.c.GetDirectoryTree(context.Background(), dg)
 }

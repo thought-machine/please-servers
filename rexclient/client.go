@@ -29,7 +29,7 @@ func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, 
 		NoSecurity:         !tls,
 		TransportCredsOnly: tls,
 		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold))
+	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold), client.UsePackName(PackName))
 	if err != nil {
 		log.Error("Error initialising remote execution client: %s", err)
 		return nil, err
@@ -73,5 +73,6 @@ func Uninitialised() *client.Client {
 	o := client.TreeSymlinkOpts{Preserved: true}
 	o.Apply(c)
 	client.CompressedBytestreamThreshold(CompressionThreshold).Apply(c)
+	client.UsePackName(PackName).Apply(c)
 	return c
 }

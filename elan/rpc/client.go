@@ -42,5 +42,5 @@ type Client interface {
 	UploadIfMissing([]*uploadinfo.Entry) error
 	BatchDownload([]digest.Digest, []pb.Compressor_Value) (map[digest.Digest][]byte, error)
 	ReadToFile(digest.Digest, string, bool) error
-	GetDirectoryTree(*pb.Digest) ([]*pb.Directory, error)
+	GetDirectoryTree(*pb.Digest, bool) ([]*pb.Directory, error)
 }
