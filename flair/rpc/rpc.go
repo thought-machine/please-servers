@@ -30,6 +30,7 @@ import (
 	"github.com/thought-machine/please-servers/flair/trie"
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
+	"github.com/thought-machine/please-servers/rexclient"
 )
 
 var log = logging.MustGetLogger()
@@ -331,6 +332,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	var g errgroup.Group
 	var mutex sync.Mutex
 	ctx := srv.Context()
+	stopAtPack := rexclient.ShouldStopAtPack(ctx)
 	r := &pb.GetTreeResponse{}
 
 	var fetchDir func(digest *pb.Digest) error
@@ -359,11 +361,13 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 		if err := proto.Unmarshal(resp.Responses[0].Data, dir); err != nil {
 			return err
 		}
-		for _, dir := range dir.Directories {
-			digest := dir.Digest
-			g.Go(func() error {
-				return fetchDir(digest)
-			})
+		if !stopAtPack || rexclient.PackDigest(dir).Hash == "" {
+			for _, dir := range dir.Directories {
+				digest := dir.Digest
+				g.Go(func() error {
+					return fetchDir(digest)
+				})
+			}
 		}
 		mutex.Lock()
 		defer mutex.Unlock()

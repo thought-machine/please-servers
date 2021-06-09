@@ -6,6 +6,7 @@ go_library(
         "//flair/trie",
         "//grpcutil",
         "//proto:purity",
+        "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:errgroup",
         "//third_party/go:genproto",
