@@ -139,11 +139,7 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	}
 	// Only upload Redis after we have successfully uploaded blobs to Elan, otherwise we could
 	// create an inconsistent situation.
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-	if cmd := r.redis.MSet(ctx, uploads...); cmd.Val() != "OK" {
-		log.Warning("Failed to upload %d blobs to Redis: %s", len(uploads), cmd.Err())
-	}
+	go r.writeBlobs(uploads)
 	return nil // We never propagate Redis errors regardless.
 }
 
@@ -171,16 +167,17 @@ func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_V
 	if len(missingDigests) == 0 {
 		return ret, nil
 	}
+	log.Debug("Found %d / %d files in Redis", len(dgs) - len(missingDigests), len(dgs))
 	m, err := r.elan.BatchDownload(missingDigests, missingComps)
 	if err != nil {
 		return nil, err
 	}
-	if len(ret) == 0 {
-		return m, nil
-	}
+	uploads := make([]interface{}, 0, 2*len(m))
 	for k, v := range m {
 		ret[k] = v
+		uploads = append(uploads, k.Hash, v)
 	}
+	go r.writeBlobs(uploads)
 	return ret, nil
 }
 
@@ -223,6 +220,20 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 		ret[i] = []byte(s)
 	}
 	return ret
+}
+
+// writeBlobs writes a series of blobs to Redis. They should be passed in interleaved key/value order.
+func (r *redisClient) writeBlobs(uploads []interface{}) {
+	if len(uploads) == 0 {
+		return
+	}
+	log.Debug("Writing %d blobs to Redis...", len(uploads) / 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	if cmd := r.redis.MSet(ctx, uploads...); cmd.Val() != "OK" {
+		log.Warning("Failed to upload %d blobs to Redis: %s", len(uploads), cmd.Err())
+	}
+	log.Debug("Wrote %d blobs to Redis...", len(uploads) / 2)
 }
 
 func (r *redisClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
