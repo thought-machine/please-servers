@@ -167,7 +167,7 @@ func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_V
 	if len(missingDigests) == 0 {
 		return ret, nil
 	}
-	log.Debug("Found %d / %d files in Redis", len(dgs) - len(missingDigests), len(dgs))
+	log.Debug("Found %d / %d files in Redis", len(dgs)-len(missingDigests), len(dgs))
 	m, err := r.elan.BatchDownload(missingDigests, missingComps)
 	if err != nil {
 		return nil, err
@@ -227,13 +227,13 @@ func (r *redisClient) writeBlobs(uploads []interface{}) {
 	if len(uploads) == 0 {
 		return
 	}
-	log.Debug("Writing %d blobs to Redis...", len(uploads) / 2)
+	log.Debug("Writing %d blobs to Redis...", len(uploads)/2)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	if cmd := r.redis.MSet(ctx, uploads...); cmd.Val() != "OK" {
 		log.Warning("Failed to upload %d blobs to Redis: %s", len(uploads), cmd.Err())
 	}
-	log.Debug("Wrote %d blobs to Redis...", len(uploads) / 2)
+	log.Debug("Wrote %d blobs to Redis...", len(uploads)/2)
 }
 
 func (r *redisClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
