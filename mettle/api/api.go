@@ -15,6 +15,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	clilogging "github.com/peterebden/go-cli-init/v4/logging"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"github.com/prometheus/client_golang/prometheus"
 	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
@@ -203,7 +204,24 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	} else {
 		log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
 	}
-	// TODO(peterebden): Try a cache lookup here now we have access to Elan.
+
+	// If we're allowed to check the cache, see if this one has already been done.
+	// A well-behaved client will likely have done this itself but we should make sure again.
+	if !req.SkipCacheLookup {
+		if err  := stream.Send(common.BuildOperation(pb.ExecutionStage_CACHE_CHECK, req.ActionDigest, nil)); err != nil {
+			log.Warningf("Failed to forward to stream: %s", err)
+		}
+		if ar, err := s.client.CheckActionCache(context.Background(), req.ActionDigest); err != nil {
+			log.Warning("Failed to check action cache: %s", err)
+		} else if ar != nil {
+			return stream.Send(common.BuildOperation(pb.ExecutionStage_COMPLETED, req.ActionDigest, &pb.ExecuteResponse{
+				Result: ar,
+				CachedResult: true,
+				Status: &rpcstatus.Status{Code: int32(codes.OK)},
+			}))
+		}
+	}
+
 	ch, created := s.eventStream(req.ActionDigest, true)
 	if !created {
 		// We didn't create a new execution, so don't need to send a request for a new build.
@@ -212,14 +230,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	go s.expireJob(req.ActionDigest.Hash)
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
-	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
-		Stage:        pb.ExecutionStage_QUEUED,
-		ActionDigest: req.ActionDigest,
-	})
-	b, _ := proto.Marshal(&longrunning.Operation{
-		Name:     req.ActionDigest.Hash,
-		Metadata: any,
-	})
+	b := common.MarshalOperation(pb.ExecutionStage_QUEUED, req.ActionDigest, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, s.name); err != nil {

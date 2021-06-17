@@ -16,6 +16,9 @@ import (
 	"gocloud.dev/pubsub"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 	"google.golang.org/grpc/codes"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc/status"
 
 	// Must import the schemes we want to use.
@@ -162,4 +165,28 @@ func CheckPath(path string) error {
 		return status.Errorf(codes.InvalidArgument, "Output path %s is absolute, that's not permitted", path)
 	}
 	return nil
+}
+
+// BuildOperation constructs a longrunning.Operation proto for a task. response may be nil.
+func BuildOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, response *pb.ExecuteResponse) *longrunning.Operation {
+	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
+		Stage:        stage,
+		ActionDigest: actionDigest,
+	})
+	op := &longrunning.Operation{
+		Name: actionDigest.Hash,
+		Metadata: any,
+		Done:     stage == pb.ExecutionStage_COMPLETED,
+	}
+	if response != nil {
+		any, _ = ptypes.MarshalAny(response)
+		op.Result = &longrunning.Operation_Response{Response: any}
+	}
+	return op
+}
+
+// MarshalOperation is like BuildOperation but gives you back the serialised proto.
+func MarshalOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, response *pb.ExecuteResponse) []byte {
+	b, _ := proto.Marshal(BuildOperation(stage, actionDigest, response))
+	return b
 }
