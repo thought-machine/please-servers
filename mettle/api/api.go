@@ -15,11 +15,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	clilogging "github.com/peterebden/go-cli-init/v4/logging"
-	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"github.com/prometheus/client_golang/prometheus"
 	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -208,16 +208,16 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	// If we're allowed to check the cache, see if this one has already been done.
 	// A well-behaved client will likely have done this itself but we should make sure again.
 	if !req.SkipCacheLookup {
-		if err  := stream.Send(common.BuildOperation(pb.ExecutionStage_CACHE_CHECK, req.ActionDigest, nil)); err != nil {
+		if err := stream.Send(common.BuildOperation(pb.ExecutionStage_CACHE_CHECK, req.ActionDigest, nil)); err != nil {
 			log.Warningf("Failed to forward to stream: %s", err)
 		}
 		if ar, err := s.client.CheckActionCache(context.Background(), req.ActionDigest); err != nil {
 			log.Warning("Failed to check action cache: %s", err)
 		} else if ar != nil {
 			return stream.Send(common.BuildOperation(pb.ExecutionStage_COMPLETED, req.ActionDigest, &pb.ExecuteResponse{
-				Result: ar,
+				Result:       ar,
 				CachedResult: true,
-				Status: &rpcstatus.Status{Code: int32(codes.OK)},
+				Status:       &rpcstatus.Status{Code: int32(codes.OK)},
 			}))
 		}
 	}

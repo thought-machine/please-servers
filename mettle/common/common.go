@@ -12,13 +12,13 @@ import (
 	"time"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
-	"github.com/peterebden/go-cli-init/v4/logging"
-	"gocloud.dev/pubsub"
-	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
-	"google.golang.org/grpc/codes"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/peterebden/go-cli-init/v4/logging"
+	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
+	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	// Must import the schemes we want to use.
@@ -174,7 +174,7 @@ func BuildOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, resp
 		ActionDigest: actionDigest,
 	})
 	op := &longrunning.Operation{
-		Name: actionDigest.Hash,
+		Name:     actionDigest.Hash,
 		Metadata: any,
 		Done:     stage == pb.ExecutionStage_COMPLETED,
 	}
