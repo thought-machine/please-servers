@@ -243,6 +243,7 @@ func (w *worker) writePack(r io.Reader, paths []string) error {
 	if err != nil {
 		return err
 	}
+	defer zr.Close()
 	tr := tar.NewReader(zr)
 	for {
 		hdr, err := tr.Next()
