@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -190,6 +191,9 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		w.waitForFreeResources()
 		w.waitForLiveConnection()
 		w.waitIfDisabled()
+		// Run an explicit GC to clear up after the last task; ideally we leave as much free as
+		// possible for the subprocesses.
+		runtime.GC()
 		w.Report(true, false, true, "Awaiting next task...")
 		if _, err := w.RunTask(ctx); err != nil {
 			if ctx.Err() != nil {
