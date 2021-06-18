@@ -85,6 +85,7 @@ func TestExecuteAndWait(t *testing.T) {
 		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_CACHE_CHECK)
 	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
 
 	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
@@ -92,7 +93,6 @@ func TestExecuteAndWait(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	receiveUpdate(t, stream2, hash, pb.ExecutionStage_QUEUED)
-
 	assert.Equal(t, hash, ex.Receive().Hash)
 
 	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
@@ -114,6 +114,7 @@ func TestExecuteAndWaitTwice(t *testing.T) {
 		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_CACHE_CHECK)
 	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
 
 	stream2, err := client.WaitExecution(context.Background(), &pb.WaitExecutionRequest{
@@ -152,6 +153,7 @@ func TestExecuteAndWaitLater(t *testing.T) {
 		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_CACHE_CHECK)
 	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
 
 	assert.Equal(t, hash, ex.Receive().Hash)
@@ -179,6 +181,7 @@ func TestExecuteAndWaitAfterCompletion(t *testing.T) {
 		ActionDigest: &pb.Digest{Hash: hash},
 	})
 	assert.NoError(t, err)
+	receiveUpdate(t, stream1, hash, pb.ExecutionStage_CACHE_CHECK)
 	op := receiveUpdate(t, stream1, hash, pb.ExecutionStage_QUEUED)
 	assert.Equal(t, hash, ex.Receive().Hash)
 	receiveUpdate(t, stream1, hash, pb.ExecutionStage_EXECUTING)
@@ -200,6 +203,7 @@ func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash st
 	})
 	assert.NoError(t, err)
 
+	receiveUpdate(t, stream, hash, pb.ExecutionStage_CACHE_CHECK)
 	receiveUpdate(t, stream, hash, pb.ExecutionStage_QUEUED)
 	assert.Equal(t, hash, ex.Receive().Hash)
 	receiveUpdate(t, stream, hash, pb.ExecutionStage_EXECUTING)
@@ -213,7 +217,7 @@ func receiveUpdate(t *testing.T, stream pb.Execution_ExecuteClient, expectedHash
 	op, metadata := recv(stream)
 	assert.Equal(t, expectedStage, metadata.Stage)
 	assert.Equal(t, expectedHash, metadata.ActionDigest.Hash)
-	log.Debug("Received (hopefully) %s update", expectedStage)
+	log.Debug("Received %s update (expected %s)", metadata.Stage, expectedStage)
 	if expectedStage == pb.ExecutionStage_COMPLETED {
 		// The stream should also have ended at this point.
 		_, err := stream.Recv()

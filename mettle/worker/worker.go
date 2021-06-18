@@ -33,7 +33,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/expfmt"
 	"gocloud.dev/pubsub"
-	"google.golang.org/genproto/googleapis/longrunning"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -938,19 +937,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 // update sends an update on the response channel
 func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteResponse) error {
 	w.Report(true, stage == pb.ExecutionStage_EXECUTING, true, stage.String())
-	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
-		Stage:        stage,
-		ActionDigest: w.actionDigest,
-	})
-	op := &longrunning.Operation{
-		Metadata: any,
-		Done:     stage == pb.ExecutionStage_COMPLETED,
-	}
-	if response != nil {
-		any, _ = ptypes.MarshalAny(response)
-		op.Result = &longrunning.Operation_Response{Response: any}
-	}
-	body, _ := proto.Marshal(op)
+	body := common.MarshalOperation(stage, w.actionDigest, response)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash, w.name)
