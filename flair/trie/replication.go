@@ -65,21 +65,24 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 // This facilitates the BatchReadBlobs endpoint that basically never returns an 'actual' error
 // because they're all inline.
 func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
-	var e error
+	var me *multierror.Error
 	success := false
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
 		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
-		if !r.isContinuable(err) && !shouldContinue {
-			return err
-		}
-		if e == nil || (err != nil && e == serverDead) {
-			e = err
-		}
 		if err == nil {
+			if !shouldContinue {
+				return nil  // No need to do any more.
+			}
 			log.Debug("Caller requested to continue on next replica for %s", key)
 			success = true // we're always successful from here on
-		} else if i < r.Replicas-1 {
+			offset += r.increment
+			continue
+		} else if !r.isContinuable(err) && !shouldContinue {
+			return err
+		}
+		me = multierror.Append(me, err)
+		if i < r.Replicas-1 {
 			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
 			log.Debug("Error reading from replica for %s: %s.", key, err)
@@ -88,10 +91,10 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	}
 	if success {
 		return nil
-	} else if e != nil {
-		log.Info("Reads from all replicas failed: %s", e)
+	} else if me != nil {
+		log.Info("Reads from all replicas failed: %s", me)
 	}
-	return e
+	return me.ErrorOrNil()
 }
 
 // SequentialDigest is like Sequential but takes a digest instead of the raw hash.

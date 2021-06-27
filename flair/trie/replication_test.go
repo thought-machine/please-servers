@@ -101,6 +101,11 @@ func TestSingleServerDown(t *testing.T) {
 	}))
 }
 
+func TestServerDeadIsContinuable(t *testing.T) {
+	r := NewReplicator(testTrie(t), 3)
+	assert.True(t, r.isContinuable(serverDead))
+}
+
 func testTrie(t *testing.T) *Trie {
 	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
