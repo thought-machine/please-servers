@@ -23,7 +23,7 @@ var serverDead = status.Errorf(codes.DeadlineExceeded, "Server is down")
 const failureThreshold = 5
 
 // recheckFrequency is the rate at which we re-check dead servers to see if they become alive again.
-const recheckFrequency = 1 * time.Minute
+const recheckFrequency = 10 * time.Second
 
 // A Replicator implements replication for our RPCs.
 type Replicator struct {
