@@ -81,6 +81,26 @@ func TestReplicatedParallelFailure(t *testing.T) {
 	assert.EqualValues(t, 3, called)
 }
 
+func TestSingleServerDown(t *testing.T) {
+	trie := testTrie(t)
+	r := NewReplicator(trie, 2)
+
+	// Fail it enough times to mark the first one down.
+	for i := 0; i < failureThreshold; i++ {
+		assert.NoError(t, r.Sequential("0000", func(s *Server) error {
+			if s == trie.Get("0000") {
+				return status.Errorf(codes.Unavailable, "Server down")
+			}
+			return nil
+		}))
+	}
+
+	// Now we should still be able to succeed on the replica
+	assert.NoError(t, r.Sequential("0000", func(s *Server) error {
+		return nil
+	}))
+}
+
 func testTrie(t *testing.T) *Trie {
 	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
