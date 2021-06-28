@@ -3,6 +3,7 @@ package trie
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -23,7 +24,7 @@ var serverDead = status.Errorf(codes.DeadlineExceeded, "Server is down")
 const failureThreshold = 5
 
 // recheckFrequency is the rate at which we re-check dead servers to see if they become alive again.
-const recheckFrequency = 1 * time.Minute
+const recheckFrequency = 10 * time.Second
 
 // A Replicator implements replication for our RPCs.
 type Replicator struct {
@@ -65,21 +66,24 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 // This facilitates the BatchReadBlobs endpoint that basically never returns an 'actual' error
 // because they're all inline.
 func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
-	var e error
+	var merr *multierror.Error
 	success := false
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
 		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
-		if !r.isContinuable(err) && !shouldContinue {
-			return err
-		}
-		if e == nil || (err != nil && e == serverDead) {
-			e = err
-		}
 		if err == nil {
+			if !shouldContinue {
+				return nil // No need to do any more.
+			}
 			log.Debug("Caller requested to continue on next replica for %s", key)
 			success = true // we're always successful from here on
-		} else if i < r.Replicas-1 {
+			offset += r.increment
+			continue
+		} else if !r.isContinuable(err) && !shouldContinue {
+			return err
+		}
+		merr = multierror.Append(merr, err)
+		if i < r.Replicas-1 {
 			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
 			log.Debug("Error reading from replica for %s: %s.", key, err)
@@ -88,10 +92,11 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	}
 	if success {
 		return nil
-	} else if e != nil {
-		log.Info("Reads from all replicas failed: %s", e)
+	} else if merr != nil {
+		log.Warning("Reads from all replicas failed: %s", merr)
+		return status.Errorf(errorCode(merr), "Reads from all replicas failed: %s", merr)
 	}
-	return e
+	return nil
 }
 
 // SequentialDigest is like Sequential but takes a digest instead of the raw hash.
@@ -252,4 +257,41 @@ func (r *Replicator) isServer(err error) bool {
 	default:
 		return false
 	}
+}
+
+// errorCode returns the most relevant error code from a multierror.
+// For example, NotFound is more relevant & useful than Unavailable or Unknown.
+func errorCode(merr *multierror.Error) codes.Code {
+	errs := merr.WrappedErrors()
+	if len(errs) == 1 {
+		return status.Code(errs[0])
+	} else if len(errs) == 0 {
+		// We aren't meant to get here, but check before we try to index it.
+		log.Warning("no errors in multierror")
+		return codes.OK
+	}
+	// Put them in order of importance.
+	ranking := map[codes.Code]int{
+		codes.OK:                 -1,
+		codes.Canceled:           -1,
+		codes.Unknown:            1,
+		codes.InvalidArgument:    5,
+		codes.DeadlineExceeded:   0,
+		codes.NotFound:           2,
+		codes.AlreadyExists:      3,
+		codes.PermissionDenied:   4,
+		codes.ResourceExhausted:  0,
+		codes.FailedPrecondition: 2,
+		codes.Aborted:            0,
+		codes.OutOfRange:         5,
+		codes.Unimplemented:      3,
+		codes.Internal:           1,
+		codes.Unavailable:        0,
+		codes.DataLoss:           6,
+		codes.Unauthenticated:    4,
+	}
+	sort.Slice(errs, func(i, j int) bool {
+		return ranking[status.Code(errs[i])] > ranking[status.Code(errs[j])]
+	})
+	return status.Code(errs[0])
 }

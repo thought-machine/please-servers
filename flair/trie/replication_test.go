@@ -1,10 +1,12 @@
 package trie
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -81,6 +83,31 @@ func TestReplicatedParallelFailure(t *testing.T) {
 	assert.EqualValues(t, 3, called)
 }
 
+func TestSingleServerDown(t *testing.T) {
+	trie := testTrie(t)
+	r := NewReplicator(trie, 2)
+
+	// Fail it enough times to mark the first one down.
+	for i := 0; i < failureThreshold; i++ {
+		assert.NoError(t, r.Sequential("0000", func(s *Server) error {
+			if s == trie.Get("0000") {
+				return status.Errorf(codes.Unavailable, "Server down")
+			}
+			return nil
+		}))
+	}
+
+	// Now we should still be able to succeed on the replica
+	assert.NoError(t, r.Sequential("0000", func(s *Server) error {
+		return nil
+	}))
+}
+
+func TestServerDeadIsContinuable(t *testing.T) {
+	r := NewReplicator(testTrie(t), 3)
+	assert.True(t, r.isContinuable(serverDead))
+}
+
 func testTrie(t *testing.T) *Trie {
 	trie := New(callback)
 	assert.NoError(t, trie.AddAll(map[string]string{
@@ -90,4 +117,49 @@ func testTrie(t *testing.T) *Trie {
 		"b0-ff": "127.0.0.1:443",
 	}))
 	return trie
+}
+
+func TestErrorCode(t *testing.T) {
+	for _, testcase := range []struct {
+		Output codes.Code
+		Inputs []codes.Code
+	}{
+		{
+			Output: codes.Unknown,
+			Inputs: []codes.Code{codes.Unknown, codes.Unknown},
+		},
+		{
+			Output: codes.NotFound,
+			Inputs: []codes.Code{codes.Unknown, codes.NotFound},
+		},
+		{
+			Output: codes.NotFound,
+			Inputs: []codes.Code{codes.Internal, codes.NotFound},
+		},
+		{
+			Output: codes.Internal,
+			Inputs: []codes.Code{codes.Unavailable, codes.Internal},
+		},
+		{
+			Output: codes.OutOfRange,
+			Inputs: []codes.Code{codes.OutOfRange, codes.Canceled},
+		},
+		{
+			Output: codes.OK,
+			Inputs: nil,
+		},
+		{
+			Output: codes.Unknown,
+			Inputs: []codes.Code{codes.Unknown},
+		},
+	} {
+		tc := testcase
+		t.Run(fmt.Sprintf("%s_%s", tc.Output, tc.Inputs), func(t *testing.T) {
+			var merr *multierror.Error
+			for _, input := range tc.Inputs {
+				merr = multierror.Append(merr, status.Errorf(input, input.String()))
+			}
+			assert.Equal(t, tc.Output, errorCode(merr))
+		})
+	}
 }
