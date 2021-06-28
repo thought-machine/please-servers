@@ -93,8 +93,13 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	if success {
 		return nil
 	} else if merr != nil {
-		log.Warning("Reads from all replicas failed: %s", merr)
-		return status.Errorf(errorCode(merr), "Reads from all replicas failed: %s", merr)
+		code := errorCode(merr)
+		// Don't log anything on a global NotFound; this is returned by GetActionResult to
+		// simply indicate the action result is not present, so it legitimately comes up often.
+		if code != codes.NotFound {
+			log.Warning("Reads from all replicas failed: %s", merr)
+		}
+		return status.Errorf(code, "Reads from all replicas failed: %s", merr)
 	}
 	return nil
 }
