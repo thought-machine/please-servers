@@ -72,7 +72,7 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
 		if err == nil {
 			if !shouldContinue {
-				return nil  // No need to do any more.
+				return nil // No need to do any more.
 			}
 			log.Debug("Caller requested to continue on next replica for %s", key)
 			success = true // we're always successful from here on
