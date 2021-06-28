@@ -66,7 +66,7 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 // This facilitates the BatchReadBlobs endpoint that basically never returns an 'actual' error
 // because they're all inline.
 func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
-	var me *multierror.Error
+	var merr *multierror.Error
 	success := false
 	offset := 0
 	for i := 0; i < r.Replicas; i++ {
@@ -82,7 +82,7 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 		} else if !r.isContinuable(err) && !shouldContinue {
 			return err
 		}
-		me = multierror.Append(me, err)
+		merr = multierror.Append(merr, err)
 		if i < r.Replicas-1 {
 			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
@@ -92,9 +92,9 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	}
 	if success {
 		return nil
-	} else if me != nil {
-		log.Warning("Reads from all replicas failed: %s", me)
-		return status.Errorf(errorCode(me), "Reads from all replicas failed: %s", me)
+	} else if merr != nil {
+		log.Warning("Reads from all replicas failed: %s", merr)
+		return status.Errorf(errorCode(merr), "Reads from all replicas failed: %s", merr)
 	}
 	return nil
 }
@@ -261,8 +261,8 @@ func (r *Replicator) isServer(err error) bool {
 
 // errorCode returns the most relevant error code from a multierror.
 // For example, NotFound is more relevant & useful than Unavailable or Unknown.
-func errorCode(me *multierror.Error) codes.Code {
-	errs := me.WrappedErrors()
+func errorCode(merr *multierror.Error) codes.Code {
+	errs := merr.WrappedErrors()
 	if len(errs) == 1 {
 		return status.Code(errs[0])
 	} else if len(errs) == 0 {

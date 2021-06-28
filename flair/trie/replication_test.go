@@ -155,11 +155,11 @@ func TestErrorCode(t *testing.T) {
 	} {
 		tc := testcase
 		t.Run(fmt.Sprintf("%s_%s", tc.Output, tc.Inputs), func(t *testing.T) {
-			var me *multierror.Error
+			var merr *multierror.Error
 			for _, input := range tc.Inputs {
-				me = multierror.Append(me, status.Errorf(input, input.String()))
+				merr = multierror.Append(merr, status.Errorf(input, input.String()))
 			}
-			assert.Equal(t, tc.Output, errorCode(me))
+			assert.Equal(t, tc.Output, errorCode(merr))
 		})
 	}
 }
