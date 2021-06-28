@@ -3,6 +3,7 @@ package trie
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -92,9 +93,10 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	if success {
 		return nil
 	} else if me != nil {
-		log.Info("Reads from all replicas failed: %s", me)
+		log.Warning("Reads from all replicas failed: %s", me)
+		return status.Errorf(errorCode(me), "Reads from all replicas failed: %s", me)
 	}
-	return me.ErrorOrNil()
+	return nil
 }
 
 // SequentialDigest is like Sequential but takes a digest instead of the raw hash.
@@ -255,4 +257,41 @@ func (r *Replicator) isServer(err error) bool {
 	default:
 		return false
 	}
+}
+
+// errorCode returns the most relevant error code from a multierror.
+// For example, NotFound is more relevant & useful than Unavailable or Unknown.
+func errorCode(me *multierror.Error) codes.Code {
+	errs := me.WrappedErrors()
+	if len(errs) == 1 {
+		return status.Code(errs[0])
+	} else if len(errs) == 0 {
+		// We aren't meant to get here, but check before we try to index it.
+		log.Warning("no errors in multierror")
+		return codes.OK
+	}
+	// Put them in order of importance.
+	ranking := map[codes.Code]int{
+		codes.OK:                 -1,
+		codes.Canceled:           -1,
+		codes.Unknown:            1,
+		codes.InvalidArgument:    5,
+		codes.DeadlineExceeded:   0,
+		codes.NotFound:           2,
+		codes.AlreadyExists:      3,
+		codes.PermissionDenied:   4,
+		codes.ResourceExhausted:  0,
+		codes.FailedPrecondition: 2,
+		codes.Aborted:            0,
+		codes.OutOfRange:         5,
+		codes.Unimplemented:      3,
+		codes.Internal:           1,
+		codes.Unavailable:        0,
+		codes.DataLoss:           6,
+		codes.Unauthenticated:    4,
+	}
+	sort.Slice(errs, func(i, j int) bool {
+		return ranking[status.Code(errs[i])] > ranking[status.Code(errs[j])]
+	})
+	return status.Code(errs[0])
 }

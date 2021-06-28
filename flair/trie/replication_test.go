@@ -1,10 +1,12 @@
 package trie
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -115,4 +117,49 @@ func testTrie(t *testing.T) *Trie {
 		"b0-ff": "127.0.0.1:443",
 	}))
 	return trie
+}
+
+func TestErrorCode(t *testing.T) {
+	for _, testcase := range []struct {
+		Output codes.Code
+		Inputs []codes.Code
+	}{
+		{
+			Output: codes.Unknown,
+			Inputs: []codes.Code{codes.Unknown, codes.Unknown},
+		},
+		{
+			Output: codes.NotFound,
+			Inputs: []codes.Code{codes.Unknown, codes.NotFound},
+		},
+		{
+			Output: codes.NotFound,
+			Inputs: []codes.Code{codes.Internal, codes.NotFound},
+		},
+		{
+			Output: codes.Internal,
+			Inputs: []codes.Code{codes.Unavailable, codes.Internal},
+		},
+		{
+			Output: codes.OutOfRange,
+			Inputs: []codes.Code{codes.OutOfRange, codes.Canceled},
+		},
+		{
+			Output: codes.OK,
+			Inputs: nil,
+		},
+		{
+			Output: codes.Unknown,
+			Inputs: []codes.Code{codes.Unknown},
+		},
+	} {
+		tc := testcase
+		t.Run(fmt.Sprintf("%s_%s", tc.Output, tc.Inputs), func(t *testing.T) {
+			var me *multierror.Error
+			for _, input := range tc.Inputs {
+				me = multierror.Append(me, status.Errorf(input, input.String()))
+			}
+			assert.Equal(t, tc.Output, errorCode(me))
+		})
+	}
 }
