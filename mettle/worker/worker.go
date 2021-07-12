@@ -652,6 +652,17 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	w.observeCosts()
 
+	// If the result was missing some output paths, we should still return it however avoid caching the result
+	if !containsAllOutputPaths(command, ar) {
+		msg := "result was missing some outputs"
+		w.writeUncachedResult(ar, msg)
+		return &pb.ExecuteResponse{
+			Status:  &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
+			Result:  ar,
+			Message: msg,
+		}
+	}
+
 	ar, err = w.client.UpdateActionResult(&pb.UpdateActionResultRequest{
 		InstanceName: w.instanceName,
 		ActionDigest: w.actionDigest,
@@ -672,6 +683,38 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
 	}
+}
+
+func containsAllOutputPaths(cmd *pb.Command, ar *pb.ActionResult) bool {
+	paths := make(map[string]struct{}, len(ar.OutputDirectories) + len(ar.OutputFiles))
+
+	// Build up the list of outputs that were generated
+	for _, f := range ar.OutputFiles {
+		paths[f.Path] = struct{}{}
+	}
+
+	for _, f := range ar.OutputDirectories {
+		paths[f.Path] = struct{}{}
+	}
+
+	for _, f := range ar.OutputSymlinks {
+		paths[f.Path] = struct{}{}
+	}
+
+	for _, d := range ar.OutputDirectorySymlinks {
+		paths[d.Path] = struct{}{}
+	}
+
+
+	// Check that we generated all the required outputs
+	for _, p := range cmd.OutputPaths {
+		if _, ok := paths[p]; !ok {
+			return false
+		}
+	}
+
+
+	return true
 }
 
 // writeBlob attempts to write a blob to the CAS. It may return nil if it fails.
