@@ -686,7 +686,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 }
 
 func containsAllOutputPaths(cmd *pb.Command, ar *pb.ActionResult) bool {
-	paths := make(map[string]struct{}, len(ar.OutputDirectories) + len(ar.OutputFiles))
+	paths := make(map[string]struct{}, len(ar.OutputDirectories)+len(ar.OutputFiles)+len(ar.OutputSymlinks)+len(ar.OutputDirectorySymlinks))
 
 	// Build up the list of outputs that were generated
 	for _, f := range ar.OutputFiles {
@@ -705,14 +705,12 @@ func containsAllOutputPaths(cmd *pb.Command, ar *pb.ActionResult) bool {
 		paths[d.Path] = struct{}{}
 	}
 
-
 	// Check that we generated all the required outputs
 	for _, p := range cmd.OutputPaths {
 		if _, ok := paths[p]; !ok {
 			return false
 		}
 	}
-
 
 	return true
 }
