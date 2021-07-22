@@ -201,6 +201,13 @@ func show(client *client.Client) {
 		mustGetProto(client, action.CommandDigest, command)
 		log.Notice("Inputs:")
 		showDir(client, action.InputRootDigest, "")
+		if ar, err := client.CheckActionCache(context.Background(), &pb.Digest{Hash: a.Hash, SizeBytes: int64(a.Size)}); err != nil {
+			log.Error("Error retrieving action result: %s", err)
+		} else if ar == nil {
+			log.Notice("No result exists for this action")
+		} else {
+			showActionResult(client, ar)
+		}
 	}
 }
 
@@ -221,11 +228,21 @@ func showDir(client *client.Client, dg *pb.Digest, indent string) {
 		log.Notice("[%s/%08d] %s%s/", d.Digest.Hash, d.Digest.SizeBytes, indent, d.Name)
 		showDir(client, d.Digest, indent+"  ")
 	}
-	req := &pb.FindMissingBlobsRequest{InstanceName: client.InstanceName}
-	for _, f := range dir.Files {
-		req.BlobDigests = append(req.BlobDigests, f.Digest)
+	for _, s := range dir.Symlinks {
+		log.Notice("[%s/%08d]%s%-50s -> %s", strings.Repeat(" ", 64), 0, indent, s.Name, s.Target)
 	}
-	resp, err := client.FindMissingBlobs(context.Background(), req)
+	showFiles(client, dir.Files, indent)
+}
+
+func showFiles(client *client.Client, files []*pb.FileNode, indent string) {
+	digests := make([]*pb.Digest, len(files))
+	for i, f := range files {
+		digests[i] = f.Digest
+	}
+	resp, err := client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
+		InstanceName: client.InstanceName,
+		BlobDigests:  digests,
+	})
 	if err != nil {
 		log.Error("%s: Request failed! %s", indent, err)
 		return
@@ -234,15 +251,34 @@ func showDir(client *client.Client, dg *pb.Digest, indent string) {
 	for _, r := range resp.MissingBlobDigests {
 		m[r.Hash] = true
 	}
-	for _, f := range dir.Files {
+	for _, f := range files {
 		if m[f.Digest.Hash] {
 			log.Error("[%s/%08d] %s%s Not found!", f.Digest.Hash, f.Digest.SizeBytes, indent, f.Name)
 		} else {
 			log.Notice("[%s/%08d] %s%s", f.Digest.Hash, f.Digest.SizeBytes, indent, f.Name)
 		}
 	}
-	for _, s := range dir.Symlinks {
-		log.Notice("[%s/%08d]%s%-50s -> %s", strings.Repeat(" ", 64), 0, indent, s.Name, s.Target)
+
+}
+
+func showActionResult(client *client.Client, ar *pb.ActionResult) {
+	files := make([]*pb.FileNode, len(ar.OutputFiles))
+	for i, f := range ar.OutputFiles {
+		files[i] = &pb.FileNode{
+			Name:   f.Path,
+			Digest: f.Digest,
+		}
+	}
+	showFiles(client, files, "")
+	for _, d := range ar.OutputDirectories {
+		tree := &pb.Tree{}
+		if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
+			log.Error("Failed to download output tree: %s", err)
+		} else {
+			log.Notice("%s", d.Path)
+			dg, _ := digest.NewFromMessage(tree.Root)
+			showDir(client, dg.ToProto(), strings.Repeat("  ", strings.Count(d.Path, "/")+1))
+		}
 	}
 }
 
