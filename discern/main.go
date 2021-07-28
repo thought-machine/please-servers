@@ -206,6 +206,8 @@ func show(client *client.Client) {
 		} else if ar == nil {
 			log.Notice("No result exists for this action")
 		} else {
+			log.Notice("Outputs:")
+			log.Notice("[%s/%08d] Action result", a.Hash, a.Size)
 			showActionResult(client, ar)
 		}
 	}
@@ -275,7 +277,7 @@ func showActionResult(client *client.Client, ar *pb.ActionResult) {
 		if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
 			log.Error("Failed to download output tree: %s", err)
 		} else {
-			log.Notice("%s", d.Path)
+			log.Notice("[%s/%08d] %s", d.TreeDigest.Hash, d.TreeDigest.SizeBytes, d.Path)
 			dg, _ := digest.NewFromMessage(tree.Root)
 			showDir(client, dg.ToProto(), strings.Repeat("  ", strings.Count(d.Path, "/")+1))
 		}
