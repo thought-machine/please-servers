@@ -18,7 +18,7 @@ var opts = struct {
 	GRPC        grpcutil.Opts                `group:"Options controlling the gRPC server"`
 	Parallelism int                          `long:"parallelism" default:"4" description:"Max parallel download tasks to run"`
 	Headers     map[string]map[string]string `short:"H" long:"header" description:"Headers to set on downloads, as a map of domain -> header name -> header"`
-	Auth        map[string]string            `short:"a" long:"auth" description:"Authorization header to use per domain, as a map of domain -> filename to read from"`
+	Auth        map[string]string            `short:"a" long:"auth" description:"Authorization header to use per domain, as a map of URL prefix -> filename to read from"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
@@ -54,14 +54,20 @@ func main() {
 			log.Notice("Header configured for %s: %s: %s", domain, name, header)
 		}
 	}
-	for domain, filename := range opts.Auth {
+
+	auth := make(map[string]string, len(opts.Auth))
+	for prefix, filename := range opts.Auth {
 		b, err := ioutil.ReadFile(filename)
 		if err != nil {
 			log.Fatalf("Failed to read auth token from %s: %s", filename, err)
 		}
-		opts.Auth[domain] = strings.TrimSpace(string(b))
-		log.Notice("Loaded auth credentials for %s", domain)
+		// Don't require the protocol on the front, that doesn't play nicely with the flags format.
+		if !strings.HasPrefix(prefix, "https://") {
+			prefix = "https://" + prefix
+		}
+		auth[prefix] = strings.TrimSpace(string(b))
+		log.Notice("Loaded auth credentials for %s", prefix)
 	}
 
-	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism, opts.Headers, opts.Auth)
+	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism, opts.Headers, auth)
 }
