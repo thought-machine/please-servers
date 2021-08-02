@@ -51,12 +51,14 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parallelism int) {
+func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parallelism int, headers map[string]map[string]string, auth map[string]string) {
 	client := rexclient.MustNew("mettle", storage, secureStorage, opts.TokenFile)
 	srv := &server{
 		client:        retryablehttp.NewClient(),
 		storageClient: client,
 		limiter:       make(chan struct{}, parallelism),
+		headers:       headers,
+		auth:          auth,
 	}
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
 	srv.client.RequestLogHook = srv.logHTTPRequests
@@ -71,6 +73,8 @@ type server struct {
 	storageClient *client.Client
 	limiter       chan struct{}
 	downloads     sync.Map
+	headers       map[string]map[string]string
+	auth          map[string]string
 }
 
 type download struct {
@@ -187,6 +191,14 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	req, err := retryablehttp.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
+	}
+	for name, header := range s.headers[req.URL.Host] {
+		log.Info("Applying header for %s: %s: %s", req.URL.Host, name, header)
+		req.Header.Set(name, header)
+	}
+	if auth, present := s.auth[req.URL.Host]; present {
+		log.Info("Applying auth for %s", req.URL.Host)
+		req.Header.Set("Authorization", auth)
 	}
 	resp, err := s.client.Do(req.WithContext(ctx))
 	if err != nil {
