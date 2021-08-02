@@ -2,21 +2,28 @@
 package main
 
 import (
-	flags "github.com/thought-machine/please-servers/cli"
+	"io/ioutil"
+	"strings"
+
+	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/grpcutil"
 	"github.com/thought-machine/please-servers/zeal/rpc"
 )
 
+var log = cli.MustGetLogger()
+
 var opts = struct {
 	Usage       string
-	Logging     flags.LoggingOpts `group:"Options controlling logging output"`
-	GRPC        grpcutil.Opts     `group:"Options controlling the gRPC server"`
-	Parallelism int               `long:"parallelism" default:"4" description:"Max parallel download tasks to run"`
+	Logging     cli.LoggingOpts              `group:"Options controlling logging output"`
+	GRPC        grpcutil.Opts                `group:"Options controlling the gRPC server"`
+	Parallelism int                          `long:"parallelism" default:"4" description:"Max parallel download tasks to run"`
+	Headers     map[string]map[string]string `short:"H" long:"header" description:"Headers to set on downloads, as a map of domain -> header name -> header"`
+	Auth        map[string]string            `short:"a" long:"auth" description:"Authorization header to use per domain, as a map of domain -> filename to read from"`
 	Storage     struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling communication with the CAS server"`
-	Admin flags.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
 Zeal is a partial implementation of the Remote Asset API.
@@ -39,7 +46,22 @@ for the Paladin skill in Diablo II since its job is to bang things down as fast 
 }
 
 func main() {
-	_, info := flags.ParseFlagsOrDie("Zeal", &opts, &opts.Logging)
-	go flags.ServeAdmin(opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism)
+	_, info := cli.ParseFlagsOrDie("Zeal", &opts, &opts.Logging)
+	go cli.ServeAdmin(opts.Admin, info)
+
+	for domain, headers := range opts.Headers {
+		for name, header := range headers {
+			log.Notice("Header configured for %s: %s: %s", domain, name, header)
+		}
+	}
+	for domain, filename := range opts.Auth {
+		b, err := ioutil.ReadFile(filename)
+		if err != nil {
+			log.Fatalf("Failed to read auth token from %s: %s", filename, err)
+		}
+		opts.Auth[domain] = strings.TrimSpace(string(b))
+		log.Notice("Loaded auth credentials for %s", domain)
+	}
+
+	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism, opts.Headers, opts.Auth)
 }
