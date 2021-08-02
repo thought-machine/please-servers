@@ -11,6 +11,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,9 +197,12 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 		log.Info("Applying header for %s: %s: %s", req.URL.Host, name, header)
 		req.Header.Set(name, header)
 	}
-	if auth, present := s.auth[req.URL.Host]; present {
-		log.Info("Applying auth for %s", req.URL.Host)
-		req.Header.Set("Authorization", auth)
+	for prefix, auth := range s.auth {
+		if strings.HasPrefix(url, prefix) {
+			log.Info("Applying auth for %s", prefix)
+			req.Header.Set("Authorization", auth)
+			break
+		}
 	}
 	resp, err := s.client.Do(req.WithContext(ctx))
 	if err != nil {
