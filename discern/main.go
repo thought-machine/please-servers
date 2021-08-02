@@ -260,7 +260,6 @@ func showFiles(client *client.Client, files []*pb.FileNode, indent string) {
 			log.Notice("[%s/%08d] %s%s", f.Digest.Hash, f.Digest.SizeBytes, indent, f.Name)
 		}
 	}
-
 }
 
 func showActionResult(client *client.Client, ar *pb.ActionResult) {
