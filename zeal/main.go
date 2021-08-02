@@ -51,7 +51,7 @@ func main() {
 
 	for domain, headers := range opts.Headers {
 		for name, header := range headers {
-			log.Notice("Applying header for %s: %s: %s", domain, name, header)
+			log.Notice("Header configured for %s: %s: %s", domain, name, header)
 		}
 	}
 	for domain, filename := range opts.Auth {
