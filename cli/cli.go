@@ -11,6 +11,7 @@ import (
 	"github.com/peterebden/go-cli-init/v4/flags"
 	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/thought-machine/http-admin"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 var log = logging.MustGetLogger()
@@ -33,7 +34,11 @@ type AdminOpts = admin.Opts
 // ParseFlagsOrDie parses incoming flags and sets up logging etc.
 func ParseFlagsOrDie(name string, opts interface{}, loggingOpts *LoggingOpts) (string, logging.LogLevelInfo) {
 	cmd := flags.ParseFlagsOrDie(name, opts)
-	return cmd, logging.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
+	info := logging.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
+	if _, err := maxprocs.Set(maxprocs.Logger(log.Notice), maxprocs.Min(1)); err != nil {
+		log.Error("Failed to set GOMAXPROCS: %s", err)
+	}
+	return cmd, info
 }
 
 // ServeAdmin starts the admin HTTP server.

@@ -745,3 +745,13 @@ go_get(
     licences = ["mit"],
     revision = "9f7001d12a5f0021fd3283525f888b5814ccee27",
 )
+
+go_module(
+    name = "automaxprocs",
+    install = [
+        "...",
+    ],
+    licences = ["MIT"],
+    module = "go.uber.org/automaxprocs",
+    version = "v1.4.0",
+)
