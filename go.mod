@@ -52,6 +52,7 @@ require (
 	github.com/thought-machine/http-admin v1.1.0
 	github.com/thought-machine/please v13.4.0+incompatible
 	go.opencensus.io v0.22.4 // indirect
+	go.uber.org/automaxprocs v1.4.0 // indirect
 	go.uber.org/zap v1.15.0 // indirect
 	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	gocloud.dev v0.20.0
