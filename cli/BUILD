@@ -3,6 +3,7 @@ go_library(
     srcs = ["cli.go"],
     visibility = ["PUBLIC"],
     deps = [
+        "//third_party/go:automaxprocs",
         "//third_party/go:cli-init",
         "//third_party/go:http-admin",
         "//third_party/go:remote-apis",
