@@ -616,15 +616,20 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 				ar.Replicas = 1
 			}
 			if existing, present := ars[ar.Hash]; !present {
-				resp.ActionResults = append(resp.ActionResults, ar)
 				ars[ar.Hash] = ar
 			} else {
-				if existing.LastAccessed < ar.LastAccessed {
-					existing.LastAccessed = ar.LastAccessed
+				// Update ars with the replica, and use the more recent lastAccessed time.
+				ar.Replicas += existing.Replicas
+				if ar.LastAccessed < existing.LastAccessed {
+				    ar.LastAccessed = existing.LastAccessed
 				}
-				existing.Replicas += ar.Replicas
+				ars[ar.Hash] = ar
 			}
 		}
+		for _, ar := range(ars) {
+			resp.ActionResults = append(resp.ActionResults, ar)
+		}
+
 		for _, blob := range r.Blobs {
 			if strings.HasPrefix(blob.Hash, "tmp") {
 				continue
