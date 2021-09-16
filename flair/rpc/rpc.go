@@ -621,12 +621,12 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 				// Update ars with the replica, and use the more recent lastAccessed time.
 				ar.Replicas += existing.Replicas
 				if ar.LastAccessed < existing.LastAccessed {
-				    ar.LastAccessed = existing.LastAccessed
+					ar.LastAccessed = existing.LastAccessed
 				}
 				ars[ar.Hash] = ar
 			}
 		}
-		for _, ar := range(ars) {
+		for _, ar := range ars {
 			resp.ActionResults = append(resp.ActionResults, ar)
 		}
 
