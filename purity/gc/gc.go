@@ -234,6 +234,13 @@ func (c *collector) MarkReferencedBlobs() error {
 	for i := 0; i < (parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
+				// Temporary logging for debug purposes
+				if c.shouldDelete(ar) {
+					accessed := time.Unix(ar.LastAccessed, 0)
+					threshold := time.Unix(c.ageThreshold, 0)
+					log.Notice("Should delete action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
+				}
+				// End temporary logging
 				if !c.shouldDelete(ar) {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
