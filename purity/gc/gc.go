@@ -238,7 +238,7 @@ func (c *collector) MarkReferencedBlobs() error {
 				if c.shouldDelete(ar) {
 					accessed := time.Unix(ar.LastAccessed, 0)
 					threshold := time.Unix(c.ageThreshold, 0)
-					log.Notice("Should delete action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
+					log.Debug("Should delete action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
 				}
 				// End temporary logging
 				if !c.shouldDelete(ar) {

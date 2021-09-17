@@ -619,6 +619,15 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 				resp.ActionResults = append(resp.ActionResults, ar)
 				ars[ar.Hash] = ar
 			} else {
+				// Temporary logging for debug purposes: if one replica is older than 72 hrs and one younger, make a note
+				minAge := 72 * time.Hour
+				ageThreshold := time.Now().Add(-minAge).Unix()
+				if (existing.LastAccessed < ageThreshold && ar.LastAccessed >= ageThreshold) || (ar.LastAccessed < ageThreshold && existing.LastAccessed >= ageThreshold) {
+					existingLastAccessed := time.Unix(existing.LastAccessed, 0)
+					arLastAccessed := time.Unix(ar.LastAccessed, 0)
+					log.Debug("AR %s: one replica accessed at %s, one at %s.", ar.Hash, existingLastAccessed, arLastAccessed)
+				}
+				// End temporary logging
 				if existing.LastAccessed < ar.LastAccessed {
 					existing.LastAccessed = ar.LastAccessed
 				}
