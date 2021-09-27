@@ -280,9 +280,8 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 // streamEvents streams a series of events back to the client.
 func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
 	for op := range ch {
-		opCopy := *op
-		opCopy.Name = digest.Hash
-		if err := stream.Send(&opCopy); err != nil {
+		op.Name = digest.Hash
+		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
 			s.stopStream(digest, ch)
 			return err
@@ -436,7 +435,12 @@ func (s *server) process(msg *pubsub.Message) {
 					recover() // Avoid any chance of panicking from a 'send on closed channel'
 				}()
 				log.Debug("Dispatching update for %s", key)
-				ch <- op
+				ch <- &longrunning.Operation{
+					Name:     op.Name,
+					Metadata: op.Metadata,
+					Done:     op.Done,
+					Result:   op.Result,
+				}
 				if op.Done {
 					close(ch)
 				}
