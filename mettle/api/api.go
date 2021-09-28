@@ -455,7 +455,7 @@ func (s *server) deleteJob(hash string, j *job) {
 	log.Debug("Removing job %s", hash)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	// Check the action hasn't been replaced since deledJob was called
+	// Check the action hasn't been replaced since deleteJob was called
 	if s.jobs[hash] == j {
 		delete(s.jobs, hash)
 	}
