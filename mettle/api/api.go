@@ -435,7 +435,12 @@ func (s *server) process(msg *pubsub.Message) {
 					recover() // Avoid any chance of panicking from a 'send on closed channel'
 				}()
 				log.Debug("Dispatching update for %s", key)
-				ch <- op
+				ch <- &longrunning.Operation{
+					Name:     op.Name,
+					Metadata: op.Metadata,
+					Done:     op.Done,
+					Result:   op.Result,
+				}
 				if op.Done {
 					close(ch)
 				}
