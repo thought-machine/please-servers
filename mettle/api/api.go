@@ -443,19 +443,21 @@ func (s *server) process(msg *pubsub.Message) {
 		}
 		if op.Done {
 			log.Info("Job %s completed by %s", key, worker)
-			go s.deleteJob(key)
+			go s.deleteJob(key, j)
 			currentRequests.Dec()
 		}
 	}
 }
 
 // deleteJob waits for a period then removes the given job from memory.
-func (s *server) deleteJob(hash string) {
+func (s *server) deleteJob(hash string, j *job) {
 	time.Sleep(retentionTime)
 	log.Debug("Removing job %s", hash)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	delete(s.jobs, hash)
+	if s.jobs[hash] == j {
+		delete(s.jobs, hash)
+	}
 }
 
 // expireJob expires an action that hasn't progressed.
