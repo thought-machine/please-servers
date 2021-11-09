@@ -7,9 +7,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
@@ -25,13 +25,14 @@ import (
 
 // Opts is the set of common options for gRPC servers.
 type Opts struct {
-	Host      string `long:"host" description:"Host to listen on"`
-	Port      int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
-	KeyFile   string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
-	CertFile  string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
-	TokenFile string `long:"token_file" description:"File containing a pre-shared token that clients must provide as authentication."`
-	AuthAll   bool   `long:"auth_all" description:"Require authentication on all RPCs (by default only on RPCs that mutate state)"`
-	NoHealth  bool   `no-flag:"true" description:"Used internally to indicate when we don't want to automatically add a healthcheck."`
+	Host          string `long:"host" description:"Host to listen on"`
+	Port          int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
+	KeyFile       string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
+	CertFile      string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
+	TLSMinVersion string `long:"tls-min-version" description:"TLS minimum version allowed on new connections"`
+	TokenFile     string `long:"token_file" description:"File containing a pre-shared token that clients must provide as authentication."`
+	AuthAll       bool   `long:"auth_all" description:"Require authentication on all RPCs (by default only on RPCs that mutate state)"`
+	NoHealth      bool   `no-flag:"true" description:"Used internally to indicate when we don't want to automatically add a healthcheck."`
 }
 
 // NewServer creates a new gRPC server with a standard set of interceptors.
@@ -42,7 +43,7 @@ func NewServer(opts Opts) (net.Listener, *grpc.Server) {
 		log.Fatalf("Failed to listen on %s:%d: %v", opts.Host, opts.Port, err)
 	}
 	log.Notice("Listening on %s:%d", opts.Host, opts.Port)
-	s := grpc.NewServer(OptionalTLS(opts.KeyFile, opts.CertFile,
+	s := grpc.NewServer(OptionalTLS(opts.KeyFile, opts.CertFile, opts.TLSMinVersion,
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(append([]grpc.UnaryServerInterceptor{
 			LogUnaryRequests,
 			grpc_prometheus.UnaryServerInterceptor,
