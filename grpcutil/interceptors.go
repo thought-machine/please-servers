@@ -29,7 +29,7 @@ type Opts struct {
 	Port          int    `short:"p" long:"port" default:"7777" description:"Port to serve on"`
 	KeyFile       string `short:"k" long:"key_file" description:"Key file to load TLS credentials from"`
 	CertFile      string `short:"c" long:"cert_file" description:"Cert file to load TLS credentials from"`
-	TLSMinVersion string `long:"tls-min-version" description:"TLS minimum version allowed on new connections"`
+	TLSMinVersion string `long:"tls-min-version" default:"1.3" description:"TLS minimum version allowed on new connections"`
 	TokenFile     string `long:"token_file" description:"File containing a pre-shared token that clients must provide as authentication."`
 	AuthAll       bool   `long:"auth_all" description:"Require authentication on all RPCs (by default only on RPCs that mutate state)"`
 	NoHealth      bool   `no-flag:"true" description:"Used internally to indicate when we don't want to automatically add a healthcheck."`
