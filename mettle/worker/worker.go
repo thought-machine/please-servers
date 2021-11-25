@@ -103,6 +103,10 @@ var packBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "pack_bytes_read_total",
 })
+var collectOutputErrors = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "collect_output_errors_total",
+})
 
 var metrics = []prometheus.Collector{
 	totalBuilds,
@@ -120,6 +124,7 @@ var metrics = []prometheus.Collector{
 	redisBytesRead,
 	packsDownloaded,
 	packBytesRead,
+	collectOutputErrors,
 }
 
 func init() {
@@ -532,7 +537,7 @@ func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Co
 // prepareDir prepares the directory for executing this request.
 func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.Status {
 	if status := w.prepareDirWithPacks(action, command, true); status != nil {
-		log.Warning("Failed to prepare directory with packs, falling back to without: %s", status)
+		log.Warning("Failed to prepare directory with packs for %s, falling back to without: %s", w.actionDigest.Hash, status)
 		return w.prepareDirWithPacks(action, command, false)
 	}
 	return nil
@@ -661,7 +666,8 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		}
 	}
 	if err := w.collectOutputs(ar, command); err != nil {
-		log.Error("Failed to collect outputs: %s", err)
+		collectOutputErrors.Inc()
+		log.Error("Failed to collect outputs for %s: %s", w.actionDigest.Hash, err)
 		return &pb.ExecuteResponse{
 			Status: inferStatus(codes.Internal, "Failed to collect outputs: %s", err),
 			Result: ar,
@@ -676,6 +682,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 
 	// If the result was missing some output paths, we should still return it however avoid caching the result
 	if !containsAllOutputPaths(command, ar) {
+		log.Warning("Result missing some outputs %s", w.actionDigest.Hash)
 		msg := "result was missing some outputs"
 		w.writeUncachedResult(ar, msg)
 		return &pb.ExecuteResponse{

@@ -53,9 +53,15 @@ var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name:      "requests_current",
 })
 
+var totalFailedActions = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "failed_actions_total",
+})
+
 func init() {
 	prometheus.MustRegister(totalRequests)
 	prometheus.MustRegister(currentRequests)
+	prometheus.MustRegister(totalFailedActions)
 }
 
 // ServeForever serves on the given port until terminated.
@@ -398,6 +404,7 @@ func (s *server) process(msg *pubsub.Message) {
 	if metadata.Stage == pb.ExecutionStage_COMPLETED {
 		if response := unmarshalResponse(op); response != nil && response.Status != nil && response.Status.Code != int32(codes.OK) {
 			log.Warning("Got an update for %s from %s, failed update: %s. Done: %v", key, worker, response.Status.Message, op.Done)
+			totalFailedActions.Inc()
 		} else {
 			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
 		}
@@ -457,11 +464,11 @@ func (s *server) process(msg *pubsub.Message) {
 // deleteJob waits for a period then removes the given job from memory.
 func (s *server) deleteJob(hash string, j *job) {
 	time.Sleep(retentionTime)
-	log.Debug("Removing job %s", hash)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	// Check the action hasn't been replaced since deleteJob was called
 	if s.jobs[hash] == j {
+		log.Notice("Removing job %s", hash)
 		delete(s.jobs, hash)
 	}
 }
