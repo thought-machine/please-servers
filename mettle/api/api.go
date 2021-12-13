@@ -422,6 +422,7 @@ func (s *server) process(msg *pubsub.Message) {
 			LastUpdate: time.Now(),
 		}
 		s.jobs[key] = j
+		currentRequests.Inc()
 	}
 	if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
 		// Only send QUEUED messages if they're the first one. This prevents us from
