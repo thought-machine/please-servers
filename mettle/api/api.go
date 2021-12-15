@@ -101,6 +101,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		log.Warningf("Failed to get inflight executions: %s", err)
 	} else if len(jobs) > 0 {
 		srv.jobs = jobs
+		currentRequests.Set(float64(len(srv.jobs)))
 		log.Notice("Updated server with %d inflight executions", len(srv.jobs))
 		for id := range jobs {
 			go srv.expireJob(id)
@@ -499,10 +500,12 @@ func (s *server) maybeExpireJob(hash string, force bool) bool {
 			log.Warning("Expiring job %s with no listeners", hash)
 		}
 		delete(s.jobs, hash)
+		currentRequests.Dec()
 		return true
 	} else if force {
 		log.Warning("Force expiring job %s with %d listeners", hash, len(j.Streams))
 		delete(s.jobs, hash)
+		currentRequests.Dec()
 		return true
 	}
 	return false
