@@ -459,7 +459,6 @@ func (s *server) process(msg *pubsub.Message) {
 		if op.Done {
 			log.Info("Job %s completed by %s", key, worker)
 			go s.deleteJob(key, j)
-			currentRequests.Dec()
 		}
 	}
 }
@@ -473,6 +472,7 @@ func (s *server) deleteJob(hash string, j *job) {
 	if s.jobs[hash] == j {
 		log.Notice("Removing job %s", hash)
 		delete(s.jobs, hash)
+		currentRequests.Dec()
 	}
 }
 
