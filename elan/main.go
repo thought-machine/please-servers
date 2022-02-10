@@ -18,6 +18,7 @@ var opts = struct {
 	DirCacheSize       int64           `long:"dir_cache_size" default:"10240" description:"Number of directory entries to cache for GetTree"`
 	KnownBlobCacheSize flags.ByteSize  `long:"known_blob_cache_size" description:"Max size of known blob cache (in approximate bytes)"`
 	Admin              cli.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
+	PromGateway        string          `long:"prom_gateway" default:"" description:"Gateway URL to push Prometheus updates to."`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
@@ -34,5 +35,5 @@ modes are intended for testing only.
 func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
 	go cli.ServeAdmin(opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize))
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), opts.PromGateway)
 }

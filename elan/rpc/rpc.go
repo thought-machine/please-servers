@@ -35,6 +35,8 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
+	"github.com/prometheus/common/expfmt"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	"google.golang.org/api/googleapi"
@@ -123,31 +125,37 @@ var blobsReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Number of blobs received, partitioned by batching and compressor used.",
 }, []string{"batched", "compressor_used"})
 
+var metrics = []prometheus.Collector{
+	bytesReceived,
+	bytesServed,
+	readLatencies,
+	writeLatencies,
+	readDurations,
+	writeDurations,
+	actionCacheHits,
+	actionCacheMisses,
+	dirCacheHits,
+	dirCacheMisses,
+	knownBlobCacheHits,
+	knownBlobCacheMisses,
+	blobSizeMismatches,
+	blobsServed,
+	blobsReceived,
+}
+
 func init() {
-	prometheus.MustRegister(bytesReceived)
-	prometheus.MustRegister(bytesServed)
-	prometheus.MustRegister(readLatencies)
-	prometheus.MustRegister(writeLatencies)
-	prometheus.MustRegister(readDurations)
-	prometheus.MustRegister(writeDurations)
-	prometheus.MustRegister(actionCacheHits)
-	prometheus.MustRegister(actionCacheMisses)
-	prometheus.MustRegister(dirCacheHits)
-	prometheus.MustRegister(dirCacheMisses)
-	prometheus.MustRegister(knownBlobCacheHits)
-	prometheus.MustRegister(knownBlobCacheMisses)
-	prometheus.MustRegister(blobSizeMismatches)
-	prometheus.MustRegister(blobsServed)
-	prometheus.MustRegister(blobsReceived)
+	for _, metric := range metrics {
+		prometheus.MustRegister(metric)
+	}
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
-	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+func ServeForever(opts grpcutil.Opts, storage, promGatewayURL string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
+	lis, s := startServer(opts, storage, promGatewayURL, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
 	grpcutil.ServeForever(lis, s)
 }
 
-func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) *server {
+func createServer(storage, promGatewayURL string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	return &server{
@@ -160,17 +168,19 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		compressor:     enc,
 		decompressor:   dec,
+		promGatewayURL: promGatewayURL,
 	}
 }
 
-func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
-	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+func startServer(opts grpcutil.Opts, storage, promGatewayURL string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
+	srv := createServer(storage, promGatewayURL, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	ppb.RegisterGCServer(s, srv)
+	go srv.periodicallyPushMetrics()
 	return lis, s
 }
 
@@ -198,6 +208,7 @@ type server struct {
 	dirCache, knownBlobCache *ristretto.Cache
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
+	promGatewayURL           string
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -790,4 +801,18 @@ func bucketOffset(compressed bool, offset int64) int64 {
 		return 0
 	}
 	return offset
+}
+
+func (s *server) periodicallyPushMetrics() {
+	if s.promGatewayURL != "" {
+		pusher := push.New(s.promGatewayURL, "elan")
+		for _, metric := range metrics {
+			pusher = pusher.Collector(metric).Format(expfmt.FmtText)
+		}
+		for range time.NewTicker(5 * time.Minute).C {
+			if err := pusher.Push(); err != nil {
+				log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
+			}
+		}
+	}
 }

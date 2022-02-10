@@ -26,6 +26,7 @@ go_library(
         "//third_party/go:zstd",
         "//third_party/go/gocloud",
         "//third_party/go/prometheus",
+        "//third_party/go/prometheus:prometheus_common",
     ],
 )
 

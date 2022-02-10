@@ -15,11 +15,11 @@ import (
 // If a scheme is given (gs:// etc) it assumes it is a bucket URL and uses that (with some
 // default settings etc). The tls and tokenFile arguments are ignored in this case.
 // If no scheme is given it assumes a gRPC URL and creates a remote client communicating using the API.
-func New(url string, tls bool, tokenFile string) (Client, error) {
+func New(url, promGatewayURL string, tls bool, tokenFile string) (Client, error) {
 	// We can't use url.Parse here because it tends to put too much into the scheme (e.g. example.org:8080 -> scheme:example.org)
 	if strings.Contains(url, "://") {
 		return &elanClient{
-			s:       createServer(url, 8, 10240, 10*1024*1024),
+			s:       createServer(url, promGatewayURL, 8, 10240, 10*1024*1024),
 			timeout: 1 * time.Minute,
 		}, nil
 	}
