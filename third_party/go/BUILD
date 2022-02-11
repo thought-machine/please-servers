@@ -225,11 +225,13 @@ go_module(
 go_module(
     name = "unix",
     install = [
+        "cpu",
+        "execabs",
         "internal/unsafeheader",
         "unix",
     ],
     module = "golang.org/x/sys",
-    version = "ddb9806d33aed8dbaac1cd6f1cba58952e87f933",
+    version = "v0.0.0-20210423082822-04245dca01da",
 )
 
 go_module(
@@ -755,3 +757,83 @@ go_module(
     module = "go.uber.org/automaxprocs",
     version = "v1.4.0",
 )
+
+go_module(
+    name = "json-iterator",
+    install = ["..."],
+    licences = ["MIT"],
+    module = "github.com/json-iterator/go",
+    version = "v1.1.6",
+    deps = [
+        ":concurrent",
+        ":reflect2",
+    ],
+)
+
+go_module(
+    name = "concurrent",
+    install = ["..."],
+    licences = ["Apache-2.0"],
+    module = "github.com/modern-go/concurrent",
+    version = "1.0.3",
+)
+
+go_module(
+    name = "reflect2",
+    install = ["..."],
+    licences = ["Apache-2.0"],
+    module = "github.com/modern-go/reflect2",
+    version = "v1.0.1",
+    deps = [":concurrent"],
+)
+
+go_module(
+    name = "kingpin",
+    licences = ["MIT"],
+    module = "gopkg.in/alecthomas/kingpin.v2",
+    version = "v2.2.6",
+    deps = [
+        ":template",
+        ":units",
+    ],
+)
+
+go_module(
+    name = "template",
+    install = [
+        "",
+        "parse",
+    ],
+    licences = ["BSD-3-Clause"],
+    module = "github.com/alecthomas/template",
+    version = "a0175ee3bccc567396460bf5acd36800cb10c49c",
+)
+
+go_module(
+    name = "units",
+    licences = ["MIT"],
+    module = "github.com/alecthomas/units",
+    version = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a",
+)
+
+
+go_module(
+    name = "logrus",
+    licences = ["MIT"],
+    module = "github.com/sirupsen/logrus",
+    version = "v1.6.0",
+    deps = [
+        ":terminal",
+        ":unix",
+    ],
+)
+
+go_module(
+    name = "x_term",
+    install = ["..."],
+    licences = ["BSD-3-Clause"],
+    module = "golang.org/x/term",
+    version = "v0.0.0-20210615171337-6886f2dfbf5b",
+    deps = [":unix"],
+)
+

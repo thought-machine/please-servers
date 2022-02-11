@@ -2,19 +2,16 @@ package(default_visibility = ["PUBLIC"])
 
 go_module(
     name = "prometheus",
-    install = [
-        "prometheus",
-        "prometheus/internal",
-        "prometheus/promhttp",
-        "prometheus/push",
-    ],
+    install = ["..."],
     module = "github.com/prometheus/client_golang",
-    version = "v1.1.0",
+    version = "v1.11.0",
     deps = [
         ":client_model",
         ":perks",
         ":procfs",
         ":prometheus_common",
+        "//third_party/go:json-iterator",
+        "//third_party/go:xxhash_v2",
         "//third_party/go:net",
         "//third_party/go:protobuf",
     ],
@@ -27,7 +24,7 @@ go_module(
         "...",
     ],
     module = "github.com/grpc-ecosystem/go-grpc-prometheus",
-    version = "6af20e3a5340d5e6bde20c8a7a78699efe19ac0a",
+    version = "v1.2.0",
     deps = [
         ":prometheus",
         "//third_party/go:grpc",
@@ -59,7 +56,7 @@ go_module(
     name = "client_model",
     install = ["..."],
     module = "github.com/prometheus/client_model",
-    version = "14fe0d1b01d4d5fc031dd4bec1823bd3ebbe8016",
+    version = "v0.2.0",
     deps = [
         "//third_party/go:protobuf",
     ],
@@ -72,11 +69,13 @@ go_module(
         "model",
         "internal/...",
     ],
+    version = "v0.30.0",
     module = "github.com/prometheus/common",
-    version = "v0.7.0",
     deps = [
         ":client_model",
         ":golang_protobuf_extensions",
+        "//third_party/go:kingpin",
+        "//third_party/go:logrus",
         "//third_party/go:protobuf",
     ],
 )
