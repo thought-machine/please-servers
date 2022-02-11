@@ -180,7 +180,7 @@ func startServer(opts grpcutil.Opts, storage, promGatewayURL string, parallelism
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	ppb.RegisterGCServer(s, srv)
-	if promGatewyURL != "" {
+	if promGatewayURL != "" {
 		go srv.periodicallyPushMetrics()
 	}
 	return lis, s

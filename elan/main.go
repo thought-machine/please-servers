@@ -35,5 +35,5 @@ modes are intended for testing only.
 func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
 	go cli.ServeAdmin(opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), opts.PromGateway)
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.PromGateway, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize))
 }
