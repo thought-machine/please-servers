@@ -180,8 +180,22 @@ func startServer(opts grpcutil.Opts, storage, promGatewayURL string, parallelism
 	pb.RegisterContentAddressableStorageServer(s, srv)
 	bs.RegisterByteStreamServer(s, srv)
 	ppb.RegisterGCServer(s, srv)
-	go srv.periodicallyPushMetrics()
+	if promGatewyURL != "" {
+		go srv.periodicallyPushMetrics()
+	}
 	return lis, s
+}
+
+func (s *server) periodicallyPushMetrics() {
+	pusher := push.New(s.promGatewayURL, "elan")
+	for _, metric := range metrics {
+		pusher = pusher.Collector(metric).Format(expfmt.FmtText)
+	}
+	for range time.NewTicker(5 * time.Minute).C {
+		if err := pusher.Push(); err != nil {
+			log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
+		}
+	}
 }
 
 func mustCache(size int64) *ristretto.Cache {
@@ -801,18 +815,4 @@ func bucketOffset(compressed bool, offset int64) int64 {
 		return 0
 	}
 	return offset
-}
-
-func (s *server) periodicallyPushMetrics() {
-	if s.promGatewayURL != "" {
-		pusher := push.New(s.promGatewayURL, "elan")
-		for _, metric := range metrics {
-			pusher = pusher.Collector(metric).Format(expfmt.FmtText)
-		}
-		for range time.NewTicker(5 * time.Minute).C {
-			if err := pusher.Push(); err != nil {
-				log.Warningf("Error pushing to Prometheus pushgateway: %s", err)
-			}
-		}
-	}
 }
