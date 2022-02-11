@@ -224,7 +224,7 @@ go_module(
 
 go_module(
     name = "unix",
-     install = [
+    install = [
         "cpu",
         "execabs",
         "internal/unsafeheader",
