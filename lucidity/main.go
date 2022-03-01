@@ -37,6 +37,7 @@ to go along with Zeal, then it could refer to the GTA Lucidity in FreeSpace 2.
 }
 
 func main() {
-	cli.ParseFlagsOrDie("Lucidity", &opts, &opts.Logging)
+	_, info := cli.ParseFlagsOrDie("Lucidity", &opts, &opts.Logging)
+	go cli.ServeAdmin(opts.Admin, info)
 	rpc.ServeForever(opts.GRPC, opts.HTTPPort, time.Duration(opts.MaxAge), opts.MinProportion, opts.IAP.Audience, opts.IAP.Users)
 }
