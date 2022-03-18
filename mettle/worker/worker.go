@@ -715,28 +715,32 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 }
 
 func containsAllOutputPaths(cmd *pb.Command, ar *pb.ActionResult) bool {
-	paths := make(map[string]struct{}, len(ar.OutputDirectories)+len(ar.OutputFiles)+len(ar.OutputSymlinks)+len(ar.OutputDirectorySymlinks))
+	paths := make(map[string]bool, len(ar.OutputDirectories)+len(ar.OutputFiles)+len(ar.OutputSymlinks)+len(ar.OutputDirectorySymlinks)+len(ar.OutputFileSymlinks))
 
 	// Build up the list of outputs that were generated
-	for _, f := range ar.OutputFiles {
-		paths[f.Path] = struct{}{}
+	for _, o := range ar.OutputFiles {
+		paths[o.Path] = true
 	}
 
-	for _, f := range ar.OutputDirectories {
-		paths[f.Path] = struct{}{}
+	for _, o := range ar.OutputDirectories {
+		paths[o.Path] = true
 	}
 
-	for _, f := range ar.OutputSymlinks {
-		paths[f.Path] = struct{}{}
+	for _, o := range ar.OutputSymlinks {
+		paths[o.Path] = true
 	}
 
-	for _, d := range ar.OutputDirectorySymlinks {
-		paths[d.Path] = struct{}{}
+	for _, o := range ar.OutputDirectorySymlinks {
+		paths[o.Path] = true
+	}
+
+	for _, o := range ar.OutputFileSymlinks {
+		paths[o.Path] = true
 	}
 
 	// Check that we generated all the required outputs
 	for _, p := range cmd.OutputPaths {
-		if _, ok := paths[p]; !ok {
+		if !paths[p] {
 			return false
 		}
 	}
