@@ -741,6 +741,7 @@ func containsAllOutputPaths(cmd *pb.Command, ar *pb.ActionResult) bool {
 	// Check that we generated all the required outputs
 	for _, p := range cmd.OutputPaths {
 		if !paths[p] {
+			log.Warningf("Action result doesn't contain output path %s. Action result object: %#v\n", p, ar)
 			return false
 		}
 	}
