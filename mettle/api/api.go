@@ -325,7 +325,6 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		// In this path we think the job is too old to be relevant; we don't actually create
 		// a new job, but we tell the caller we did so it triggers a new execution.
 		created = true
-		currentRequests.Inc()
 	} else {
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
