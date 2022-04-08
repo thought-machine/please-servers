@@ -302,7 +302,7 @@ go_module(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "d0d55ea13e2f1fba38b06806c8412b9c228c06c3",
+    version = "181b52eecd7d37935823ce2f2a01d28860c0b1ef",
 )
 
 go_module(
@@ -816,7 +816,6 @@ go_module(
     version = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a",
 )
 
-
 go_module(
     name = "logrus",
     licences = ["MIT"],
@@ -836,4 +835,3 @@ go_module(
     version = "v0.0.0-20210615171337-6886f2dfbf5b",
     deps = [":unix"],
 )
-
