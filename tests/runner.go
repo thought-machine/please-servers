@@ -9,11 +9,10 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/thought-machine/please-servers/cli/v4/flags"
-	"github.com/thought-machine/please-servers/cli/v4/logging"
+	"github.com/thought-machine/please-servers/cli"
 )
 
-var log = logging.MustGetLogger()
+var log = cli.MustGetLogger()
 
 var opts struct {
 	Logging     cli.LoggingOpts `group:"Options controlling logging output"`
@@ -81,7 +80,7 @@ func checkPort(port string) error {
 }
 
 func main() {
-	flags.ParseFlagsOrDie("Mettle Test Runner", &opts, &opts.Logging)
+	cli.ParseFlagsOrDie("Mettle Test Runner", &opts, &opts.Logging)
 	if err := Main(); err != nil {
 		log.Fatalf("%s", err)
 	}
