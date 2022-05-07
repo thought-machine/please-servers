@@ -1,4 +1,4 @@
-name: Golang rules
+name: Please Servers
 on: [push, pull_request]
 jobs:
   test:
