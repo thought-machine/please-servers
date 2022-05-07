@@ -29,7 +29,7 @@ go_library(
         "//third_party/go/gocloud",
         "//third_party/go/prometheus",
         "//third_party/go/prometheus:prometheus_common",
-        "//third_party/proto:cas",
-        "//third_party/proto:resourceusage",
+        "//third_party/proto/cas",
+        "//third_party/proto/resourceusage",
     ],
 )
