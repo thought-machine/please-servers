@@ -5,12 +5,11 @@ version = >=16.19.0
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
 [parse]
-defaultsubincludes = ///go//build_defs:go
+preloadsubincludes = ///go//build_defs:go
 
 [plugin "go"]
 target = //plugins:go
 importpath = github.com/thought-machine/please-servers
-gopath = $TMP_DIR:$TMP_DIR/third_party/go:$TMP_DIR/third_party/go/prometheus:$TMP_DIR/third_party/go/gocloud
 
 [python]
 moduledir = third_party/python
@@ -27,6 +26,7 @@ defaultdbgcflags = --std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop
 
 [featureflags]
 excludeccrules = true
+excludegorules = true
 
 [alias "runlocal"]
 cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local //redis:run_local
