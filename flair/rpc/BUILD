@@ -5,7 +5,7 @@ go_library(
     deps = [
         "//flair/trie",
         "//grpcutil",
-        "//proto:purity",
+        "//proto/purity",
         "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:errgroup",

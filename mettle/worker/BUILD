@@ -7,7 +7,7 @@ go_library(
         "//elan/rpc",
         "//grpcutil",
         "//mettle/common",
-        "//proto:lucidity",
+        "//proto/lucidity",
         "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:cloud_pubsub",
@@ -29,7 +29,7 @@ go_library(
         "//third_party/go/gocloud",
         "//third_party/go/prometheus",
         "//third_party/go/prometheus:prometheus_common",
-        "//third_party/proto:cas",
-        "//third_party/proto:resourceusage",
+        "//third_party/proto/cas",
+        "//third_party/proto/resourceusage",
     ],
 )

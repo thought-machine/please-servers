@@ -8,7 +8,7 @@ go_library(
     visibility = ["//lucidity/..."],
     deps = [
         "//grpcutil",
-        "//proto:lucidity",
+        "//proto/lucidity",
         "//third_party/go:api",
         "//third_party/go:cli-init",
         "//third_party/go:protobuf",
@@ -22,7 +22,7 @@ go_test(
     resources = glob(["static/*.*"]),
     deps = [
         ":rpc",
-        "//proto:lucidity",
+        "//proto/lucidity",
         "//third_party/go:testify",
     ],
 )

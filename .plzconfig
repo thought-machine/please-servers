@@ -1,12 +1,15 @@
 [please]
-version = >=16.19.0
+version = >=16.20.0
 
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
-[go]
+[parse]
+preloadsubincludes = ///go//build_defs:go
+
+[plugin "go"]
+target = //plugins:go
 importpath = github.com/thought-machine/please-servers
-gopath = $TMP_DIR:$TMP_DIR/third_party/go:$TMP_DIR/third_party/go/prometheus:$TMP_DIR/third_party/go/gocloud
 
 [python]
 moduledir = third_party/python
@@ -15,6 +18,15 @@ moduledir = third_party/python
 protoctool = //third_party/proto:protoc
 protocgoplugin = //third_party/go:protoc-gen-go
 language = go
+
+[plugin "cc"]
+target = //plugins:cc
+defaultoptcflags = --std=c99 -O3 -pipe -DNDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
+defaultdbgcflags = --std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
+
+[featureflags]
+excludeccrules = true
+excludegorules = true
 
 [alias "runlocal"]
 cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local //redis:run_local

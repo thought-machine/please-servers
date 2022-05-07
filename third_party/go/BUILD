@@ -716,9 +716,9 @@ go_module(
     ],
 )
 
-go_get(
+go_module(
     name = "opentelemetry",
-    get = "go.opentelemetry.io/otel",
+    module = "go.opentelemetry.io/otel",
     install = [
         ".",
         "api/global",
@@ -732,7 +732,7 @@ go_get(
         "unit",
     ],
     licences = ["apache-2.0"],
-    revision = "v0.13.0",
+    version = "v0.13.0",
 )
 
 go_module(
@@ -741,11 +741,11 @@ go_module(
     version = "v2.1.1",
 )
 
-go_get(
+go_module(
     name = "rendezvous",
-    get = "github.com/dgryski/go-rendezvous",
+    module = "github.com/dgryski/go-rendezvous",
     licences = ["mit"],
-    revision = "9f7001d12a5f0021fd3283525f888b5814ccee27",
+    version = "9f7001d12a5f0021fd3283525f888b5814ccee27",
 )
 
 go_module(
