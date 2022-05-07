@@ -1,5 +1,5 @@
 [please]
-version = >=16.19.0
+version = >=16.20.0
 
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
