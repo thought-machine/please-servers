@@ -46,10 +46,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: thought-machine/release-action@master
-      - name: Release tool
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: thought-machine/release-action@master
         with:
           version-file: VERSION
           change-log-file: ChangeLog
