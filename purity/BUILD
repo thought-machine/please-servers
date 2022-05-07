@@ -8,6 +8,7 @@ go_binary(
         "//third_party/go:cli-init",
         "//third_party/go/gocloud",
     ],
+    visibility = ["//package:all"],
 )
 
 sh_cmd(

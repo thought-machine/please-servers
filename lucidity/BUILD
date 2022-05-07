@@ -7,6 +7,7 @@ go_binary(
         "//lucidity/rpc",
         "//third_party/go:cli-init",
     ],
+    visibility = ["//package:all"],
 )
 
 sh_cmd(

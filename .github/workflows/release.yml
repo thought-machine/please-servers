@@ -1,0 +1,60 @@
+name: Golang rules
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: thoughtmachine/please-servers:20220507
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: plz-out/gen/third_party/go
+          key: ${{ runner.os }}-go-${{ hashFiles('third_party/go/BUILD', 'scripts/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Run tests
+        run: ./pleasew test -p -v 2 --exclude //tests/...
+        env:
+          PLZ_CONFIG_PROFILE: "ci"
+      - name: Archive logs
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: logs
+          path: |
+            plz-out/log
+  release:
+    needs: [test]
+    runs-on: ubuntu-latest
+    container:
+      image: thoughtmachine/please-servers:20220507
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: plz-out/gen/third_party/go
+          key: ${{ runner.os }}-go-${{ hashFiles('third_party/go/BUILD', 'scripts/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Build
+        run: ./pleasew build --profile release -p -v notice //package:release_files
+        env:
+          PLZ_CONFIG_PROFILE: "ci"
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: thought-machine/release-action@master
+      - name: Release tool
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: thought-machine/release-action@master
+        with:
+          version-file: VERSION
+          change-log-file: ChangeLog
+          release-files: plz-out/gen/package

@@ -1,0 +1,6 @@
+Version 9.7.0
+-------------
+    * First version released with GitHub Actions
+    * Updated to Go and C as plugins
+    * Updated to latest Go version
+    * No functional changes.
