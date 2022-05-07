@@ -16,6 +16,14 @@ protoctool = //third_party/proto:protoc
 protocgoplugin = //third_party/go:protoc-gen-go
 language = go
 
+[plugin "cc"]
+target = //plugins:cc
+defaultoptcflags = --std=c99 -O3 -pipe -DNDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
+defaultdbgcflags = --std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
+
+[featureflags]
+excludeccrules = true
+
 [alias "runlocal"]
 cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local //redis:run_local
 desc = Runs an instance of each server for local development
