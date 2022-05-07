@@ -5,7 +5,7 @@ go_library(
     deps = [
         "//grpcutil",
         "//mettle/common",
-        "//proto:mettle",
+        "//proto/mettle",
         "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:genproto",
@@ -26,7 +26,7 @@ go_test(
     deps = [
         ":api",
         "//grpcutil",
-        "//proto:mettle",
+        "//proto/mettle",
         "//third_party/go:genproto",
         "//third_party/go:grpc",
         "//third_party/go:protobuf",

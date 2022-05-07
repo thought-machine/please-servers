@@ -10,7 +10,7 @@ go_library(
     ],
     deps = [
         "//grpcutil",
-        "//proto:purity",
+        "//proto/purity",
         "//rexclient",
         "//third_party/go:api",
         "//third_party/go:cli-init",

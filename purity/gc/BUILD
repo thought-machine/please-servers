@@ -6,7 +6,7 @@ go_library(
         "//purity/...",
     ],
     deps = [
-        "//proto:purity",
+        "//proto/purity",
         "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:go-multierror",

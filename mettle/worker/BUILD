@@ -7,7 +7,7 @@ go_library(
         "//elan/rpc",
         "//grpcutil",
         "//mettle/common",
-        "//proto:lucidity",
+        "//proto/lucidity",
         "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:cloud_pubsub",
