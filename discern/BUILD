@@ -11,4 +11,5 @@ go_binary(
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
     ],
+    visibility = ["//package:all"],
 )

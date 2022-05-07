@@ -9,6 +9,7 @@ go_binary(
         "//third_party/go:cli-init",
         "//third_party/go:grpc",
     ],
+    visibility = ["//package:all"],
 )
 
 sh_cmd(

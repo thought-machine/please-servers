@@ -9,6 +9,7 @@ go_binary(
         "//mettle/worker",
         "//third_party/go:cli-init",
     ],
+    visibility = ["//package:all"],
 )
 
 sh_cmd(

@@ -6,6 +6,7 @@ go_binary(
         "//grpcutil",
         "//zeal/rpc",
     ],
+    visibility = ["//package:all"],
 )
 
 sh_cmd(
