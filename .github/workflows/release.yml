@@ -4,7 +4,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: thoughtmachine/please-servers:20220507
+      image: thoughtmachine/please-servers:20220508
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -16,9 +16,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Run tests
-        run: ./pleasew test -p -v 2 --exclude //tests/...
-        env:
-          PLZ_CONFIG_PROFILE: "ci"
+        run: ./pleasew test --profile ci -p -v 2 --exclude //tests/...
       - name: Archive logs
         if: always()
         uses: actions/upload-artifact@v2
@@ -30,7 +28,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     container:
-      image: thoughtmachine/please-servers:20220507
+      image: thoughtmachine/please-servers:20220508
     if: github.ref == 'refs/heads/master'
     steps:
       - name: Checkout code
@@ -43,9 +41,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Build
-        run: ./pleasew build --profile release -p -v notice //package:release_files
-        env:
-          PLZ_CONFIG_PROFILE: "ci"
+        run: ./pleasew build --profile ci -p -v notice //package:release_files
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
