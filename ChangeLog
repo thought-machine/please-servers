@@ -1,3 +1,7 @@
+Version 9.7.1
+-------------
+    * Version bump to regenerate release
+
 Version 9.7.0
 -------------
     * First version released with GitHub Actions
