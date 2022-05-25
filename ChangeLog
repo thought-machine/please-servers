@@ -1,3 +1,7 @@
+Version 9.7.2
+-------------
+    * Increase debug logging a little for Purity
+
 Version 9.7.1
 -------------
     * Version bump to regenerate release

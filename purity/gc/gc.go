@@ -235,10 +235,12 @@ func (c *collector) MarkReferencedBlobs() error {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				// Temporary logging for debug purposes
+				accessed := time.Unix(ar.LastAccessed, 0)
+				threshold := time.Unix(c.ageThreshold, 0)
 				if c.shouldDelete(ar) {
-					accessed := time.Unix(ar.LastAccessed, 0)
-					threshold := time.Unix(c.ageThreshold, 0)
 					log.Debug("Should delete action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
+				} else {
+					log.Debug("Not deleting action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
 				}
 				// End temporary logging
 				if !c.shouldDelete(ar) {
