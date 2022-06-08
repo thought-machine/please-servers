@@ -134,8 +134,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension); err != nil {
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) {
+	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension, immediateShutdown); err != nil {
 		log.Fatalf("Failed to run: %s", err)
 	}
 }
@@ -171,7 +171,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration) error {
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) error {
 	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension)
 	if err != nil {
 		return err
@@ -182,12 +182,25 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	go func() {
 		sig := <-ch
-		log.Warning("Received signal %s, shutting down when ready...", sig)
-		cancel()
-		w.Report(false, false, false, "Received signal %s, shutting down when ready...", sig)
-		sig = <-ch
-		w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
-		log.Fatalf("Received another signal %s, shutting down immediately", sig)
+		if immediateShutdown {
+			log.Warning("Received shutdown signal %s, shutting down...", sig)
+			cancel()
+		} else {
+		    log.Warning("Received signal %s, shutting down when the task completes or times out...", sig)
+		}
+
+		t := time.NewTicker(5 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				log.Warning("Exceeded timeout, shutting down task now")
+			    cancel()
+			case <-ch:
+				w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
+		        log.Fatalf("Received another signal %s, shutting down immediately", sig)
+			}
+		}
 	}()
 	go w.periodicallyPushMetrics()
 	defer w.metricTicker.Stop()
@@ -199,12 +212,13 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		// possible for the subprocesses.
 		runtime.GC()
 		w.Report(true, false, true, "Awaiting next task...")
-		if _, err := w.RunTask(ctx); err != nil {
-			if ctx.Err() != nil {
-				// Error came from a signal triggered above. Give a brief period to send reports then die.
-				time.Sleep(500 * time.Millisecond)
-				return fmt.Errorf("terminated by signal")
-			}
+		_, err := w.RunTask(ctx)
+		if ctx.Err() != nil {
+			// Error came from a signal triggered above. Give a brief period to send reports then die.
+			time.Sleep(500 * time.Millisecond)
+			return fmt.Errorf("terminated by signal")
+		}
+		if err != nil {
 			// If we get an error back here, we have failed to communicate with one of
 			// our queues or something else bad happened internally  so we are basically doomed
 			// and should stop.
