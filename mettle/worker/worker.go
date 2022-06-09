@@ -186,7 +186,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 			log.Warning("Received shutdown signal %s, shutting down...", sig)
 			cancel()
 		} else {
-		    log.Warning("Received signal %s, shutting down when the task completes or times out...", sig)
+			log.Warning("Received signal %s, shutting down when the task completes or times out...", sig)
 		}
 
 		t := time.NewTicker(5 * time.Minute)
@@ -195,10 +195,10 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 			select {
 			case <-t.C:
 				log.Warning("Exceeded timeout, shutting down task now")
-			    cancel()
+				cancel()
 			case <-ch:
 				w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
-		        log.Fatalf("Received another signal %s, shutting down immediately", sig)
+				log.Fatalf("Received another signal %s, shutting down immediately", sig)
 			}
 		}
 	}()
