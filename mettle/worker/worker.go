@@ -177,26 +177,27 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		return err
 	}
 	defer w.ShutdownQueues()
-	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
+	shutdownCh := make(chan bool, 1)
+	defer close(shutdownCh)
 	go func() {
 		sig := <-ch
-		if immediateShutdown {
-			log.Warning("Received shutdown signal %s, shutting down...", sig)
-			cancel()
-		} else {
-			log.Warning("Received signal %s, shutting down when the task completes or times out...", sig)
+		if immediateShutdown || w.actionDigest == nil {
+			w.Report(false, false, false, "Received shutdown signal %s, shutting down...", sig)
+			log.Fatalf("Received shutdown signal %s, shutting down...", sig)
 		}
+		log.Warning("Received signal %s, shutting down when the task completes or times out", sig)
+		shutdownCh <- true
 
 		t := time.NewTicker(5 * time.Minute)
 		defer t.Stop()
 		for {
 			select {
 			case <-t.C:
-				log.Warning("Exceeded timeout, shutting down task now")
-				cancel()
-			case <-ch:
+				w.Report(false, false, false, "Exceeded timeout, shutting down immediately...")
+				log.Fatalf("Exceeded timeout, shutting down immediately...")
+			case sig = <-ch:
 				w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
 				log.Fatalf("Received another signal %s, shutting down immediately", sig)
 			}
@@ -212,12 +213,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		// possible for the subprocesses.
 		runtime.GC()
 		w.Report(true, false, true, "Awaiting next task...")
-		_, err := w.RunTask(ctx)
-		if ctx.Err() != nil {
-			// Error came from a signal triggered above. Give a brief period to send reports then die.
-			time.Sleep(500 * time.Millisecond)
-			return fmt.Errorf("terminated by signal")
-		}
+		_, err := w.RunTask(context.Background())
 		if err != nil {
 			// If we get an error back here, we have failed to communicate with one of
 			// our queues or something else bad happened internally  so we are basically doomed
@@ -225,6 +221,11 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 			err = fmt.Errorf("Failed to run task: %s", err)
 			w.Report(false, false, false, err.Error())
 			return err
+		}
+		select {
+		case <-shutdownCh:
+			return fmt.Errorf("Shutdown signal detected, terminating now as the task is complete")
+		default:
 		}
 	}
 }
