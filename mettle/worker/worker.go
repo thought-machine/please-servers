@@ -422,6 +422,7 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	w.cachedBytes = 0
 	response := w.runTask(msg)
 	msg.Ack()
+	w.currentMsg = nil
 	err = w.update(pb.ExecutionStage_COMPLETED, response)
 	w.actionDigest = nil
 	return response, err
