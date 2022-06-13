@@ -1,3 +1,7 @@
+Version 9.7.2
+-------------
+    * Allowing workers to wait for task completion before shutting down
+
 Version 9.7.1
 -------------
     * Version bump to regenerate release
