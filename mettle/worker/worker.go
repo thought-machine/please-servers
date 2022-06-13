@@ -184,8 +184,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	go func() {
 		sig := <-ch
 		if immediateShutdown || w.actionDigest == nil {
-			w.Report(false, false, false, "Received shutdown signal %s, shutting down...", sig)
-			log.Fatalf("Received shutdown signal %s, shutting down...", sig)
+			w.forceShutdown(fmt.Sprintf("Received shutdown signal %s, shutting down...", sig))
 		}
 		log.Warning("Received signal %s, shutting down when the task completes or times out", sig)
 		shutdownCh <- true
@@ -195,11 +194,9 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		for {
 			select {
 			case <-t.C:
-				w.Report(false, false, false, "Exceeded timeout, shutting down immediately...")
-				log.Fatalf("Exceeded timeout, shutting down immediately...")
+				w.forceShutdown("Exceeded timeout, shutting down immediately...")
 			case sig = <-ch:
-				w.Report(false, false, false, "Received another signal %s, shutting down immediately...", sig)
-				log.Fatalf("Received another signal %s, shutting down immediately", sig)
+				w.forceShutdown(fmt.Sprintf("Received another signal %s, shutting down immediately...", sig))
 			}
 		}
 	}()
@@ -357,6 +354,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 type worker struct {
 	requests        *pubsub.Subscription
 	responses       *pubsub.Topic
+	currentMsg      *pubsub.Message
 	ackExtension    time.Duration
 	ackExtensionSub string
 	client          elan.Client
@@ -419,6 +417,7 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 		log.Error("Error receiving message: %s", err)
 		return nil, err
 	}
+	w.currentMsg = msg
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
 	response := w.runTask(msg)
@@ -492,6 +491,15 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		}
 	}
 	return w.execute(req, action, command)
+}
+
+// forceShutdown sends any shutdown reports and calls log.Fatal() to shut down the worker
+func (w *worker) forceShutdown(shutdownMsg string) {
+	w.Report(false, false, false, shutdownMsg)
+	if w.currentMsg != nil {
+		w.currentMsg.Nack()
+	}
+	log.Fatal(shutdownMsg)
 }
 
 // extendAckDeadline continuously extends the ack deadline of a message until the
