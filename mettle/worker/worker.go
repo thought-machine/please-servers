@@ -179,21 +179,18 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	defer w.ShutdownQueues()
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
-	shutdownCh := make(chan bool, 1)
-	defer close(shutdownCh)
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		sig := <-ch
-		if immediateShutdown || w.actionDigest == nil {
+		if immediateShutdown {
 			w.forceShutdown(fmt.Sprintf("Received shutdown signal %s, shutting down...", sig))
 		}
-		log.Warning("Received signal %s, shutting down when the task completes or times out", sig)
-		shutdownCh <- true
+		log.Warning("Received signal %s, shutting down when any in-progress task completes or times out", sig)
+		cancel()
 
-		t := time.NewTicker(5 * time.Minute)
-		defer t.Stop()
 		for {
 			select {
-			case <-t.C:
+			case <-time.After(5 * time.Minute):
 				w.forceShutdown("Exceeded timeout, shutting down immediately...")
 			case sig = <-ch:
 				w.forceShutdown(fmt.Sprintf("Received another signal %s, shutting down immediately...", sig))
@@ -210,7 +207,12 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		// possible for the subprocesses.
 		runtime.GC()
 		w.Report(true, false, true, "Awaiting next task...")
-		_, err := w.RunTask(context.Background())
+		_, err := w.RunTask(ctx)
+		if ctx.Err() != nil {
+			// Error came from a signal triggered above. Give a brief period to send reports then die.
+			time.Sleep(500 * time.Millisecond)
+			return fmt.Errorf("terminated by signal")
+		}
 		if err != nil {
 			// If we get an error back here, we have failed to communicate with one of
 			// our queues or something else bad happened internally  so we are basically doomed
@@ -218,11 +220,6 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 			err = fmt.Errorf("Failed to run task: %s", err)
 			w.Report(false, false, false, err.Error())
 			return err
-		}
-		select {
-		case <-shutdownCh:
-			return fmt.Errorf("Shutdown signal detected, terminating now as the task is complete")
-		default:
 		}
 	}
 }
