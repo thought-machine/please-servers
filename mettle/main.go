@@ -61,23 +61,24 @@ var opts = struct {
 		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
-		Dir             string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
-		NoClean         bool                    `long:"noclean" description:"Don't clean workdirs after actions complete"`
-		Name            string                  `short:"n" long:"name" description:"Name of this worker"`
-		Browser         string                  `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
-		Lucidity        string                  `long:"lucidity" description:"URL of Lucidity server to report to"`
-		PromGateway     string                  `long:"prom_gateway" default:"" description:"Gateway URL to push Prometheus updates to."`
-		Sandbox         string                  `long:"sandbox" description:"Location of tool to sandbox build actions with"`
-		AltSandbox      string                  `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
-		Timeout         flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
-		MinDiskSpace    flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
-		MemoryThreshold float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
-		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
-		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
-		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
-		Storage         StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
-		Redis           RedisOpts               `group:"Options controlling connection to Redis" namespace:"redis"`
-		Queues          struct {
+		Dir               string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
+		NoClean           bool                    `long:"noclean" description:"Don't clean workdirs after actions complete"`
+		Name              string                  `short:"n" long:"name" description:"Name of this worker"`
+		Browser           string                  `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Lucidity          string                  `long:"lucidity" description:"URL of Lucidity server to report to"`
+		PromGateway       string                  `long:"prom_gateway" default:"" description:"Gateway URL to push Prometheus updates to."`
+		Sandbox           string                  `long:"sandbox" description:"Location of tool to sandbox build actions with"`
+		AltSandbox        string                  `long:"alt_sandbox" description:"Location of tool to sandbox build actions with that don't explicitly request it"`
+		Timeout           flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
+		MinDiskSpace      flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
+		MemoryThreshold   float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		VersionFile       string                  `long:"version_file" description:"File containing version tag"`
+		Costs             map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
+		ImmediateShutdown bool                    `long:"immediate_shutdown" default:"false" description:"True if the worker should shut down immediately on a sigterm."`
+		Cache             CacheOpts               `group:"Options controlling caching" namespace:"cache"`
+		Storage           StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
+		Redis             RedisOpts               `group:"Options controlling connection to Redis" namespace:"redis"`
+		Queues            struct {
 			RequestQueue  string         `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue string         `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 			AckExtension  flags.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcppubsub queues."`
@@ -173,11 +174,11 @@ func main() {
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
-			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, opts.Dual.Redis.URL, opts.Dual.Redis.ReadPassword(), opts.Dual.Redis.TLS, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0)
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, opts.Dual.Redis.URL, opts.Dual.Redis.ReadPassword(), opts.Dual.Redis.TLS, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0, opts.Worker.ImmediateShutdown)
 		}
 		api.ServeForever(opts.Dual.GRPC, "", requests, responses, responses, "", false, opts.Dual.AllowedPlatform, opts.Dual.Storage.Storage[0], opts.Dual.Storage.TLS)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, opts.Worker.Redis.URL, opts.Worker.Redis.ReadPassword(), opts.Worker.Redis.TLS, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension))
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, opts.Worker.Redis.URL, opts.Worker.Redis.ReadPassword(), opts.Worker.Redis.TLS, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension), opts.Worker.ImmediateShutdown)
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.RequestQueue, opts.API.Queues.ResponseQueue+opts.API.Queues.ResponseQueueSuffix, opts.API.Queues.PreResponseQueue, opts.API.API.URL, opts.API.API.TLS, opts.API.AllowedPlatform, opts.API.Storage.Storage, opts.API.Storage.TLS)
 	} else if err := one(); err != nil {
