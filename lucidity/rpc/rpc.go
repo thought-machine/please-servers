@@ -100,13 +100,11 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 		s.recalculateValidVersions()
 	}
 	validVersion := s.IsValidVersion(req.Version)
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	liveWorkers.Set(s.updateMap(s.liveWorkers, req.Name, req.Alive))
-	deadWorkers.Set(s.updateMap(s.deadWorkers, req.Name, !req.Alive))
-	healthyWorkers.Set(s.updateMap(s.healthyWorkers, req.Name, req.Healthy))
-	unhealthyWorkers.Set(s.updateMap(s.unhealthyWorkers, req.Name, !req.Healthy))
-	busyWorkers.Set(s.updateMap(s.busyWorkers, req.Name, req.Busy))
+	if !validVersion {
+		req.Healthy = false
+		req.Status = "Invalid version"
+	}
+	s.updateMaps(req)
 	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !validVersion}, nil
 }
 
@@ -131,6 +129,7 @@ func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 			r.Healthy = false
 			r.Status = "Invalid version"
 		}
+		s.updateMaps(r)
 		workers.Workers = append(workers.Workers, r)
 		return true
 	})
@@ -141,6 +140,16 @@ func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	m.Marshal(w, workers)
+}
+
+func (s *server) updateMaps(r *pb.UpdateRequest) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	liveWorkers.Set(s.updateMap(s.liveWorkers, r.Name, r.Alive))
+	deadWorkers.Set(s.updateMap(s.deadWorkers, r.Name, !r.Alive))
+	healthyWorkers.Set(s.updateMap(s.healthyWorkers, r.Name, r.Healthy))
+	unhealthyWorkers.Set(s.updateMap(s.unhealthyWorkers, r.Name, !r.Healthy))
+	busyWorkers.Set(s.updateMap(s.busyWorkers, r.Name, r.Busy))
 }
 
 func (s *server) ServeAsset(w http.ResponseWriter, r *http.Request) {
