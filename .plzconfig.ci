@@ -3,6 +3,9 @@
 dir = .plz-cache
 dircompress = true
 
+[plugin "go"]
+defaultstatic = true
+
 [proto]
 protoctool = protoc
 
