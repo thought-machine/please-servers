@@ -100,6 +100,10 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 		s.recalculateValidVersions()
 	}
 	validVersion := s.IsValidVersion(req.Version)
+	if !s.IsValidVersion(req.Version) {
+		req.Healthy = false
+		req.Status = "Invalid version"
+	}
 	s.updateMaps(req)
 	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !validVersion}, nil
 }
