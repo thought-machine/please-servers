@@ -100,7 +100,7 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 		s.recalculateValidVersions()
 	}
 	validVersion := s.IsValidVersion(req.Version)
-	if !s.IsValidVersion(req.Version) {
+	if !validVersion {
 		req.Healthy = false
 		req.Status = "Invalid version"
 	}
