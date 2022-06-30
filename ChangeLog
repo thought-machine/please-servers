@@ -1,3 +1,7 @@
+Version 9.7.3
+-------------
+    * Update lucidity metrics when marking worker as unhealthy
+
 Version 9.7.2
 -------------
     * Allowing workers to wait for task completion before shutting down
