@@ -74,7 +74,7 @@ var opts = struct {
 		MemoryThreshold   float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
 		VersionFile       string                  `long:"version_file" description:"File containing version tag"`
 		Costs             map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
-		ImmediateShutdown bool                    `long:"immediate_shutdown" default:"false" description:"True if the worker should shut down immediately on a sigterm."`
+		ImmediateShutdown bool                    `long:"immediate_shutdown" description:"True if the worker should shut down immediately on a sigterm."`
 		Cache             CacheOpts               `group:"Options controlling caching" namespace:"cache"`
 		Storage           StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		Redis             RedisOpts               `group:"Options controlling connection to Redis" namespace:"redis"`

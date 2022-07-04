@@ -1,3 +1,7 @@
+Version 9.7.6
+-------------
+    * Fixing immediate_shutdown flag
+
 Version 9.7.5
 -------------
     * Binaries now statically linked again, hopefully for real this time
