@@ -20,6 +20,7 @@ func TestValidVersion(t *testing.T) {
 		r, err := s.Update(context.Background(), &pb.UpdateRequest{
 			Name:       name,
 			Version:    version,
+			Healthy:    true,
 			UpdateTime: time.Now().Unix(),
 		})
 		assert.NoError(t, err)
