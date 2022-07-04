@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -17,8 +18,9 @@ func TestValidVersion(t *testing.T) {
 	// Helper function. Returns true if this update would trigger disabling the worker.
 	update := func(name, version string) bool {
 		r, err := s.Update(context.Background(), &pb.UpdateRequest{
-			Name:    name,
-			Version: version,
+			Name:       name,
+			Version:    version,
+			UpdateTime: time.Now().Unix(),
 		})
 		assert.NoError(t, err)
 		return r.ShouldDisable
