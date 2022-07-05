@@ -48,17 +48,10 @@ var busyWorkers = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name:      "busy_workers_total",
 })
 
-func init() {
-	prometheus.MustRegister(liveWorkers)
-	prometheus.MustRegister(deadWorkers)
-	prometheus.MustRegister(healthyWorkers)
-	prometheus.MustRegister(unhealthyWorkers)
-	prometheus.MustRegister(busyWorkers)
-}
-
 // ServeForever serves on the given port until terminated.
 func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, minProportion float64, audience string, allowedUsers []string) {
 	srv := newServer(minProportion)
+	prometheus.MustRegister(srv)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterLucidityServer(s, srv)
 
@@ -73,21 +66,16 @@ func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, minPro
 	grpcutil.ServeForever(lis, s)
 }
 
+// server implements prometheus.Collector, which allows us to compute metrics
+// on the fly.
 type server struct {
-	workers, validVersions                                                  sync.Map
-	mutex                                                                   sync.Mutex
-	liveWorkers, deadWorkers, healthyWorkers, unhealthyWorkers, busyWorkers map[string]struct{}
-	minProportion                                                           float64
+	workers, validVersions sync.Map
+	minProportion          float64
 }
 
 func newServer(minProportion float64) *server {
 	return &server{
-		liveWorkers:      map[string]struct{}{},
-		deadWorkers:      map[string]struct{}{},
-		healthyWorkers:   map[string]struct{}{},
-		unhealthyWorkers: map[string]struct{}{},
-		busyWorkers:      map[string]struct{}{},
-		minProportion:    minProportion,
+		minProportion: minProportion,
 	}
 }
 
@@ -99,37 +87,25 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 	if !ok || v.(*pb.UpdateRequest).Version != req.Version {
 		s.recalculateValidVersions()
 	}
-	validVersion := s.IsValidVersion(req.Version)
-	if !validVersion {
+	s.checkWorkerHealth(req)
+	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !req.Healthy}, nil
+}
+
+func (s *server) checkWorkerHealth(req *pb.UpdateRequest) {
+	if req.UpdateTime < time.Now().Add(-10*time.Minute).Unix() {
+		req.Healthy = false
+		req.Status = "Too long since last update"
+	} else if !s.IsValidVersion(req.Version) {
 		req.Healthy = false
 		req.Status = "Invalid version"
 	}
-	s.updateMaps(req)
-	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !validVersion}, nil
-}
-
-func (s *server) updateMap(m map[string]struct{}, key string, in bool) float64 {
-	if in {
-		m[key] = struct{}{}
-	} else {
-		delete(m, key)
-	}
-	return float64(len(m))
 }
 
 func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 	workers := &pb.Workers{}
-	minHealthy := time.Now().Add(-10 * time.Minute).Unix()
 	s.workers.Range(func(k, v interface{}) bool {
 		r := v.(*pb.UpdateRequest)
-		if r.Healthy && r.UpdateTime < minHealthy {
-			r.Healthy = false
-			r.Status = "Too long since last update"
-		} else if !s.IsValidVersion(r.Version) {
-			r.Healthy = false
-			r.Status = "Invalid version"
-		}
-		s.updateMaps(r)
+		s.checkWorkerHealth(r)
 		workers.Workers = append(workers.Workers, r)
 		return true
 	})
@@ -140,16 +116,6 @@ func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	m.Marshal(w, workers)
-}
-
-func (s *server) updateMaps(r *pb.UpdateRequest) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	liveWorkers.Set(s.updateMap(s.liveWorkers, r.Name, r.Alive))
-	deadWorkers.Set(s.updateMap(s.deadWorkers, r.Name, !r.Alive))
-	healthyWorkers.Set(s.updateMap(s.healthyWorkers, r.Name, r.Healthy))
-	unhealthyWorkers.Set(s.updateMap(s.unhealthyWorkers, r.Name, !r.Healthy))
-	busyWorkers.Set(s.updateMap(s.busyWorkers, r.Name, r.Busy))
 }
 
 func (s *server) ServeAsset(w http.ResponseWriter, r *http.Request) {
@@ -201,13 +167,6 @@ func (s *server) Clean(maxAge time.Duration) {
 
 func (s *server) removeWorker(key string) {
 	s.workers.Delete(key)
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	delete(s.liveWorkers, key)
-	delete(s.deadWorkers, key)
-	delete(s.healthyWorkers, key)
-	delete(s.unhealthyWorkers, key)
-	delete(s.busyWorkers, key)
 }
 
 // recalculateValidVersions runs through all the workers and calculates the new set of versions we'll allow to be active.
@@ -245,4 +204,46 @@ func (s *server) recalculateValidVersions() {
 func (s *server) IsValidVersion(v string) bool {
 	_, valid := s.validVersions.Load(v)
 	return valid
+}
+
+// Describe sends prometheus description of all metrics collected in Collect.
+func (s *server) Describe(out chan<- *prometheus.Desc) {
+	liveWorkers.Describe(out)
+	deadWorkers.Describe(out)
+	healthyWorkers.Describe(out)
+	unhealthyWorkers.Describe(out)
+	busyWorkers.Describe(out)
+}
+
+// Collect counts number of unhealthy, dead and busy workers and send the
+// corresponding metrics. It also checks the worker health on the fly, in case
+// the version or the updateTime is no longer valid.
+func (s *server) Collect(out chan<- prometheus.Metric) {
+	var total, unhealthy, dead, busy float64
+	s.workers.Range(func(_, v interface{}) bool {
+		r := v.(*pb.UpdateRequest)
+		s.checkWorkerHealth(r)
+		if !r.Healthy {
+			unhealthy++
+		}
+		if !r.Alive {
+			dead++
+		}
+		if r.Busy {
+			busy++
+		}
+		total++
+		return true
+	})
+	liveWorkers.Set(total - dead)
+	deadWorkers.Set(dead)
+	healthyWorkers.Set(total - unhealthy)
+	unhealthyWorkers.Set(unhealthy)
+	busyWorkers.Set(busy)
+
+	liveWorkers.Collect(out)
+	deadWorkers.Collect(out)
+	healthyWorkers.Collect(out)
+	unhealthyWorkers.Collect(out)
+	busyWorkers.Collect(out)
 }
