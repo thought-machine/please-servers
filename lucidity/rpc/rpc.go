@@ -92,7 +92,7 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 }
 
 func (s *server) checkWorkerHealth(req *pb.UpdateRequest) {
-	if req.Healthy && req.UpdateTime < time.Now().Add(-10*time.Minute).Unix() {
+	if req.UpdateTime < time.Now().Add(-10*time.Minute).Unix() {
 		req.Healthy = false
 		req.Status = "Too long since last update"
 	} else if !s.IsValidVersion(req.Version) {
