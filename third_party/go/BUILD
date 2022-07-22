@@ -296,13 +296,14 @@ go_module(
         ":remote-apis",
         ":rpc",
         ":zstd",
+        ":zstdpool",
     ],
 )
 
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "181b52eecd7d37935823ce2f2a01d28860c0b1ef",
+    version = "52a570458adc5c5c6be63b597ca60170cb199646",
 )
 
 go_module(
@@ -834,4 +835,13 @@ go_module(
     module = "golang.org/x/term",
     version = "v0.0.0-20210615171337-6886f2dfbf5b",
     deps = [":unix"],
+)
+
+go_module(
+    name = "zstdpool",
+    licences = ["Apache-2.0"],
+    module = "github.com/mostynb/zstdpool-syncpool",
+    version = "v0.0.7",
+    visibility = ["PUBLIC"],
+    deps = [":zstd"],
 )
