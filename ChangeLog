@@ -1,3 +1,7 @@
+Version 9.7.8
+-------------
+    * Fix in remote api SDK to not create recursive directory structures from empty directories.
+
 Version 9.7.7
 -------------
     * Compute metrics at collection time.
