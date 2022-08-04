@@ -1,3 +1,7 @@
+Version 9.7.9
+-------------
+    * Stdout / stderr uploading is more robust against errors.
+
 Version 9.7.8
 -------------
     * Fix in remote api SDK to not create recursive directory structures from empty directories.
