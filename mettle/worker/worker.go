@@ -672,19 +672,19 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		ExecutionMetadata: w.metadata,
 	}
 
-	stdoutDigest, err := w.client.WriteBlob(w.stdout.Bytes())
-	if err != nil {
+	stdoutDigest, uploadErr := w.client.WriteBlob(w.stdout.Bytes())
+	if uploadErr != nil {
 		return &pb.ExecuteResponse{
-			Status: inferStatus(codes.Internal, "Failed to upload stdout: %s", err),
+			Status: inferStatus(codes.Internal, "Failed to upload stdout: %s", uploadErr),
 			Result: ar,
 		}
 	}
 	ar.StdoutDigest = stdoutDigest
 
-	stderrDigest, err := w.client.WriteBlob(w.stderr.Bytes())
-	if err != nil {
+	stderrDigest, uploadErr := w.client.WriteBlob(w.stderr.Bytes())
+	if uploadErr != nil {
 		return &pb.ExecuteResponse{
-			Status: inferStatus(codes.Internal, "Failed to upload stderr: %s", err),
+			Status: inferStatus(codes.Internal, "Failed to upload stderr: %s", uploadErr),
 			Result: ar,
 		}
 	}
