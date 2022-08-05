@@ -674,6 +674,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 
 	stdoutDigest, uploadErr := w.client.WriteBlob(w.stdout.Bytes())
 	if uploadErr != nil {
+		log.Error("Failed to upload stdout for %s: %s", w.actionDigest.Hash, uploadErr)
 		return &pb.ExecuteResponse{
 			Status: inferStatus(codes.Internal, "Failed to upload stdout: %s", uploadErr),
 			Result: ar,
@@ -683,6 +684,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 
 	stderrDigest, uploadErr := w.client.WriteBlob(w.stderr.Bytes())
 	if uploadErr != nil {
+		log.Error("Failed to upload stderr for %s: %s", w.actionDigest.Hash, uploadErr)
 		return &pb.ExecuteResponse{
 			Status: inferStatus(codes.Internal, "Failed to upload stderr: %s", uploadErr),
 			Result: ar,
