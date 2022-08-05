@@ -289,6 +289,14 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	for _, f := range result.OutputFiles {
 		digests = append(digests, f.Digest)
 	}
+	if result.StdoutDigest != nil {
+		c.referencedBlobs[result.StdoutDigest.Hash] = struct{}{}
+		digests = append(digests, result.StdoutDigest)
+	}
+	if result.StderrDigest != nil {
+		c.referencedBlobs[result.StderrDigest.Hash] = struct{}{}
+		digests = append(digests, result.StderrDigest)
+	}
 	// Check whether all these outputs exist.
 	resp, err := c.client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
 		InstanceName: c.client.InstanceName,
@@ -309,12 +317,6 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	}
 	for _, d := range dirs {
 		c.markDirectory(d)
-	}
-	if result.StdoutDigest != nil {
-		c.referencedBlobs[result.StdoutDigest.Hash] = struct{}{}
-	}
-	if result.StderrDigest != nil {
-		c.referencedBlobs[result.StderrDigest.Hash] = struct{}{}
 	}
 	c.inputSizes[ar.Hash] = int(inputSize)
 	c.outputSizes[ar.Hash] = int(size)
