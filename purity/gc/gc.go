@@ -413,6 +413,8 @@ func (c *collector) markTree(d *pb.OutputDirectory) (int64, []*pb.Digest, error)
 }
 
 func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	var size int64
 	digests := []*pb.Digest{}
 	for _, f := range d.Files {
