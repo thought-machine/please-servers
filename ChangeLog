@@ -1,3 +1,7 @@
+Version 9.7.10
+-------------
+    * Fixing concurrent map writes in Purity
+
 Version 9.7.9
 -------------
     * Stdout / stderr uploading is more robust against errors.
