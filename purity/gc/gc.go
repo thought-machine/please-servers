@@ -273,29 +273,10 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 		log.Debug("Found failed action result %s: exit code %d", ar.Hash, result.ExitCode)
 		c.markBroken(ar.Hash, ar.SizeBytes)
 	}
-	size := ar.SizeBytes
-	digests := []*pb.Digest{}
-	for _, d := range result.OutputDirectories {
-		sz, dgs, err := c.markTree(d)
-		if err != nil {
-			if status.Code(err) == codes.NotFound {
-				return err
-			}
-			log.Warning("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
-		}
-		size += sz
-		digests = append(digests, dgs...)
-	}
-	for _, f := range result.OutputFiles {
-		digests = append(digests, f.Digest)
-	}
-	if result.StdoutDigest != nil {
-		c.referencedBlobs[result.StdoutDigest.Hash] = struct{}{}
-		digests = append(digests, result.StdoutDigest)
-	}
-	if result.StderrDigest != nil {
-		c.referencedBlobs[result.StderrDigest.Hash] = struct{}{}
-		digests = append(digests, result.StderrDigest)
+	outputSize, digests, err := c.outputs(result)
+	if err != nil {
+		log.Warning("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
+		return err
 	}
 	// Check whether all these outputs exist.
 	resp, err := c.client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
@@ -308,22 +289,48 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
 	inputSize, dirs, _ := c.inputDirs(dg)
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.referencedBlobs[ar.Hash] = struct{}{}
-	for _, f := range result.OutputFiles {
-		c.referencedBlobs[f.Digest.Hash] = struct{}{}
-		size += f.Digest.SizeBytes
-	}
 	for _, d := range dirs {
 		c.markDirectory(d)
 	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	c.inputSizes[ar.Hash] = int(inputSize)
-	c.outputSizes[ar.Hash] = int(size)
+	c.outputSizes[ar.Hash] = int(outputSize)
 	if resp != nil && len(resp.MissingBlobDigests) > 0 {
 		return fmt.Errorf("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
 	}
 	return nil
+}
+
+func (c *collector) outputs(ar *pb.ActionResult) (int64, []*pb.Digest, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	var size int64
+	digests := []*pb.Digest{}
+	for _, d := range ar.OutputDirectories {
+		sz, dgs, err := c.markTree(d)
+		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return size, []*pb.Digest{}, err
+			}
+		}
+		size += sz
+		digests = append(digests, dgs...)
+	}
+	for _, f := range ar.OutputFiles {
+		c.referencedBlobs[f.Digest.Hash] = struct{}{}
+		size += f.Digest.SizeBytes
+		digests = append(digests, f.Digest)
+	}
+	if ar.StdoutDigest != nil {
+		c.referencedBlobs[ar.StdoutDigest.Hash] = struct{}{}
+		digests = append(digests, ar.StdoutDigest)
+	}
+	if ar.StderrDigest != nil {
+		c.referencedBlobs[ar.StderrDigest.Hash] = struct{}{}
+		digests = append(digests, ar.StderrDigest)
+	}
+	return size, digests, nil
 }
 
 // inputDirs returns all the inputs for an action. It doesn't return any errors because we don't
