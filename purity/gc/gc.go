@@ -289,11 +289,11 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
 	inputSize, dirs, _ := c.inputDirs(dg)
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	for _, d := range dirs {
 		c.markDirectory(d)
 	}
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	c.inputSizes[ar.Hash] = int(inputSize)
 	c.outputSizes[ar.Hash] = int(outputSize)
 	if resp != nil && len(resp.MissingBlobDigests) > 0 {
@@ -303,8 +303,6 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 }
 
 func (c *collector) outputs(ar *pb.ActionResult) (int64, []*pb.Digest, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	var size int64
 	digests := []*pb.Digest{}
 	for _, d := range ar.OutputDirectories {
@@ -317,6 +315,8 @@ func (c *collector) outputs(ar *pb.ActionResult) (int64, []*pb.Digest, error) {
 		size += sz
 		digests = append(digests, dgs...)
 	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	for _, f := range ar.OutputFiles {
 		c.referencedBlobs[f.Digest.Hash] = struct{}{}
 		size += f.Digest.SizeBytes
@@ -413,8 +413,6 @@ func (c *collector) markTree(d *pb.OutputDirectory) (int64, []*pb.Digest, error)
 }
 
 func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	var size int64
 	digests := []*pb.Digest{}
 	for _, f := range d.Files {
