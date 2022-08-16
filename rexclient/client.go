@@ -17,7 +17,8 @@ var log = logging.MustGetLogger()
 // for compression. Empirical evidence suggests zstd typically makes it worse at sizes under
 // a few hundred bytes and gains are minimal until approaching a kilobyte.
 // TODO(peterebden): Look into dictionary compression which is designed to improve compression
-//                   of small items.
+//
+//	of small items.
 const CompressionThreshold = 1024
 
 // New creates a new remote execution client.

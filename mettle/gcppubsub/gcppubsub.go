@@ -8,14 +8,14 @@
 //
 // It registers for the scheme gcppubsub.
 //
-// As
+// # As
 //
 // gcppubsub exposes the following types for As:
-//  - Topic: *raw.PublisherClient
-//  - Subscription: *raw.SubscriberClient
-//  - Message.BeforeSend: *pb.PubsubMessage
-//  - Message: *pb.PubsubMessage, *pb.ReceivedMessage
-//  - Error: *google.golang.org/grpc/status.Status
+//   - Topic: *raw.PublisherClient
+//   - Subscription: *raw.SubscriberClient
+//   - Message.BeforeSend: *pb.PubsubMessage
+//   - Message: *pb.PubsubMessage, *pb.ReceivedMessage
+//   - Error: *google.golang.org/grpc/status.Status
 package gcppubsub
 
 import (
