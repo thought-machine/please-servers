@@ -18,6 +18,7 @@ jobs:
       - name: golangci-lint
         env:
           GOGC: 20
+          GOOPTS: "-p 2"
         uses: golangci/golangci-lint-action@v2
         with:
           version: v1.45.0
