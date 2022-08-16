@@ -141,7 +141,7 @@ func testMain(m *testing.M) int {
 	lis, s := startServer(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: 7777,
-	}, storage, 5, 1000, 1000)
+	}, storage, 5, 5, 1000, 1000)
 	go grpcutil.ServeForever(lis, s)
 	defer s.Stop()
 
