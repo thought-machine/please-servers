@@ -142,19 +142,19 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
-	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+func ServeForever(opts grpcutil.Opts, storage string, storageRetries, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
+	lis, s := startServer(opts, storage, storageRetries, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
 	grpcutil.ServeForever(lis, s)
 }
 
-func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) *server {
+func createServer(storage string, storageRetries, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	return &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:    strings.TrimPrefix(storage, "file://"),
 		isFileStorage:  strings.HasPrefix(storage, "file://"),
-		bucket:         mustOpenStorage(storage),
+		bucket:         mustOpenStorage(storage, storageRetries),
 		limiter:        make(chan struct{}, parallelism),
 		dirCache:       mustCache(maxDirCacheSize),
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
@@ -163,8 +163,8 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 	}
 }
 
-func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
-	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+func startServer(opts grpcutil.Opts, storage string, storageRetries, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
+	srv := createServer(storage, storageRetries, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)

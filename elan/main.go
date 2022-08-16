@@ -17,6 +17,7 @@ var opts = struct {
 	Parallelism        int             `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer"`
 	DirCacheSize       int64           `long:"dir_cache_size" default:"10240" description:"Number of directory entries to cache for GetTree"`
 	KnownBlobCacheSize flags.ByteSize  `long:"known_blob_cache_size" description:"Max size of known blob cache (in approximate bytes)"`
+	StorageRetries     int             `long:"storage_retries" description:"Max number of retries when accessing storage" default:"5"`
 	Admin              cli.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{
 	Usage: `
@@ -34,5 +35,5 @@ modes are intended for testing only.
 func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
 	go cli.ServeAdmin(opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize))
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.StorageRetries, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize))
 }

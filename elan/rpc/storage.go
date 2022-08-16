@@ -22,12 +22,16 @@ type bucket interface {
 	Delete(ctx context.Context, key string, hard bool) error
 }
 
-func mustOpenStorage(url string) bucket {
+func mustOpenStorage(url string, retries int) bucket {
 	bucket, err := blob.OpenBucket(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open storage %s: %v", url, err)
 	}
-	return &adapter{bucket: bucket}
+	a := &adapter{bucket: bucket}
+	if retries > 0 {
+		return &retryBucket{bucket: a, retries: retries}
+	}
+	return a
 }
 
 type adapter struct {
