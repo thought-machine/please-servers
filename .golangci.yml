@@ -24,7 +24,7 @@ linters:
   enable:
     - deadcode
     - gosimple
-    #- govet
+    - govet
     - ineffassign
     - staticcheck
     - structcheck
