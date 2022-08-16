@@ -16,6 +16,8 @@ jobs:
         with:
           go-version: '^1.18'
       - name: golangci-lint
+        env:
+          GOGC: 20
         uses: golangci/golangci-lint-action@v2
         with:
           version: v1.45.0
