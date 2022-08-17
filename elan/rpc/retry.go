@@ -20,71 +20,59 @@ type retryBucket struct {
 }
 
 func (b retryBucket) NewRangeReader(ctx context.Context, key string, offset, length int64, opts *blob.ReaderOptions) (io.ReadCloser, error) {
-	var (
-		rc  io.ReadCloser
-		err error
-	)
-	err = b.retry(ctx, func() error {
-		rc, err = b.bucket.NewRangeReader(ctx, key, offset, length, opts)
-		return err
+	return retryWithReturnValue(ctx, b.retries, func() (io.ReadCloser, error) {
+		return b.bucket.NewRangeReader(ctx, key, offset, length, opts)
 	})
-	return rc, err
 }
 
 func (b retryBucket) NewWriter(ctx context.Context, key string, opts *blob.WriterOptions) (io.WriteCloser, error) {
-	var (
-		wc  io.WriteCloser
-		err error
-	)
-	err = b.retry(ctx, func() error {
-		wc, err = b.bucket.NewWriter(ctx, key, opts)
-		return err
+	return retryWithReturnValue(ctx, b.retries, func() (io.WriteCloser, error) {
+		return b.bucket.NewWriter(ctx, key, opts)
 	})
-	return wc, err
 }
 
 func (b retryBucket) WriteAll(ctx context.Context, key string, data []byte) error {
-	return b.retry(ctx, func() error {
+	return retry(ctx, b.retries, func() error {
 		return b.bucket.WriteAll(ctx, key, data)
 	})
 }
 
 func (b retryBucket) ReadAll(ctx context.Context, key string) ([]byte, error) {
-	var (
-		data []byte
-		err  error
-	)
-	err = b.retry(ctx, func() error {
-		data, err = b.bucket.ReadAll(ctx, key)
-		return err
+	return retryWithReturnValue(ctx, b.retries, func() ([]byte, error) {
+		return  b.bucket.ReadAll(ctx, key)
 	})
-	return data, err
 }
 
 func (b retryBucket) Exists(ctx context.Context, key string) (bool, error) {
-	var (
-		exists bool
-		err    error
-	)
-	err = b.retry(ctx, func() error {
-		exists, err = b.bucket.Exists(ctx, key)
-		return err
+	return retryWithReturnValue(ctx, b.retries, func() (bool, error) {
+		return  b.bucket.Exists(ctx, key)
 	})
-	return exists, err
 }
 
 func (b retryBucket) Delete(ctx context.Context, key string, hard bool) error {
-	return b.retry(ctx, func() error {
+	return retry(ctx, b.retries, func() error {
 		return b.bucket.Delete(ctx, key, hard)
 	})
 }
 
-func (b retryBucket) retry(ctx context.Context, f func() error) error {
+func retryWithReturnValue[V any](ctx context.Context, retries int, f func() (V, error)) (V, error) {
+	var (
+		ret V
+		err    error
+	)
+	err = retry(ctx, retries, func() error {
+		ret, err = f()
+		return err
+	})
+	return ret, err
+}
+
+func retry(ctx context.Context, retries int, f func() error) error {
 	var (
 		err = f()
 		r   int
 	)
-	for r = 0; r < b.retries && err != nil && ctx.Err() == nil && b.isErrorRetryable(err); r++ {
+	for r = 0; r < retries && err != nil && ctx.Err() == nil && isErrorRetryable(err); r++ {
 		err = f()
 	}
 	if err != nil && r > 0 {
@@ -93,7 +81,7 @@ func (b retryBucket) retry(ctx context.Context, f func() error) error {
 	return err
 }
 
-func (b retryBucket) isErrorRetryable(err error) bool {
+func isErrorRetryable(err error) bool {
 	return (gcerrors.Code(err) == gcerrors.Internal || status.Code(err) == codes.Internal) ||
 		(gcerrors.Code(err) == gcerrors.Canceled || status.Code(err) == codes.Canceled) ||
 		(gcerrors.Code(err) == gcerrors.DeadlineExceeded || status.Code(err) == codes.DeadlineExceeded) ||
