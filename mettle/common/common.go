@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	// Must import the schemes we want to use.
-	_ "github.com/thought-machine/please-servers/mettle/gcppubsub"
+    _ 	"gocloud.dev/pubsub/gcppubsub"
 	"github.com/thought-machine/please-servers/mettle/mempubsub"
 )
 
