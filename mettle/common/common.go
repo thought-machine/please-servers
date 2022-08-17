@@ -39,7 +39,12 @@ const workerKey = "build.please.mettle.worker"
 // MustOpenSubscription opens a subscription, which must have been created ahead of time.
 // It dies on any errors.
 func MustOpenSubscription(url string) *pubsub.Subscription {
-	url = renameURL(url)
+	// Limit the maximum receive batch size to 1
+	if strings.Contains(url, "?") {
+		url += "&max_recv_batch_size=1"
+	} else {
+		url += "?max_recv_batch_size=1"
+	}
 	subMutex.Lock()
 	defer subMutex.Unlock()
 	if sub, present := subscriptions[url]; present {
@@ -59,23 +64,12 @@ func MustOpenSubscription(url string) *pubsub.Subscription {
 
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 func MustOpenTopic(url string) *pubsub.Topic {
-	url = renameURL(url)
 	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open topic %s: %s", url, err)
 	}
 	log.Debug("Opened topic %s", url)
 	return t
-}
-
-// renameURL maps from old names (omem and gcprpubsub) to new ones (mem and gcppubsub)
-func renameURL(url string) string {
-	if strings.HasPrefix(url, "gcprpubsub://") {
-		return "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
-	} else if strings.HasPrefix(url, "gcprpubsub://") {
-		return "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
-	}
-	return url
 }
 
 func handleSignals(cancel context.CancelFunc, s Shutdownable) {
