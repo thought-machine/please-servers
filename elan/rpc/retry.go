@@ -94,5 +94,9 @@ func (b retryBucket) retry(ctx context.Context, f func() error) error {
 }
 
 func (b retryBucket) isErrorRetryable(err error) bool {
-	return gcerrors.Code(err) == gcerrors.Internal || status.Code(err) == codes.Internal
+	return (gcerrors.Code(err) == gcerrors.Internal || status.Code(err) == codes.Internal) ||
+		(gcerrors.Code(err) == gcerrors.Canceled || status.Code(err) == codes.Canceled) ||
+		(gcerrors.Code(err) == gcerrors.DeadlineExceeded || status.Code(err) == codes.DeadlineExceeded) ||
+		(gcerrors.Code(err) == gcerrors.ResourceExhausted || status.Code(err) == codes.ResourceExhausted) ||
+		(gcerrors.Code(err) == gcerrors.Unknown || status.Code(err) == codes.Unknown)
 }
