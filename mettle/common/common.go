@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	// Must import the schemes we want to use.
-    _ 	"gocloud.dev/pubsub/gcppubsub"
 	"github.com/thought-machine/please-servers/mettle/mempubsub"
+	_ "gocloud.dev/pubsub/gcppubsub"
 )
 
 var log = logging.MustGetLogger()
