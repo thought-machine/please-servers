@@ -1,6 +1,6 @@
 plugin_repo(
     name = "go",
-    revision = "v0.3.2",
+    revision = "v0.4.4",
 )
 
 plugin_repo(

@@ -5,11 +5,11 @@
 // It is intended for local development, not production. Among other things its memory usage
 // grows continually as new keys are added.
 //
-// As
+// # As
 //
 // mempubsub exposes the following types for As:
-//  - Message.BeforeSend: *OrderedMessage
-//  - Message: *OrderedMessage
+//   - Message.BeforeSend: *OrderedMessage
+//   - Message: *OrderedMessage
 package mempubsub
 
 import (
