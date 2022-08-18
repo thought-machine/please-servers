@@ -91,10 +91,10 @@ var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "cache_misses_total",
 })
-var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
+var blobNotFoundErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "blob_not_found_errors_total",
-})
+}, []string{"version"})
 var packsDownloaded = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "packs_downloaded_total",
@@ -135,9 +135,8 @@ func init() {
 
 // RunForever runs the worker, receiving jobs until terminated.
 func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension, immediateShutdown); err != nil {
-		log.Fatalf("Failed to run: %s", err)
-	}
+	err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension, immediateShutdown)
+	log.Fatalf("Failed to run: %s", err)
 }
 
 // RunOne runs one single request, returning any error received.
@@ -590,7 +589,7 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest, usePacks); err != nil {
 		if grpcstatus.Code(err) == codes.NotFound {
-			blobNotFoundErrors.Inc()
+			blobNotFoundErrors.WithLabelValues(w.version).Inc()
 		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
