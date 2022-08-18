@@ -3,6 +3,7 @@ package common
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -38,12 +39,7 @@ const workerKey = "build.please.mettle.worker"
 // MustOpenSubscription opens a subscription, which must have been created ahead of time.
 // It dies on any errors.
 func MustOpenSubscription(url string) *pubsub.Subscription {
-	// Limit the maximum receive batch size to 1
-	if strings.Contains(url, "?") {
-		url += "&max_recv_batch_size=1"
-	} else {
-		url += "?max_recv_batch_size=1"
-	}
+	url = limitBatchSize(url, "1")
 	subMutex.Lock()
 	defer subMutex.Unlock()
 	if sub, present := subscriptions[url]; present {
@@ -59,6 +55,20 @@ func MustOpenSubscription(url string) *pubsub.Subscription {
 	handleSignals(cancel, s)
 	subscriptions[url] = s
 	return s
+}
+
+// limitBatchSize adds a query parameter to the URL setting the batch size.
+func limitBatchSize(in, size string) string {
+	u, err := url.Parse(in)
+	if err != nil {
+		// It's not clear exactly how we can even get here; url.Parse seems to pretty much never
+		// return an error. Anyway, panicking at this point shouldn't be an issue.
+		panic(err)
+	}
+	v := u.Query()
+	v.Add("max_recv_batch_size", size)
+	u.RawQuery = v.Encode()
+	return u.String()
 }
 
 // MustOpenTopic opens a topic, which must have been created ahead of time.

@@ -17,3 +17,7 @@ func TestCheckPath(t *testing.T) {
 	assert.Error(t, CheckPath("../test"))
 	assert.Error(t, CheckPath("test/../test"))
 }
+
+func TestLimitBatchSize(t *testing.T) {
+	assert.Equal(t, "gcppubsub://projects/mettle/subscriptions/mettle-requests?max_recv_batch_size=1", limitBatchSize("gcppubsub://projects/mettle/subscriptions/mettle-requests", "1"))
+}
