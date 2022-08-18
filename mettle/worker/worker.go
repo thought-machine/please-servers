@@ -462,10 +462,22 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		WorkerStartTimestamp: ptypes.TimestampNow(),
 	}
 	w.taskStartTime = time.Now()
-	req, action, command, status := w.readRequest(msg.Body)
+	req, err := readRequest(msg.Body)
+	if err != nil {
+		log.Error("Bad request: %s", err)
+		return &pb.ExecuteResponse{
+			Result: &pb.ActionResult{},
+			Status: status(codes.FailedPrecondition, err.Error()),
+		}
+	}
 	if req != nil {
 		w.actionDigest = req.ActionDigest
 	}
+	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
+	w.actionDigest = req.ActionDigest
+	w.lastURL = w.actionURL()
+
+	action, command, status := w.fetchRequestBlobs(req)
 	if status != nil {
 		log.Error("Bad request: %s", status)
 		return &pb.ExecuteResponse{
@@ -473,9 +485,6 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 			Status: status,
 		}
 	}
-	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
-	w.actionDigest = req.ActionDigest
-	w.lastURL = w.actionURL()
 	if status := w.prepareDir(action, command); status != nil {
 		log.Warning("Failed to prepare directory for action digest %s: %s", w.actionDigest.Hash, status)
 		ar := &pb.ActionResult{
@@ -494,7 +503,13 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 // forceShutdown sends any shutdown reports and calls log.Fatal() to shut down the worker
 func (w *worker) forceShutdown(shutdownMsg string) {
 	w.Report(false, false, false, shutdownMsg)
+	log.Info("Force shutting down worker")
 	if w.currentMsg != nil {
+		if w.actionDigest != nil {
+			log.Infof("Nacking action: %s", w.actionDigest.Hash)
+		} else {
+			log.Error("Nacking action but action digest is nil")
+		}
 		w.currentMsg.Nack()
 	}
 	log.Fatal(shutdownMsg)
@@ -541,20 +556,26 @@ func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.Subscr
 }
 
 // readRequest unmarshals the original execution request.
-func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Command, *rpcstatus.Status) {
+func readRequest(msg []byte) (*pb.ExecuteRequest, error) {
 	req := &pb.ExecuteRequest{}
+	if err := proto.Unmarshal(msg, req); err != nil {
+		return nil, fmt.Errorf("Badly serialised request: %s", err)
+	}
+	return req, nil
+}
+
+// fetchRequestBlobs fetches and unmarshals the action and command for an execution request.
+func (w *worker) fetchRequestBlobs(req *pb.ExecuteRequest) (*pb.Action, *pb.Command, *rpcstatus.Status) {
 	action := &pb.Action{}
 	command := &pb.Command{}
-	if err := proto.Unmarshal(msg, req); err != nil {
-		return nil, nil, nil, status(codes.FailedPrecondition, "Badly serialised request: %s", err)
-	} else if err := w.readBlobToProto(req.ActionDigest, action); err != nil {
-		return req, nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
+	if err := w.readBlobToProto(req.ActionDigest, action); err != nil {
+		return nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
 	} else if err := w.readBlobToProto(action.CommandDigest, command); err != nil {
-		return req, nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
+		return nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
 	} else if err := common.CheckOutputPaths(command); err != nil {
-		return req, nil, nil, status(codes.InvalidArgument, "Invalid command outputs: %s", err)
+		return nil, nil, status(codes.InvalidArgument, "Invalid command outputs: %s", err)
 	}
-	return req, action, command, nil
+	return action, command, nil
 }
 
 // prepareDir prepares the directory for executing this request.
