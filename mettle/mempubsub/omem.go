@@ -1,5 +1,5 @@
 // Package mempubsub provides an in-memory pubsub implementation with a concept of ordering.
-// It registers for the scheme "omem".
+// It registers for the scheme "mem".
 // It supports at-least-once semantics.
 //
 // It is intended for local development, not production. Among other things its memory usage

@@ -508,11 +508,13 @@ func (w *worker) extendAckDeadline(ctx context.Context, msg *pubsub.Message) {
 		log.Warning("Failed to convert message to a *ReceivedMessage, cannot extend ack deadline")
 		return
 	}
+	ackID := rm.AckId
 	var client *psraw.SubscriberClient
 	if !w.requests.As(&client) {
 		log.Warning("Failed to convert subscription to a *SubscriberClient, cannot extend ack deadline")
 		return
 	}
+	w.extendAckDeadlineOnce(ctx, client, ackID)
 	t := time.NewTicker(w.ackExtension / 2) // Extend twice as frequently as the deadline expiry
 	defer t.Stop()
 	for {
@@ -520,7 +522,7 @@ func (w *worker) extendAckDeadline(ctx context.Context, msg *pubsub.Message) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			w.extendAckDeadlineOnce(ctx, client, rm.AckId)
+			w.extendAckDeadlineOnce(ctx, client, ackID)
 		}
 	}
 }

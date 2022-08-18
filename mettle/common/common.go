@@ -3,6 +3,7 @@ package common
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,9 +22,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	// Must import the schemes we want to use.
-	_ "github.com/thought-machine/please-servers/mettle/gcppubsub"
-	"github.com/thought-machine/please-servers/mettle/mempubsub"
+	"github.com/thought-machine/please-servers/mettle/mempubsub" // Register our custom mempubsub scheme
+	_ "gocloud.dev/pubsub/gcppubsub"                             // And gocloud's gcppubsub provider
 )
 
 var log = logging.MustGetLogger()
@@ -39,7 +39,7 @@ const workerKey = "build.please.mettle.worker"
 // MustOpenSubscription opens a subscription, which must have been created ahead of time.
 // It dies on any errors.
 func MustOpenSubscription(url string) *pubsub.Subscription {
-	url = renameURL(url)
+	url = limitBatchSize(url, "1")
 	subMutex.Lock()
 	defer subMutex.Unlock()
 	if sub, present := subscriptions[url]; present {
@@ -57,25 +57,28 @@ func MustOpenSubscription(url string) *pubsub.Subscription {
 	return s
 }
 
+// limitBatchSize adds a query parameter to the URL setting the batch size.
+func limitBatchSize(in, size string) string {
+	u, err := url.Parse(in)
+	if err != nil {
+		// It's not clear exactly how we can even get here; url.Parse seems to pretty much never
+		// return an error. Anyway, panicking at this point shouldn't be an issue.
+		panic(err)
+	}
+	v := u.Query()
+	v.Add("max_recv_batch_size", size)
+	u.RawQuery = v.Encode()
+	return u.String()
+}
+
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 func MustOpenTopic(url string) *pubsub.Topic {
-	url = renameURL(url)
 	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open topic %s: %s", url, err)
 	}
 	log.Debug("Opened topic %s", url)
 	return t
-}
-
-// renameURL maps from old names (omem and gcprpubsub) to new ones (mem and gcppubsub)
-func renameURL(url string) string {
-	if strings.HasPrefix(url, "gcprpubsub://") {
-		return "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
-	} else if strings.HasPrefix(url, "gcprpubsub://") {
-		return "gcppubsub://" + strings.TrimPrefix(url, "gcprpubsub://")
-	}
-	return url
 }
 
 func handleSignals(cancel context.CancelFunc, s Shutdownable) {
