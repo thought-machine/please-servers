@@ -76,12 +76,14 @@ go_module(
         "balancer/grpclb/...",
         "balancer/roundrobin",
         "binarylog/...",
+        "channelz",
         "codes",
         "connectivity",
         "credentials",
         "credentials/alts",
         "credentials/alts/...",
         "credentials/google",
+        "credentials/insecure",
         "credentials/oauth",
         "encoding",
         "encoding/gzip",
@@ -308,7 +310,7 @@ go_module(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "52a570458adc5c5c6be63b597ca60170cb199646",
+    version = "94bf9a16399445ca7dc5e4036f9d1a9d2d353d13",
 )
 
 go_module(
