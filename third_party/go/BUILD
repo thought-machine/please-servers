@@ -2,7 +2,7 @@ package(default_visibility = ["PUBLIC"])
 
 go_toolchain(
     name = "toolchain",
-    version = "1.16",
+    version = "1.19",
 )
 
 go_module(
@@ -76,12 +76,14 @@ go_module(
         "balancer/grpclb/...",
         "balancer/roundrobin",
         "binarylog/...",
+        "channelz",
         "codes",
         "connectivity",
         "credentials",
         "credentials/alts",
         "credentials/alts/...",
         "credentials/google",
+        "credentials/insecure",
         "credentials/oauth",
         "encoding",
         "encoding/gzip",
@@ -90,29 +92,7 @@ go_module(
         "health",
         "health/grpc_health_v1",
         "internal",
-        "internal/status",
-        "internal/buffer",
-        "internal/channelz",
-        "internal/grpcsync",
-        "internal/backoff",
-        "internal/resolver",
-        "internal/transport",
-        "internal/resolver/dns",
-        "internal/resolver/passthrough",
-        "internal/resolver/unix",
-        "credentials/insecure",
-        "internal/binarylog",
-        "internal/grpcrand",
-        "internal/serviceconfig",
-        "internal/balancerload",
-        "internal/grpcutil",
-        "internal/credentials",
-        "internal/grpclog",
-        "internal/metadata",
-        "internal/syscall",
-        "internal/transport/networktype",
-        "internal/envconfig",
-        "internal/googlecloud",
+        "internal/...",
         "keepalive",
         "metadata",
         "peer",
@@ -127,7 +107,12 @@ go_module(
         "tap",
     ],
     module = "google.golang.org/grpc",
-    version = "v1.45.0",
+    strip = [
+        "internal/credentials/xds",
+        "internal/testutils",
+        "internal/xds",
+    ],
+    version = "v1.48.0",
     deps = [
         ":cmp",
         ":oauth2",
@@ -326,7 +311,7 @@ go_module(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "52a570458adc5c5c6be63b597ca60170cb199646",
+    version = "94bf9a16399445ca7dc5e4036f9d1a9d2d353d13",
 )
 
 go_module(
@@ -749,7 +734,6 @@ go_module(
 
 go_module(
     name = "opentelemetry",
-    module = "go.opentelemetry.io/otel",
     install = [
         ".",
         "api/global",
@@ -763,6 +747,7 @@ go_module(
         "unit",
     ],
     licences = ["apache-2.0"],
+    module = "go.opentelemetry.io/otel",
     version = "v0.13.0",
 )
 
@@ -774,8 +759,8 @@ go_module(
 
 go_module(
     name = "rendezvous",
-    module = "github.com/dgryski/go-rendezvous",
     licences = ["mit"],
+    module = "github.com/dgryski/go-rendezvous",
     version = "9f7001d12a5f0021fd3283525f888b5814ccee27",
 )
 
