@@ -105,47 +105,18 @@ go_module(
         "tap",
     ],
     module = "google.golang.org/grpc",
+    strip = [
+        "internal/credentials/xds",
+        "internal/testutils",
+        "internal/xds",
+    ],
     version = "v1.48.0",
     deps = [
         ":cmp",
-        ":envoyproxy-control-plane",
         ":oauth2",
         ":protobuf",
         ":rpc",
         ":unix",
-    ],
-)
-
-go_module(
-    name = "envoyproxy-control-plane",
-    install = ["envoy/type/matcher/v3"],
-    module = "github.com/envoyproxy/go-control-plane",
-    version = "v0.10.3",
-    deps = [
-        ":envoyproxy-protoc-validate",
-        ":protobuf",
-        ":xds",
-    ],
-)
-
-go_module(
-    name = "envoyproxy-protoc-validate",
-    install = ["validate"],
-    module = "github.com/envoyproxy/protoc-gen-validate",
-    version = "v0.6.7",
-    deps = [
-        ":protobuf",
-    ],
-)
-
-go_module(
-    name = "xds",
-    install = ["udpa/annotations"],
-    module = "github.com/cncf/xds/go",
-    version = "v0.0.0-20220314180256-7f1daf1720fc",
-    deps = [
-        ":envoyproxy-protoc-validate",
-        ":protobuf",
     ],
 )
 
