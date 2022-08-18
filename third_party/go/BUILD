@@ -31,9 +31,9 @@ go_module(
     name = "net",
     install = ["..."],
     module = "golang.org/x/net",
-    version = "136a25c244d3019482a795d728110278d6ba09a4",
+    version = "1bab6f366d9ec8c152f8735b2e359822ef75e3bd",
     deps = [
-        ":terminal",
+        ":x_term",
         ":text",
     ],
 )
@@ -125,7 +125,7 @@ go_module(
 go_mod_download(
     name = "genproto_download",
     module = "google.golang.org/genproto",
-    version = "063164c882e6716797f16f5accd450506145132d",
+    version = "1856144b1d9c726b541e4a75f9bf7fe259ff92de",
 )
 
 go_module(
@@ -134,6 +134,7 @@ go_module(
     install = [
         "googleapis/rpc/code",
         "googleapis/rpc/status",
+        "googleapis/type/date",
     ],
     module = "google.golang.org/genproto",
     deps = [":protobuf"],
@@ -353,9 +354,11 @@ go_module(
         "internal",
         "jws",
         "jwt",
+        "authhandler",
+        "google/internal/externalaccount",
     ],
     module = "golang.org/x/oauth2",
-    version = "bf48bf16ab8d622ce64ec6ce98d2c98f916b6303",
+    version = "fd043fe589d2d1486b6af56f44a691e819752a23",
     deps = [
         ":cloud-metadata",
         ":net",
@@ -624,8 +627,9 @@ go_module(
 
 go_module(
     name = "cloud-storage",
+    install = ["..."],
     module = "cloud.google.com/go/storage",
-    version = "v1.11.0",
+    version = "v1.25.0",
     deps = [
         ":api",
         ":errgroup",
@@ -675,6 +679,7 @@ go_module(
         "calendar/v3",
         "googleapi",
         "googleapi/transport",
+        "iamcredentials/v1",
         "idtoken",
         "internal",
         "internal/gensupport",
@@ -699,7 +704,7 @@ go_module(
         "drive/v3",
     ],
     module = "google.golang.org/api",
-    version = "v0.40.0",
+    version = "v0.92.0",
     deps = [
         ":errgroup",
         ":gax-go",
@@ -707,6 +712,9 @@ go_module(
         ":go.opencensus.io",
         ":grpc",
         ":oauth2",
+        ":uuid",
+        ":enterprise-certificate-proxy",
+        ":net",
     ],
 )
 
@@ -851,4 +859,12 @@ go_module(
     version = "v0.0.7",
     visibility = ["PUBLIC"],
     deps = [":zstd"],
+)
+
+go_module(
+    name = "enterprise-certificate-proxy",
+    install = ["..."],
+    licences = ["Apache-2.0"],
+    module = "github.com/googleapis/enterprise-certificate-proxy",
+    version = "v0.1.0",
 )

@@ -1,3 +1,11 @@
+Version 9.8.0
+-------------
+    * Add version labels to blob not found metric
+    * Devendorise pubsub
+    * Deadline extension on Pub/Sub queues performed immediately
+    * Update gRPC package to 1.48
+    * Update cloud-storage to 1.25
+
 Version 9.7.11
 -------------
     * Fixing deadlocks in Purity
