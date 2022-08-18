@@ -2,7 +2,7 @@ package(default_visibility = ["PUBLIC"])
 
 go_toolchain(
     name = "toolchain",
-    version = "1.16",
+    version = "1.19",
 )
 
 go_module(
@@ -105,13 +105,47 @@ go_module(
         "tap",
     ],
     module = "google.golang.org/grpc",
-    version = "v1.36.0",
+    version = "v1.48.0",
     deps = [
         ":cmp",
+        ":envoyproxy-control-plane",
         ":oauth2",
         ":protobuf",
         ":rpc",
         ":unix",
+    ],
+)
+
+go_module(
+    name = "envoyproxy-control-plane",
+    install = ["envoy/type/matcher/v3"],
+    module = "github.com/envoyproxy/go-control-plane",
+    version = "v0.10.3",
+    deps = [
+        ":envoyproxy-protoc-validate",
+        ":protobuf",
+        ":xds",
+    ],
+)
+
+go_module(
+    name = "envoyproxy-protoc-validate",
+    install = ["validate"],
+    module = "github.com/envoyproxy/protoc-gen-validate",
+    version = "v0.6.7",
+    deps = [
+        ":protobuf",
+    ],
+)
+
+go_module(
+    name = "xds",
+    install = ["udpa/annotations"],
+    module = "github.com/cncf/xds/go",
+    version = "v0.0.0-20220314180256-7f1daf1720fc",
+    deps = [
+        ":envoyproxy-protoc-validate",
+        ":protobuf",
     ],
 )
 
@@ -719,7 +753,6 @@ go_module(
 
 go_module(
     name = "opentelemetry",
-    module = "go.opentelemetry.io/otel",
     install = [
         ".",
         "api/global",
@@ -733,6 +766,7 @@ go_module(
         "unit",
     ],
     licences = ["apache-2.0"],
+    module = "go.opentelemetry.io/otel",
     version = "v0.13.0",
 )
 
@@ -744,8 +778,8 @@ go_module(
 
 go_module(
     name = "rendezvous",
-    module = "github.com/dgryski/go-rendezvous",
     licences = ["mit"],
+    module = "github.com/dgryski/go-rendezvous",
     version = "9f7001d12a5f0021fd3283525f888b5814ccee27",
 )
 
