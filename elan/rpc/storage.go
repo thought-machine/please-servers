@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 
+	"cloud.google.com/go/storage"
 	"github.com/klauspost/compress/zstd"
 	"gocloud.dev/blob"
 )
@@ -27,6 +28,12 @@ func mustOpenStorage(url string) bucket {
 	if err != nil {
 		log.Fatalf("Failed to open storage %s: %v", url, err)
 	}
+
+	var gcsClient *storage.Client
+	if bucket.As(&gcsClient) {
+		gcsClient.SetRetry()
+	}
+
 	return &adapter{bucket: bucket}
 }
 

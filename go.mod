@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	cloud.google.com/go/pubsub v1.3.1
+	cloud.google.com/go/storage v1.25.0
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/Workiva/go-datastructures v1.0.52 // indirect
 	github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c
@@ -12,9 +13,8 @@ require (
 	github.com/dgraph-io/ristretto v0.0.3
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-redis/redis/v8 v8.8.3
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.5.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/wire v0.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/go-multierror v1.1.0
@@ -35,11 +35,11 @@ require (
 	go.uber.org/automaxprocs v1.4.0
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
-	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	google.golang.org/api v0.30.0
-	google.golang.org/genproto v0.0.0-20200904004341-0bd0a958aa1d
-	google.golang.org/grpc v1.31.1
-	google.golang.org/protobuf v1.25.0
+	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
+	google.golang.org/api v0.88.0
+	google.golang.org/genproto v0.0.0-20220720214146-176da50484ac
+	google.golang.org/grpc v1.48.0
+	google.golang.org/protobuf v1.28.0
 	gopkg.in/gcfg.v1 v1.2.3 // indirect
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 	gopkg.in/warnings.v0 v0.1.2 // indirect
@@ -47,5 +47,5 @@ require (
 
 replace (
 	github.com/bazelbuild/remote-apis v0.0.0-20201113154229-1e9ccef3705c => github.com/peterebden/remote-apis v0.0.0-20201218092846-5306a2d66a1b
-	github.com/bazelbuild/remote-apis-sdks v0.0.0-20210219194604-fdb5dae38ca8 => github.com/peterebden/remote-apis-sdks v0.0.0-20210607091647-d0d55ea13e2f
+	github.com/bazelbuild/remote-apis-sdks v0.0.0-20210219194604-fdb5dae38ca8 => github.com/peterebden/remote-apis-sdks v0.0.0-20220818131950-94bf9a163994
 )
