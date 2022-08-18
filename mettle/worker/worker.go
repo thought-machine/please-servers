@@ -91,10 +91,10 @@ var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "cache_misses_total",
 })
-var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
+var blobNotFoundErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "blob_not_found_errors_total",
-})
+}, []string{"version"})
 var packsDownloaded = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "packs_downloaded_total",
@@ -580,7 +580,7 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest, usePacks); err != nil {
 		if grpcstatus.Code(err) == codes.NotFound {
-			blobNotFoundErrors.Inc()
+			blobNotFoundErrors.WithLabelValues(w.version).Inc()
 		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
