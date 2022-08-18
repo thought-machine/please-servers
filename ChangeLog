@@ -1,4 +1,4 @@
-Version 9.7.12
+Version 9.8.0
 -------------
     * Add version labels to blob not found metric
     * Devendorise pubsub
