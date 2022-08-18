@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -180,21 +181,23 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer cancel()
+		defer wg.Done()
 		sig := <-ch
 		if immediateShutdown {
 			w.forceShutdown(fmt.Sprintf("Received shutdown signal %s, shutting down...", sig))
+			return
 		}
 		log.Warning("Received signal %s, shutting down when any in-progress task completes or times out", sig)
-		cancel()
 
-		for {
-			select {
-			case <-time.After(5 * time.Minute):
-				w.forceShutdown("Exceeded timeout, shutting down immediately...")
-			case sig = <-ch:
-				w.forceShutdown(fmt.Sprintf("Received another signal %s, shutting down immediately...", sig))
-			}
+		select {
+		case <-time.After(5 * time.Minute):
+			w.forceShutdown("Exceeded timeout, shutting down immediately...")
+		case sig = <-ch:
+			w.forceShutdown(fmt.Sprintf("Received another signal %s, shutting down immediately...", sig))
 		}
 	}()
 	go w.periodicallyPushMetrics()
@@ -209,8 +212,8 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 		w.Report(true, false, true, "Awaiting next task...")
 		_, err := w.RunTask(ctx)
 		if ctx.Err() != nil {
-			// Error came from a signal triggered above. Give a brief period to send reports then die.
-			time.Sleep(500 * time.Millisecond)
+			// Error came from a signal triggered above. Wait for graceful shutdown to complete.
+			wg.Wait()
 			return fmt.Errorf("terminated by signal")
 		}
 		if err != nil {
