@@ -462,19 +462,16 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		WorkerStartTimestamp: ptypes.TimestampNow(),
 	}
 	w.taskStartTime = time.Now()
-	req, err := readRequest(msg.Body)
-	if err != nil {
-		log.Error("Bad request: %s", err)
+	req := &pb.ExecuteRequest{}
+	if err := proto.Unmarshal(msg.Body, req); err != nil {
+		log.Error("Badly serialised request: %s")
 		return &pb.ExecuteResponse{
 			Result: &pb.ActionResult{},
-			Status: status(codes.FailedPrecondition, err.Error()),
+			Status: status(codes.FailedPrecondition, "Badly serialised request: %s", err),
 		}
 	}
-	if req != nil {
-		w.actionDigest = req.ActionDigest
-	}
-	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
 	w.actionDigest = req.ActionDigest
+	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
 	w.lastURL = w.actionURL()
 
 	action, command, status := w.fetchRequestBlobs(req)
@@ -553,15 +550,6 @@ func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.Subscr
 	}); err != nil {
 		log.Warning("Failed to extend ack deadline for %s: %s", w.actionDigest.Hash, err)
 	}
-}
-
-// readRequest unmarshals the original execution request.
-func readRequest(msg []byte) (*pb.ExecuteRequest, error) {
-	req := &pb.ExecuteRequest{}
-	if err := proto.Unmarshal(msg, req); err != nil {
-		return nil, fmt.Errorf("Badly serialised request: %s", err)
-	}
-	return req, nil
 }
 
 // fetchRequestBlobs fetches and unmarshals the action and command for an execution request.
