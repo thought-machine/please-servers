@@ -1,3 +1,7 @@
+Version 9.8.1
+-------------
+    * Add logging on worker shutdown and shutting down queues
+
 Version 9.8.0
 -------------
     * Add version labels to blob not found metric
