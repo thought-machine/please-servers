@@ -395,6 +395,7 @@ type worker struct {
 
 // ShutdownQueues shuts down the internal topic & subscription when done.
 func (w *worker) ShutdownQueues() {
+	log.Notice("Shutting down queues")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := w.responses.Shutdown(ctx); err != nil {
