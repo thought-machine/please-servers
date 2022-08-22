@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -15,7 +16,9 @@ import (
 // If the URL is prefixed by a protocol (grpc:// or grpcs://) that overrides the TLS flag.
 func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn, error) {
 	address, tls = parseAddress(address, tls)
-	return grpc.Dial(address, append(DialOptions(tokenFile), tlsOpt(tls, caFile))...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return grpc.DialContext(ctx, address, append(DialOptions(tokenFile), grpc.WithReturnConnectionError(), tlsOpt(tls, caFile))...)
 }
 
 // DialOptions returns some common dial options.
