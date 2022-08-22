@@ -18,7 +18,7 @@ func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn,
 	address, tls = parseAddress(address, tls)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return grpc.DialContext(ctx, address, append(DialOptions(tokenFile), grpc.WithBlock(), tlsOpt(tls, caFile))...)
+	return grpc.DialContext(ctx, address, append(DialOptions(tokenFile), grpc.WithReturnConnectionError(), tlsOpt(tls, caFile))...)
 }
 
 // DialOptions returns some common dial options.
