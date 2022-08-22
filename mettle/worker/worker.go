@@ -91,10 +91,10 @@ var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "cache_misses_total",
 })
-var blobNotFoundErrors = prometheus.NewCounter(prometheus.CounterOpts{
+var blobNotFoundErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "blob_not_found_errors_total",
-})
+}, []string{"version"})
 var packsDownloaded = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "packs_downloaded_total",
@@ -135,9 +135,8 @@ func init() {
 
 // RunForever runs the worker, receiving jobs until terminated.
 func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) {
-	if err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension, immediateShutdown); err != nil {
-		log.Fatalf("Failed to run: %s", err)
-	}
+	err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, redis, redisPassword, redisTLS, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension, immediateShutdown)
+	log.Fatalf("Failed to run: %s", err)
 }
 
 // RunOne runs one single request, returning any error received.
@@ -395,6 +394,7 @@ type worker struct {
 
 // ShutdownQueues shuts down the internal topic & subscription when done.
 func (w *worker) ShutdownQueues() {
+	log.Notice("Shutting down queues")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := w.responses.Shutdown(ctx); err != nil {
@@ -462,10 +462,19 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		WorkerStartTimestamp: ptypes.TimestampNow(),
 	}
 	w.taskStartTime = time.Now()
-	req, action, command, status := w.readRequest(msg.Body)
-	if req != nil {
-		w.actionDigest = req.ActionDigest
+	req := &pb.ExecuteRequest{}
+	if err := proto.Unmarshal(msg.Body, req); err != nil {
+		log.Error("Badly serialised request: %s")
+		return &pb.ExecuteResponse{
+			Result: &pb.ActionResult{},
+			Status: status(codes.FailedPrecondition, "Badly serialised request: %s", err),
+		}
 	}
+	w.actionDigest = req.ActionDigest
+	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
+	w.lastURL = w.actionURL()
+
+	action, command, status := w.fetchRequestBlobs(req)
 	if status != nil {
 		log.Error("Bad request: %s", status)
 		return &pb.ExecuteResponse{
@@ -473,9 +482,6 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 			Status: status,
 		}
 	}
-	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
-	w.actionDigest = req.ActionDigest
-	w.lastURL = w.actionURL()
 	if status := w.prepareDir(action, command); status != nil {
 		log.Warning("Failed to prepare directory for action digest %s: %s", w.actionDigest.Hash, status)
 		ar := &pb.ActionResult{
@@ -494,7 +500,13 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 // forceShutdown sends any shutdown reports and calls log.Fatal() to shut down the worker
 func (w *worker) forceShutdown(shutdownMsg string) {
 	w.Report(false, false, false, shutdownMsg)
+	log.Info("Force shutting down worker")
 	if w.currentMsg != nil {
+		if w.actionDigest != nil {
+			log.Infof("Nacking action: %s", w.actionDigest.Hash)
+		} else {
+			log.Error("Nacking action but action digest is nil")
+		}
 		w.currentMsg.Nack()
 	}
 	log.Fatal(shutdownMsg)
@@ -508,11 +520,13 @@ func (w *worker) extendAckDeadline(ctx context.Context, msg *pubsub.Message) {
 		log.Warning("Failed to convert message to a *ReceivedMessage, cannot extend ack deadline")
 		return
 	}
+	ackID := rm.AckId
 	var client *psraw.SubscriberClient
 	if !w.requests.As(&client) {
 		log.Warning("Failed to convert subscription to a *SubscriberClient, cannot extend ack deadline")
 		return
 	}
+	w.extendAckDeadlineOnce(ctx, client, ackID)
 	t := time.NewTicker(w.ackExtension / 2) // Extend twice as frequently as the deadline expiry
 	defer t.Stop()
 	for {
@@ -520,7 +534,7 @@ func (w *worker) extendAckDeadline(ctx context.Context, msg *pubsub.Message) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			w.extendAckDeadlineOnce(ctx, client, rm.AckId)
+			w.extendAckDeadlineOnce(ctx, client, ackID)
 		}
 	}
 }
@@ -538,21 +552,18 @@ func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.Subscr
 	}
 }
 
-// readRequest unmarshals the original execution request.
-func (w *worker) readRequest(msg []byte) (*pb.ExecuteRequest, *pb.Action, *pb.Command, *rpcstatus.Status) {
-	req := &pb.ExecuteRequest{}
+// fetchRequestBlobs fetches and unmarshals the action and command for an execution request.
+func (w *worker) fetchRequestBlobs(req *pb.ExecuteRequest) (*pb.Action, *pb.Command, *rpcstatus.Status) {
 	action := &pb.Action{}
 	command := &pb.Command{}
-	if err := proto.Unmarshal(msg, req); err != nil {
-		return nil, nil, nil, status(codes.FailedPrecondition, "Badly serialised request: %s", err)
-	} else if err := w.readBlobToProto(req.ActionDigest, action); err != nil {
-		return req, nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
+	if err := w.readBlobToProto(req.ActionDigest, action); err != nil {
+		return nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
 	} else if err := w.readBlobToProto(action.CommandDigest, command); err != nil {
-		return req, nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
+		return nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
 	} else if err := common.CheckOutputPaths(command); err != nil {
-		return req, nil, nil, status(codes.InvalidArgument, "Invalid command outputs: %s", err)
+		return nil, nil, status(codes.InvalidArgument, "Invalid command outputs: %s", err)
 	}
-	return req, action, command, nil
+	return action, command, nil
 }
 
 // prepareDir prepares the directory for executing this request.
@@ -578,7 +589,7 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest, usePacks); err != nil {
 		if grpcstatus.Code(err) == codes.NotFound {
-			blobNotFoundErrors.Inc()
+			blobNotFoundErrors.WithLabelValues(w.version).Inc()
 		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
