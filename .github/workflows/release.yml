@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: thoughtmachine/please-servers:20220816
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' && needs.test.result == 'success'
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
