@@ -1,3 +1,7 @@
+Version 9.9.0
+-------------
+    * Pushed metrics now include the worker name as a label.
+
 Version 9.8.2
 -------------
     * Add return with error connection option to grpc dial
