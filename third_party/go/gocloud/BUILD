@@ -26,7 +26,6 @@ go_module(
     ],
     module = "gocloud.dev",
     version = "v0.26.0",
-    visibility = ["PUBLIC"],
     deps = [
         ":wire",
         ":x_errors",
@@ -34,9 +33,11 @@ go_module(
         "//third_party/go:cloud_pubsub",
         "//third_party/go:gax-go",
         "//third_party/go:go.opencensus.io",
-        "//third_party/go:google-cloud-go",
-        "//third_party/go:grpc",
-        "//third_party/go:oauth2",
+        "//third_party/go:api",
+        "//third_party/go:gcp_iam",
+#        "//third_party/go:google-cloud-go",
+#        "//third_party/go:grpc",
+#        "//third_party/go:oauth2",
     ],
 )
 

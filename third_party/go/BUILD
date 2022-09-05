@@ -63,63 +63,198 @@ go_module(
     ],
 )
 
+go_mod_download(
+    name = "grpc_download",
+    licences = ["Apache-2.0"],
+    module = "google.golang.org/grpc",
+    version = "v1.45.0",
+)
+
 go_module(
     name = "grpc",
-    exported_deps = [":net"],
+    download = ":grpc_download",
+    exported_deps = [
+        ":net",
+        ":grpc_metadata",
+        ":grpc_sub",
+    ],
     install = [
-        ".",
         "attributes",
         "backoff",
         "balancer",
         "balancer/base",
-        "balancer/grpclb",
         "balancer/grpclb/...",
         "balancer/roundrobin",
         "binarylog/...",
-        "channelz",
-        "codes",
         "connectivity",
-        "credentials",
-        "credentials/alts",
-        "credentials/alts/...",
-        "credentials/google",
-        "credentials/insecure",
-        "credentials/oauth",
+        "credentials/...",
         "encoding",
         "encoding/gzip",
         "encoding/proto",
         "grpclog",
         "health",
         "health/grpc_health_v1",
-        "internal",
         "internal/...",
         "keepalive",
-        "metadata",
+        "naming",
         "peer",
-        "reflection",
         "reflection/...",
+        "reflection/grpc_reflection_v1alpha",
         "resolver",
         "resolver/dns",
+        "resolver/manual",
         "resolver/passthrough",
         "serviceconfig",
         "stats",
-        "status",
         "tap",
-    ],
+        "test/bufconn",
+        "credentials",
+        "internal",
+        "reflection",
+   ],
     module = "google.golang.org/grpc",
-    strip = [
-        "internal/credentials/xds",
-        "internal/testutils",
-        "internal/xds",
-    ],
-    version = "v1.48.0",
+    visibility = ["PUBLIC"],
     deps = [
         ":cmp",
         ":oauth2",
         ":protobuf",
         ":rpc",
         ":unix",
+        ":go-control-plane",
+        ":go-control-plane-rbac",
+        ":go-control-plane-types",
     ],
+)
+
+go_mod_download(
+    name = "go-control-plane_download",
+    licences = ["Apache-2.0"],
+    module = "github.com/envoyproxy/go-control-plane",
+    version = "v0.10.1",
+)
+
+go_module(
+    name = "go-control-plane-rbac",
+    download = ":go-control-plane_download",
+    install = [
+        "envoy/config/rbac/v3",
+    ],
+    module = "github.com/envoyproxy/go-control-plane",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":genproto_gcp_api-v1alpha1",
+        ":go-control-plane-annotations",
+    ],
+)
+
+go_module(
+    name = "genproto_gcp_api-v1alpha1",
+    download = ":genproto_download",
+    install = [
+        "googleapis/api/expr/v1alpha1/...",
+    ],
+    module = "google.golang.org/genproto",
+    strip = ["googleapis/rpc/..."],
+    deps = [
+        ":protobuf",
+    ],
+)
+
+go_module(
+    name = "go-control-plane",
+    download = ":go-control-plane_download",
+    install = [
+        "envoy/config/core/v3/...",
+    ],
+    module = "github.com/envoyproxy/go-control-plane",
+    deps = [
+        ":protobuf",
+        ":protoc-gen-validate-envoy",
+        ":xds",
+    ],
+)
+
+go_module(
+    name = "go-control-plane-annotations",
+    download = ":go-control-plane_download",
+    install = [
+        "envoy/annotations",
+    ],
+    module = "github.com/envoyproxy/go-control-plane",
+    deps = [
+        ":protobuf",
+        ":protoc-gen-validate-envoy",
+        ":xds",
+    ],
+)
+
+go_module(
+    name = "go-control-plane-types",
+    download = ":go-control-plane_download",
+    install = [
+        "envoy/config/route/v3",
+        "envoy/type/matcher/v3",
+        "envoy/type/v3",
+    ],
+    module = "github.com/envoyproxy/go-control-plane",
+    deps = [
+        ":protobuf",
+        ":xds",
+    ],
+)
+
+go_module(
+    name = "xds",
+    install = [
+        "udpa/annotations/...",
+        "xds/core/v3",
+        "xds/annotations/v3",
+        "xds/type/matcher/v3",
+    ],
+    licences = ["Apache-2.0"],
+    module = "github.com/cncf/xds/go",
+    version = "v0.0.0-20211001041855-01bcc9b48dfe",
+    deps = [
+        ":protobuf",
+        ":protoc-gen-validate-envoy",
+    ],
+)
+
+go_module(
+    name = "protoc-gen-validate-envoy",
+    install = ["validate"],
+    licences = ["Apache-2.0"],
+    module = "github.com/envoyproxy/protoc-gen-validate",
+    version = "v0.6.1",
+    deps = [":protobuf"],
+)
+
+go_module(
+    name = "grpc_metadata",
+    download = ":grpc_download",
+    install = [
+        "metadata",
+    ],
+    module = "google.golang.org/grpc",
+    deps = [],
+)
+
+
+go_module(
+    name = "grpc_sub",
+    download = ":grpc_download",
+    exported_deps = [
+        ":protobuf",
+        ":net",
+        ":rpc",
+    ],
+    install = [
+        "",
+        "codes",
+        "status",
+    ],
+    module = "google.golang.org/grpc",
+    deps = [],
 )
 
 go_mod_download(
@@ -358,10 +493,10 @@ go_module(
         "google/internal/externalaccount",
     ],
     module = "golang.org/x/oauth2",
-    version = "fd043fe589d2d1486b6af56f44a691e819752a23",
+    version = "v0.0.0-20220309155454-6242fa91716a",
     deps = [
-        ":cloud-metadata",
         ":net",
+        ":cloud-metadata",
     ],
 )
 
@@ -576,22 +711,55 @@ go_module(
 go_mod_download(
     name = "cloud_download",
     module = "cloud.google.com/go",
-    version = "v0.78.0",
+    version = "v0.104.0",
 )
 
 go_module(
     name = "cloud-metadata",
-    download = ":cloud_download",
-    install = ["compute/metadata"],
-    module = "cloud.google.com/go",
+    version = "v1.9.0",
+    install = [
+        "metadata",
+    ],
+    module = "cloud.google.com/go/compute",
+    deps = [
+        ":gax-go",
+        ":grpc_metadata",
+    ],
 )
 
 go_module(
-    name = "google-cloud-go",
+    name = "gcp_iam",
+    install = ["..."],
+    module = "cloud.google.com/go/iam",
+    version = "v0.3.0",
+    deps = [
+        ":gax-go",
+        ":grpc_metadata",
+        ":genproto",
+        ":api",
+        ":genproto_gcp_iam",
+    ],
+)
+
+go_module(
+    name = "genproto_gcp_iam",
+    download = ":genproto_download",
+    install = [
+        "googleapis/iam/admin/v1",
+    ],
+    module = "google.golang.org/genproto",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":grpc",
+        ":protobuf",
+    ],
+)
+
+
+go_module(
+    name = "gcp_internal",
     download = ":cloud_download",
     install = [
-        "iam",
-        "iam/credentials/...",
         "internal",
         "internal/optional",
         "internal/pubsub",
@@ -602,26 +770,37 @@ go_module(
     deps = [
         ":api",
         ":errgroup",
-        ":gax-go",
         ":genproto",
         ":go.opencensus.io",
+        ":x_errors",
     ],
+)
+
+go_module(
+    name = "x_errors",
+    install = [
+        ".",
+        "...",
+    ],
+    module = "golang.org/x/xerrors",
+    version = "a5947ffaace3e882f334c1750858b4a6a7e52422",
+    deps = [":unix"],
 )
 
 go_module(
     name = "cloud_pubsub",
     install = [
-        ".",
         "apiv1",
     ],
     module = "cloud.google.com/go/pubsub",
-    version = "v1.10.0",
+    version = "v1.19.0",
     deps = [
         ":api",
         ":gax-go",
         ":genproto",
         ":go.opencensus.io",
-        ":google-cloud-go",
+        ":gcp_iam",
+        ":gcp_internal",
     ],
 )
 
@@ -636,16 +815,18 @@ go_module(
         ":gax-go",
         ":genproto",
         ":go.opencensus.io",
-        ":google-cloud-go",
+        ":gcp_iam",
+        ":gcp_internal",
     ],
 )
 
 go_module(
     name = "gax-go",
+    install = [""],
     module = "github.com/googleapis/gax-go/v2",
     version = "v2.0.5",
     deps = [
-        ":grpc",
+        ":grpc_sub",
     ],
 )
 
@@ -679,6 +860,7 @@ go_module(
         "calendar/v3",
         "googleapi",
         "googleapi/transport",
+        "iam/...",
         "iamcredentials/v1",
         "idtoken",
         "internal",
@@ -708,8 +890,8 @@ go_module(
     deps = [
         ":errgroup",
         ":gax-go",
-        ":genproto",
         ":go.opencensus.io",
+        ":genproto",
         ":grpc",
         ":oauth2",
         ":uuid",
