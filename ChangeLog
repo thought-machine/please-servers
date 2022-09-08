@@ -1,3 +1,7 @@
+Version 9.9.1
+-------------
+    * Return writer close errors in uploadOne()
+
 Version 9.9.0
 -------------
     * Pushed metrics now include the worker name as a label.
