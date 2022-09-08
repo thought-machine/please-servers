@@ -110,7 +110,9 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 	}
 
 	defer func() {
-		err = wr.Close()
+		if closeErr := wr.Close(); closeErr != nil {
+			err = closeErr
+		}
 	}()
 
 	w := e.s.compressWriter(wr, compressed)
