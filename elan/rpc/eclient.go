@@ -103,7 +103,11 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 	wr, err := e.s.bucket.NewWriter(ctx, key, &blob.WriterOptions{BufferSize: e.s.bufferSize(entry.Digest.ToProto())})
 	if err != nil {
 		return err
