@@ -79,7 +79,7 @@ func (e *elanClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	return g.Wait()
 }
 
-func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
+func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 	if entry.Digest.Hash == digest.Empty.Hash {
 		return nil
 	}
@@ -108,9 +108,14 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) error {
 	if err != nil {
 		return err
 	}
-	defer wr.Close()
+
+	defer func() {
+		err = wr.Close()
+	}()
+
 	w := e.s.compressWriter(wr, compressed)
 	if _, err := io.Copy(w, f); err != nil {
+		// cancel the context before wr.Close()
 		cancel()
 		return err
 	}
