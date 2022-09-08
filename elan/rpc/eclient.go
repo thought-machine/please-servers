@@ -110,7 +110,7 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 	}
 
 	defer func() {
-		if closeErr := wr.Close(); closeErr != nil {
+		if closeErr := wr.Close(); err == nil {
 			err = closeErr
 		}
 	}()
