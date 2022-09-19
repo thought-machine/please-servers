@@ -229,6 +229,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 	resp := &pb.BatchUpdateBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
+	m := make(map[string][]*pb.BatchUpdateBlobsResponse_Response, len(blobs) * s.replicator.Replicas)
 	for srv, rs := range blobs {
 		srv := srv
 		rs := rs
@@ -245,12 +246,27 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				}
 				mutex.Lock()
 				defer mutex.Unlock()
-				resp.Responses = append(resp.Responses, r.Responses...)
+				for _, resp := range r.Responses {
+					m[resp.Digest.Hash] = append(m[resp.Digest.Hash], resp)
+				}
 				return nil
 			})
 		})
 	}
-	return resp, g.Wait()
+	err := g.Wait()
+	chooseResponse := func(v []*pb.BatchUpdateBlobsResponse_Response) *pb.BatchUpdateBlobsResponse_Response {
+		for _, r := range v {
+			if r.Status.Code == int32(codes.OK) {
+				return r
+			}
+		}
+		// Not ideal but just return the first one so it has a sensible code.
+		return v[0]
+	}
+	for _, v := range m {
+		resp.Responses = append(resp.Responses, chooseResponse(v))
+	}
+	return resp, err
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
