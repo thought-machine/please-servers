@@ -229,7 +229,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 	resp := &pb.BatchUpdateBlobsResponse{}
 	var g errgroup.Group
 	var mutex sync.Mutex
-	m := make(map[string][]*pb.BatchUpdateBlobsResponse_Response, len(blobs) * s.replicator.Replicas)
+	m := make(map[string][]*pb.BatchUpdateBlobsResponse_Response, len(blobs)*s.replicator.Replicas)
 	for srv, rs := range blobs {
 		srv := srv
 		rs := rs
