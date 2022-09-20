@@ -1,3 +1,7 @@
+Version 9.9.2
+-------------
+    * Improvements to BatchUpdateBlobs fan-out logic in Flair.
+
 Version 9.9.1
 -------------
     * Return writer close errors in uploadOne()
