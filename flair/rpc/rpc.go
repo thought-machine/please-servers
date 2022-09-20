@@ -261,6 +261,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			}
 		}
 		// Not ideal but just return the first one so it has a sensible code.
+		log.Error("BatchUpdateBlobs failed to all replicas: %s", v)
 		return v[0]
 	}
 	for _, v := range m {
