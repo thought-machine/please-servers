@@ -1,3 +1,8 @@
+Version 9.9.3
+-------------
+    * Reverted change from 9.8.2 to return with error connection option to
+	grpc dial.
+
 Version 9.9.2
 -------------
     * Improvements to BatchUpdateBlobs fan-out logic in Flair.
