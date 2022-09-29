@@ -48,6 +48,8 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, re
 		return err
 	} else if err := gc.LoadAllBlobs(); err != nil {
 		return err
+	} else if err := gc.RemoveActionResults(); err != nil {
+		return err
 	} else if err := gc.MarkReferencedBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBlobs(); err != nil {
@@ -125,21 +127,22 @@ type Action struct {
 }
 
 type collector struct {
-	client          *client.Client
-	gcclient        ppb.GCClient
-	actionResults   []*ppb.ActionResult
-	allBlobs        map[string]int64
-	actionSizes     map[string]int64
-	referencedBlobs map[string]struct{}
-	brokenResults   map[string]int64
-	inputSizes      map[string]int
-	outputSizes     map[string]int
-	actionRFs       map[string]int
-	blobRFs         map[string]int
-	mutex           sync.Mutex
-	ageThreshold    int64
-	missingInputs   int64
-	dryRun          bool
+	client            *client.Client
+	gcclient          ppb.GCClient
+	actionResults     []*ppb.ActionResult
+	liveActionResults map[string]int64
+	allBlobs          map[string]int64
+	actionSizes       map[string]int64
+	referencedBlobs   map[string]struct{}
+	brokenResults     map[string]int64
+	inputSizes        map[string]int
+	outputSizes       map[string]int
+	actionRFs         map[string]int
+	blobRFs           map[string]int
+	mutex             sync.Mutex
+	ageThreshold      int64
+	missingInputs     int64
+	dryRun            bool
 }
 
 func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
@@ -148,11 +151,12 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		return nil, err
 	}
 	return &collector{
-		client:      client,
-		gcclient:    ppb.NewGCClient(client.Connection),
-		dryRun:      dryRun,
-		allBlobs:    map[string]int64{},
-		actionSizes: map[string]int64{},
+		client:            client,
+		gcclient:          ppb.NewGCClient(client.Connection),
+		dryRun:            dryRun,
+		allBlobs:          map[string]int64{},
+		actionSizes:       map[string]int64{},
+		liveActionResults: map[string]int64{},
 		referencedBlobs: map[string]struct{}{
 			digest.Empty.Hash: {}, // The empty blob always counts as referenced.
 		},
@@ -234,14 +238,7 @@ func (c *collector) MarkReferencedBlobs() error {
 	for i := 0; i < (parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
-				// Temporary logging for debug purposes
-				if c.shouldDelete(ar) {
-					accessed := time.Unix(ar.LastAccessed, 0)
-					threshold := time.Unix(c.ageThreshold, 0)
-					log.Debug("Should delete action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
-				}
-				// End temporary logging
-				if !c.shouldDelete(ar) {
+				if _, present := c.liveActionResults[ar.Hash]; present {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Debug("Failed to find referenced blobs for %s: %s", ar.Hash, err)
@@ -275,7 +272,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	}
 	outputSize, digests, err := c.outputs(result)
 	if err != nil {
-		log.Warning("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
+		log.Debug("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
 		return err
 	}
 	// Check whether all these outputs exist.
@@ -284,7 +281,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 		BlobDigests:  digests,
 	})
 	if err != nil {
-		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
+		log.Debug("Failed to check blob digests for %s: %s", ar.Hash, err)
 	}
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
@@ -463,23 +460,56 @@ func (c *collector) checkDirectories(dirs []*pb.Directory) {
 	}
 }
 
-func (c *collector) RemoveBlobs() error {
-	log.Notice("Determining blobs to remove...")
-	blobs := map[string][]*ppb.Blob{}
-	ars := map[string][]*ppb.Blob{}
+func (c *collector) RemoveActionResults() error {
+	log.Notice("Determining action results to remove...")
+	ars := []*ppb.Blob{}
 	numArs := 0
-	numBlobs := 0
 	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
 			log.Debug("Identified action result %s for deletion", ar.Hash)
-			key := ar.Hash[:2]
-			ars[key] = append(ars[key], &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
-			delete(c.actionRFs, ar.Hash)
+			ars = append(ars, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
 			totalSize += ar.SizeBytes
 			numArs++
+		} else {
+			c.liveActionResults[ar.Hash] = ar.SizeBytes
 		}
 	}
+	if c.dryRun {
+		log.Notice("Would delete %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
+		return nil
+	}
+	log.Notice("Deleting %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
+	ch := newProgressBar("Deleting blobs", 256)
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	var merr *multierror.Error
+	for _, ar := range ars {
+		log.Debug("Removing action result %s", ar.Hash)
+		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+			Prefix:        ar.Hash[:2],
+			ActionResults: []*ppb.Blob{ar},
+			Hard:          true,
+		}); err != nil {
+			log.Debug("Failed to delete action result %s marking as live", ar.Hash)
+			c.liveActionResults[ar.Hash] = ar.SizeBytes
+			c.actionRFs[ar.Hash] = 2
+			merr = multierror.Append(merr, err)
+		}
+		ch <- 1
+	}
+	return merr.ErrorOrNil()
+}
+
+func (c *collector) RemoveBlobs() error {
+	log.Notice("Determining blobs to remove...")
+	blobs := map[string][]*ppb.Blob{}
+	numBlobs := 0
+	var totalSize int64
 	for hash, size := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
 			log.Debug("Identified blob %s for deletion", hash)
@@ -491,10 +521,10 @@ func (c *collector) RemoveBlobs() error {
 		}
 	}
 	if c.dryRun {
-		log.Notice("Would delete %d action results and %d blobs, total size %s", numArs, numBlobs, humanize.Bytes(uint64(totalSize)))
+		log.Notice("Would delete %d blobs, total size %s", numBlobs, humanize.Bytes(uint64(totalSize)))
 		return nil
 	}
-	log.Notice("Deleting %d action results and %d blobs, total size %s", numArs, numBlobs, humanize.Bytes(uint64(totalSize)))
+	log.Notice("Deleting %d blobs, total size %s", numBlobs, humanize.Bytes(uint64(totalSize)))
 	ch := newProgressBar("Deleting blobs", 256)
 	defer func() {
 		close(ch)
@@ -510,9 +540,8 @@ func (c *collector) RemoveBlobs() error {
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 				defer cancel()
 				_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-					Prefix:        key,
-					Blobs:         blobs[key],
-					ActionResults: ars[key],
+					Prefix: key,
+					Blobs:  blobs[key],
 				})
 				if err != nil {
 					me = multierror.Append(me, err)
