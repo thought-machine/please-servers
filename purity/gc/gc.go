@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -297,7 +298,11 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	c.inputSizes[ar.Hash] = int(inputSize)
 	c.outputSizes[ar.Hash] = int(outputSize)
 	if resp != nil && len(resp.MissingBlobDigests) > 0 {
-		return fmt.Errorf("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
+		digests := make([]string, len(resp.MissingBlobDigests))
+		for i, dg := range resp.MissingBlobDigests {
+			digests[i] = fmt.Sprintf("%s/%d", dg.Hash, dg.SizeBytes)
+		}
+		return fmt.Errorf("Action result %s is missing %d digests: %s", ar.Hash, len(resp.MissingBlobDigests), strings.Join(digests, ", "))
 	}
 	return nil
 }
