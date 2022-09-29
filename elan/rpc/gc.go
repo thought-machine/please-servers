@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path"
 	"strings"
@@ -85,13 +86,17 @@ func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob
 	var me *multierror.Error
 	for _, blob := range blobs {
 		key := s.key(prefix, &pb.Digest{Hash: blob.Hash, SizeBytes: blob.SizeBytes})
-		if exists, _ := s.bucket.Exists(ctx, key); exists {
+		if exists, err := s.bucket.Exists(ctx, key); exists {
 			if err := s.bucket.Delete(ctx, key, hard); err != nil {
 				me = multierror.Append(me, err)
 			}
 			if s.knownBlobCache != nil {
 				s.knownBlobCache.Del(key)
 			}
+		} else if err != nil {
+			me = multierror.Append(me, err)
+		} else {
+			me = multierror.Append(me, fmt.Errorf("Blob not found: %s", key))
 		}
 	}
 	return me.ErrorOrNil()
