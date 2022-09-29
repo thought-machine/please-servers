@@ -1,3 +1,7 @@
+Version 9.9.4
+-------------
+    * Return blob not found error from elan gc delete.
+
 Version 9.9.3
 -------------
     * Reverted change from 9.8.2 to return with error connection option to
