@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path"
 	"strings"
@@ -95,7 +96,7 @@ func (s *server) deleteAll(ctx context.Context, prefix string, blobs []*ppb.Blob
 		} else if err != nil {
 			me = multierror.Append(me, err)
 		} else {
-			me = multierror.Append(me, fmt.Error("Blob not found: %s", key))
+			me = multierror.Append(me, fmt.Errorf("Blob not found: %s", key))
 		}
 	}
 	return me.ErrorOrNil()
