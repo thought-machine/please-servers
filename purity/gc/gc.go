@@ -55,7 +55,7 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, re
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBrokenBlobs(); err != nil {
-		return err
+		log.Notice("Failed to remove broken blobs: %v", err)
 	} else if err := gc.ReplicateBlobs(replicationFactor); err != nil {
 		return err
 	}
@@ -487,7 +487,6 @@ func (c *collector) RemoveActionResults() error {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	var merr *multierror.Error
 	for _, ar := range ars {
 		log.Debug("Removing action result %s", ar.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
@@ -495,14 +494,16 @@ func (c *collector) RemoveActionResults() error {
 			ActionResults: []*ppb.Blob{ar},
 			Hard:          true,
 		}); err != nil {
-			log.Debug("Failed to delete action result %s marking as live", ar.Hash)
+			log.Debug("Failed to delete action result %s marking as live: %w", ar.Hash, err)
 			c.liveActionResults[ar.Hash] = ar.SizeBytes
-			c.actionRFs[ar.Hash] = 2
 			merr = multierror.Append(merr, err)
+		} else {
+			log.Debug("Deleted action result: %s", ar.Hash)
+			delete(c.actionRFs, ar.Hash)
 		}
 		ch <- 1
 	}
-	return merr.ErrorOrNil()
+	return nil
 }
 
 func (c *collector) RemoveBlobs() error {
@@ -551,13 +552,17 @@ func (c *collector) RemoveBlobs() error {
 			return me.ErrorOrNil()
 		})
 	}
-	return g.Wait().ErrorOrNil()
+	if err := g.Wait().ErrorOrNil(); err != nil {
+		log.Debug("Failed to delete blobs: %v", err)
+	}
+	return nil
 }
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
 }
 
+//RemoveSpecificBlobs removes blobs from the cache. It's best effort and returns a multierror or nil
 func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	for _, d := range digests {
 		delete(c.actionRFs, d.Hash)
@@ -580,6 +585,7 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	var merr *multierror.Error
 	for _, digest := range digests {
 		log.Debug("Removing action result %s", digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
@@ -587,11 +593,11 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
 			Hard:          true,
 		}); err != nil {
-			return err
+			merr = multierror.Append(merr, err)
 		}
 		ch <- 1
 	}
-	return nil
+	return merr.ErrorOrNil()
 }
 
 // RemoveBrokenBlobs removes any blobs previously marked as broken.
