@@ -556,7 +556,7 @@ func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
 }
 
-//RemoveSpecificBlobs removes blobs from the cache. It's best effort and returns a multierror or nil
+// RemoveSpecificBlobs removes blobs from the cache. It's best effort and returns a multierror or nil
 func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	for _, d := range digests {
 		delete(c.actionRFs, d.Hash)
