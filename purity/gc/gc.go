@@ -144,6 +144,7 @@ type collector struct {
 	ageThreshold      int64
 	missingInputs     int64
 	dryRun            bool
+	parallelism       int
 }
 
 func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
@@ -168,6 +169,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		actionRFs:     map[string]int{},
 		blobRFs:       map[string]int{},
 		ageThreshold:  time.Now().Add(-minAge).Unix(),
+		parallelism:   16,
 	}, nil
 }
 
@@ -221,8 +223,6 @@ func min(a, b int) int {
 }
 
 func (c *collector) MarkReferencedBlobs() error {
-	// Get a little bit of parallelism here, but not too much.
-	const parallelism = 16
 	log.Notice("Finding referenced blobs...")
 	ch := newProgressBar("Checking action results", len(c.actionResults))
 	var live int64
@@ -236,9 +236,9 @@ func (c *collector) MarkReferencedBlobs() error {
 	}()
 	var wg sync.WaitGroup
 	// Loop one extra time to catch the remaining ars as the step size is rounded down
-	wg.Add(parallelism + 1)
-	step := len(c.actionResults) / parallelism
-	for i := 0; i < (parallelism + 1); i++ {
+	wg.Add(c.parallelism + 1)
+	step := len(c.actionResults) / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				if _, present := c.liveActionResults[ar.Hash]; present {
@@ -531,12 +531,10 @@ func (c *collector) RemoveBlobs() error {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
 	}()
-	const parallelism = 16
 	var wg sync.WaitGroup
-	// Loop one extra time to catch the remaining blobs as the step size is rounded down
-	wg.Add(parallelism + 1)
-	step := len(c.actionResults) / parallelism
-	for i := 0; i < (parallelism + 1); i++ {
+	wg.Add(c.parallelism + 1)
+	step := len(c.actionResults) / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(blobs []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
@@ -585,7 +583,6 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	for _, digest := range digests {
 		log.Debug("Removing action result %s", digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-			Prefix:        digest.Hash[:2],
 			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
 			Hard:          true,
 		}); err != nil {
@@ -740,8 +737,6 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		}
 	}
 
-	// Get a little bit of parallelism here, but not too much.
-	const parallelism = 16
 	log.Notice("Finding all input blobs...")
 	ch := newProgressBar("Searching input actions", len(c.actionResults))
 	defer func() {
@@ -750,9 +745,9 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	}()
 	var wg sync.WaitGroup
 	// Loop one extra time to catch the remaining ars as the step size is rounded down
-	wg.Add(parallelism + 1)
-	step := len(c.actionResults) / parallelism
-	for i := 0; i < (parallelism + 1); i++ {
+	wg.Add(c.parallelism + 1)
+	step := len(c.actionResults) / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				_, dirs, digest := c.inputDirs(&pb.Digest{
