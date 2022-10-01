@@ -127,13 +127,10 @@ var metrics = []prometheus.Collector{
 	collectOutputErrors,
 }
 
-func registerMetrics(name string, addName bool) {
-	r := prometheus.DefaultRegisterer
-	if addName {
-		r = prometheus.WrapRegistererWith(prometheus.Labels{
-			"worker": name,
-		}, r)
-	}
+func registerMetrics(name string) {
+	r := prometheus.WrapRegistererWith(prometheus.Labels{
+		"worker": name,
+	}, prometheus.DefaultRegisterer)
 	for _, metric := range metrics {
 		r.MustRegister(metric)
 	}
@@ -346,7 +343,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
-	registerMetrics(name, promGatewayURL != "")
+	registerMetrics(name)
 	for name, cost := range costs {
 		w.costs[name] = &bbru.MonetaryResourceUsage_Expense{Currency: cost.Denomination, Cost: cost.Amount}
 	}
