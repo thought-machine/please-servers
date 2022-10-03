@@ -488,22 +488,32 @@ func (c *collector) RemoveActionResults() error {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	for _, ar := range ars {
-		log.Debug("Removing action result %s", ar.Hash)
-		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-			ActionResults: []*ppb.Blob{ar},
-			Hard:          true,
-		}); err != nil {
-			log.Debug("Failed to delete action result %s marking as live: %w", ar.Hash, err)
-			c.liveActionResults[ar.Hash] = ar.SizeBytes
-		} else {
-			log.Debug("Deleted action result: %s", ar.Hash)
-			delete(c.actionRFs, ar.Hash)
-		}
-		ch <- 1
+	var wg sync.WaitGroup
+	wg.Add(c.parallelism + 1)
+	step := numArs / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
+		go func(ars []*ppb.Blob) {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+			defer cancel()
+			for _, ar := range ars {
+				log.Debug("Removing action result %s", ar.Hash)
+				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+					ActionResults: []*ppb.Blob{ar},
+					Hard:          true,
+				}); err != nil {
+					log.Debug("Failed to delete action result %s marking as live: %w", ar.Hash, err)
+					c.liveActionResults[ar.Hash] = ar.SizeBytes
+				} else {
+					log.Debug("Deleted action result: %s", ar.Hash)
+					delete(c.actionRFs, ar.Hash)
+				}
+				ch <- 1
+			}
+			ch <- 1
+			wg.Done()
+		}(ars[step*i : min(step*(i+1), numArs)])
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -533,13 +543,14 @@ func (c *collector) RemoveBlobs() error {
 	}()
 	var wg sync.WaitGroup
 	wg.Add(c.parallelism + 1)
-	step := len(c.actionResults) / c.parallelism
+	step := len(blobs) / c.parallelism
 	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(blobs []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 				Blobs: blobs,
+				Hard:  true,
 			})
 			if err != nil {
 				log.Debug("Unable to delete blobs: %v", err)
