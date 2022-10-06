@@ -55,7 +55,7 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, re
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBrokenBlobs(); err != nil {
-		log.Notice("Failed to remove broken blobs: %v", err)
+		log.Warning("Failed to remove broken blobs: %v", err)
 	} else if err := gc.ReplicateBlobs(replicationFactor); err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	}
 	outputSize, digests, err := c.outputs(result)
 	if err != nil {
-		log.Debug("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
+		log.Warning("Couldn't download output tree for %s, continuing anyway: %s", ar.Hash, err)
 		return err
 	}
 	// Check whether all these outputs exist.
@@ -284,7 +284,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 		BlobDigests:  digests,
 	})
 	if err != nil {
-		log.Debug("Failed to check blob digests for %s: %s", ar.Hash, err)
+		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
 	}
 	// Mark all the inputs as well. There are some fringe cases that make things awkward
 	// and it means things look more sensible in the browser.
@@ -501,7 +501,7 @@ func (c *collector) RemoveActionResults() error {
 					ActionResults: []*ppb.Blob{ar},
 					Hard:          true,
 				}); err != nil {
-					log.Debug("Failed to delete action result %s marking as live: %w", ar.Hash, err)
+					log.Warning("Failed to delete action result %s marking as live: %w", ar.Hash, err)
 					c.liveActionResults[ar.Hash] = ar.SizeBytes
 				} else {
 					log.Debug("Deleted action result: %s", ar.Hash)
@@ -519,7 +519,8 @@ func (c *collector) RemoveActionResults() error {
 
 func (c *collector) RemoveBlobs() error {
 	log.Notice("Determining blobs to remove...")
-	blobs := []*ppb.Blob{}
+	capacity := len(c.allBlobs) - len(c.referencedBlobs)
+	blobs := make([]*ppb.Blob, 0, capacity)
 	numBlobs := 0
 	var totalSize int64
 	for hash, blob := range c.allBlobs {
@@ -543,7 +544,7 @@ func (c *collector) RemoveBlobs() error {
 	}()
 	var wg sync.WaitGroup
 	wg.Add(c.parallelism + 1)
-	step := len(blobs) / c.parallelism
+	step := numBlobs / c.parallelism
 	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(blobs []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
@@ -553,11 +554,11 @@ func (c *collector) RemoveBlobs() error {
 				Hard:  true,
 			})
 			if err != nil {
-				log.Debug("Unable to delete blobs: %v", err)
+				log.Warning("Unable to delete blobs: %v", err)
 			}
 			ch <- 1
 			wg.Done()
-		}(blobs[step*i : min(step*(i+1), len(blobs))])
+		}(blobs[step*i : min(step*(i+1), numBlobs)])
 	}
 	wg.Wait()
 	return nil

@@ -1,5 +1,13 @@
 Version 9.9.4
 -------------
+    * Restructure Purity so that it deletes action results before marking
+	their blobs as live.
+	* Add cache prefix field to purity action results proto
+	* Add cache prefix field to purity blobs proto
+	* Elan List() returns blobs with cache preflix field populated 
+
+Version 9.9.4
+-------------
     * Return blob not found error from elan gc delete.
 
 Version 9.9.3
