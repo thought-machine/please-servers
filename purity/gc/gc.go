@@ -55,7 +55,7 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, re
 	} else if err := gc.RemoveBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBrokenBlobs(); err != nil {
-		log.Warning("Failed to remove broken blobs: %v", err)
+		return err
 	} else if err := gc.ReplicateBlobs(replicationFactor); err != nil {
 		return err
 	}
