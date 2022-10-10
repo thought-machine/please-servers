@@ -5,6 +5,7 @@ Version 10.0.0
 	* Add cache prefix field to purity action results proto
 	* Add cache prefix field to purity blobs proto
 	* Elan List() returns blobs with cache preflix field populated 
+    * Wrap prom registerer to avoid collector collisions.
 
 Version 9.9.4
 -------------
