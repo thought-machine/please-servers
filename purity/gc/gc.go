@@ -593,10 +593,10 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	var merr *multierror.Error
 	for _, digest := range digests {
 		cachePrefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
-		log.Debug("Removing action result %s%s", prefix, digest.Hash)
+		log.Debug("Removing action result %s%s", cachePrefix, digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
-			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, cachePrefix: prefix}},
+			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, CachePrefix: cachePrefix}},
 			Hard:          true,
 		}); err != nil {
 			merr = multierror.Append(merr, err)
