@@ -1,3 +1,7 @@
+Version 10.0.1
+-------------
+    * Add prefix to purity delete request as it's needed by flair
+
 Version 10.0.0
 -------------
     * Restructure Purity so that it deletes action results before
