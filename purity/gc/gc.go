@@ -498,10 +498,11 @@ func (c *collector) RemoveActionResults() error {
 			for _, ar := range ars {
 				log.Debug("Removing action result %s", ar.Hash)
 				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+					Prefix:        ar.CachePrefix,
 					ActionResults: []*ppb.Blob{ar},
 					Hard:          true,
 				}); err != nil {
-					log.Warning("Failed to delete action result %s marking as live: %w", ar.Hash, err)
+					log.Warning("Failed to delete action result %s%s marking as live: %v", ar.CachePrefix, ar.Hash, err)
 					c.liveActionResults[ar.Hash] = ar.SizeBytes
 				} else {
 					log.Debug("Deleted action result: %s", ar.Hash)
@@ -509,7 +510,6 @@ func (c *collector) RemoveActionResults() error {
 				}
 				ch <- 1
 			}
-			ch <- 1
 			wg.Done()
 		}(ars[step*i : min(step*(i+1), numArs)])
 	}
@@ -519,14 +519,13 @@ func (c *collector) RemoveActionResults() error {
 
 func (c *collector) RemoveBlobs() error {
 	log.Notice("Determining blobs to remove...")
-	capacity := len(c.allBlobs) - len(c.referencedBlobs)
-	blobs := make([]*ppb.Blob, 0, capacity)
+	blobs := make(map[string][]*ppb.Blob)
 	numBlobs := 0
 	var totalSize int64
 	for hash, blob := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
 			log.Debug("Identified blob %s for deletion", hash)
-			blobs = append(blobs, blob)
+			blobs[blob.CachePrefix] = append(blobs[blob.CachePrefix], blob)
 			delete(c.blobRFs, hash)
 			totalSize += blob.SizeBytes
 			numBlobs++
@@ -543,22 +542,22 @@ func (c *collector) RemoveBlobs() error {
 		time.Sleep(10 * time.Millisecond)
 	}()
 	var wg sync.WaitGroup
-	wg.Add(c.parallelism + 1)
-	step := numBlobs / c.parallelism
-	for i := 0; i < (c.parallelism + 1); i++ {
-		go func(blobs []*ppb.Blob) {
+	wg.Add(numBlobs)
+	for k, v := range blobs {
+		go func(prefix string, blobs []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-				Blobs: blobs,
-				Hard:  true,
+				Prefix: prefix,
+				Blobs:  blobs,
+				Hard:   true,
 			})
 			if err != nil {
-				log.Warning("Unable to delete blobs: %v", err)
+				log.Warning("Failed to delete blobs: %v", err)
 			}
 			ch <- 1
 			wg.Done()
-		}(blobs[step*i : min(step*(i+1), numBlobs)])
+		}(k, v)
 	}
 	wg.Wait()
 	return nil
@@ -593,9 +592,11 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	defer cancel()
 	var merr *multierror.Error
 	for _, digest := range digests {
-		log.Debug("Removing action result %s", digest.Hash)
+		prefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
+		log.Debug("Removing action result %s%s", prefix, digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
+			Prefix:        prefix,
+			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, CachePrefix: prefix}},
 			Hard:          true,
 		}); err != nil {
 			merr = multierror.Append(merr, err)
