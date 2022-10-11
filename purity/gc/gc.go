@@ -525,7 +525,8 @@ func (c *collector) RemoveBlobs() error {
 	for hash, blob := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
 			log.Debug("Identified blob %s for deletion", hash)
-			blobs[blob.CachePrefix] = append(blobs[blob.CachePrefix], blob)
+			key := blob.Hash[:2]
+			blobs[key] = append(blobs[key], blob)
 			delete(c.blobRFs, hash)
 			totalSize += blob.SizeBytes
 			numBlobs++
@@ -548,7 +549,7 @@ func (c *collector) RemoveBlobs() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-				Prefix: prefix[len(prefix)-3 : len(prefix)-1],
+				Prefix: prefix,
 				Blobs:  blobs,
 				Hard:   true,
 			})
