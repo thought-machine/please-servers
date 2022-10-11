@@ -498,7 +498,7 @@ func (c *collector) RemoveActionResults() error {
 			for _, ar := range ars {
 				log.Debug("Removing action result %s", ar.Hash)
 				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-					Prefix:        ar.CachePrefix,
+					Prefix:        ar.Hash[:2],
 					ActionResults: []*ppb.Blob{ar},
 					Hard:          true,
 				}); err != nil {
@@ -548,7 +548,7 @@ func (c *collector) RemoveBlobs() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-				Prefix: prefix,
+				Prefix: prefix[len(prefix)-3 : len(prefix)-1],
 				Blobs:  blobs,
 				Hard:   true,
 			})
@@ -592,11 +592,11 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	defer cancel()
 	var merr *multierror.Error
 	for _, digest := range digests {
-		prefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
+		cachePrefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
 		log.Debug("Removing action result %s%s", prefix, digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-			Prefix:        prefix,
-			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, CachePrefix: prefix}},
+			Prefix:        digest.Hash[:2],
+			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, cachePrefix: prefix}},
 			Hard:          true,
 		}); err != nil {
 			merr = multierror.Append(merr, err)
