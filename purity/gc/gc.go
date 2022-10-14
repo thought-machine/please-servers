@@ -484,7 +484,7 @@ func (c *collector) RemoveActionResults() error {
 		return nil
 	}
 	log.Notice("Deleting %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
-	ch := newProgressBar("Deleting blobs", 256)
+	ch := newProgressBar("Deleting action results", 256)
 	defer func() {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
@@ -498,7 +498,6 @@ func (c *collector) RemoveActionResults() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			for _, ar := range ars {
-				log.Debug("Removing action result %s", ar.Hash)
 				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 					Prefix:        ar.Hash[:2],
 					ActionResults: []*ppb.Blob{ar},
@@ -514,9 +513,9 @@ func (c *collector) RemoveActionResults() error {
 					delete(c.actionRFs, ar.Hash)
 					c.mutex.Unlock()
 				}
+				ch <- 1
 			}
 			wg.Done()
-			ch <- 1
 		}(ars[step*i : min(step*(i+1), numArs)])
 	}
 	wg.Wait()
