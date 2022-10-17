@@ -92,8 +92,6 @@ func (s *server) deleteAll(ctx context.Context, blobs []*ppb.Blob, hard bool) er
 			}
 		} else if err != nil {
 			me = multierror.Append(me, fmt.Error("Error reading blob: %w", err))
-		} else {
-			me = multierror.Append(me, fmt.Errorf("Blob not found: %s", key))
 		}
 	}
 	return me.ErrorOrNil()
