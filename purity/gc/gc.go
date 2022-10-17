@@ -471,7 +471,7 @@ func (c *collector) RemoveActionResults() error {
 	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
-			log.Debug("Identified action result %s for deletion: Replicas: %v", ar.Hash)
+			log.Debug("Identified action result %s for deletion", ar.Hash)
 			ars = append(ars, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes, CachePrefix: ar.CachePrefix})
 			totalSize += ar.SizeBytes
 			numArs++
@@ -508,8 +508,8 @@ func (c *collector) RemoveActionResults() error {
 					c.liveActionResults[ar.Hash] = ar.SizeBytes
 					c.mutex.Unlock()
 				} else {
-					c.mutex.Lock()
 					log.Debug("Deleted action result: %s", ar.Hash)
+					c.mutex.Lock()
 					delete(c.actionRFs, ar.Hash)
 					c.mutex.Unlock()
 				}
