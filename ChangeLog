@@ -1,3 +1,9 @@
+Version 10.1.1
+-------------
+    * Remove blob not found error from elan gc
+	* Improve errors returned from elan gc
+	* Fix concurrency bugs in purity
+
 Version 10.0.1
 -------------
     * Add prefix to purity delete request as it's needed by flair
