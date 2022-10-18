@@ -496,6 +496,7 @@ func (c *collector) RemoveActionResults() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			for _, ar := range ars {
+				log.Debug("Removing action result %s", ar.Hash)
 				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 					Prefix:        ar.Hash[:2],
 					ActionResults: []*ppb.Blob{ar},
