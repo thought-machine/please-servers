@@ -1,4 +1,4 @@
-Version 10.1.1
+Version 10.1.0
 -------------
     * Remove blob not found error from elan gc
 	* Improve errors returned from elan gc
