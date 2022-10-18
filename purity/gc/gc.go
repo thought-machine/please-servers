@@ -483,7 +483,7 @@ func (c *collector) RemoveActionResults() error {
 		return nil
 	}
 	log.Notice("Deleting %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
-	ch := newProgressBar("Deleting blobs", 256)
+	ch := newProgressBar("Deleting action results", len(ars))
 	defer func() {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
@@ -503,10 +503,14 @@ func (c *collector) RemoveActionResults() error {
 					Hard:          true,
 				}); err != nil {
 					log.Warning("Failed to delete action result %s%s marking as live: %v", ar.CachePrefix, ar.Hash, err)
+					c.mutex.Lock()
 					c.liveActionResults[ar.Hash] = ar.SizeBytes
+					c.mutex.Unlock()
 				} else {
 					log.Debug("Deleted action result: %s", ar.Hash)
+					c.mutex.Lock()
 					delete(c.actionRFs, ar.Hash)
+					c.mutex.Unlock()
 				}
 				ch <- 1
 			}
@@ -543,7 +547,7 @@ func (c *collector) RemoveBlobs() error {
 		time.Sleep(10 * time.Millisecond)
 	}()
 	var wg sync.WaitGroup
-	wg.Add(numBlobs)
+	wg.Add(len(blobs))
 	for k, v := range blobs {
 		go func(prefix string, blobs []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
