@@ -239,7 +239,6 @@ func (c *collector) MarkReferencedBlobs() error {
 	wg.Add(c.parallelism + 1)
 	step := len(c.actionResults) / c.parallelism
 	for i := 0; i < (c.parallelism + 1); i++ {
-		i := i
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				if _, present := c.liveActionResults[ar.Hash]; present {
@@ -484,7 +483,7 @@ func (c *collector) RemoveActionResults() error {
 		return nil
 	}
 	log.Notice("Deleting %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
-	ch := newProgressBar("Deleting action results", 256)
+	ch := newProgressBar("Deleting action results", len(ars))
 	defer func() {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
@@ -493,7 +492,6 @@ func (c *collector) RemoveActionResults() error {
 	wg.Add(c.parallelism + 1)
 	step := numArs / c.parallelism
 	for i := 0; i < (c.parallelism + 1); i++ {
-		i := i
 		go func(ars []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
@@ -513,8 +511,8 @@ func (c *collector) RemoveActionResults() error {
 					delete(c.actionRFs, ar.Hash)
 					c.mutex.Unlock()
 				}
+				ch <- 1
 			}
-			ch <- 1
 			wg.Done()
 		}(ars[step*i : min(step*(i+1), numArs)])
 	}
@@ -550,8 +548,6 @@ func (c *collector) RemoveBlobs() error {
 	var wg sync.WaitGroup
 	wg.Add(len(blobs))
 	for k, v := range blobs {
-		k := k
-		v := v
 		go func(prefix string, blobs []*ppb.Blob) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()

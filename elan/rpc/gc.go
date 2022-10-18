@@ -83,6 +83,7 @@ func (s *server) deleteAll(ctx context.Context, blobs []*ppb.Blob, hard bool) er
 	var me *multierror.Error
 	for _, blob := range blobs {
 		key := blob.CachePrefix + blob.Hash
+		log.Notice("Deleting blob %s", key)
 		if exists, err := s.bucket.Exists(ctx, key); exists {
 			if err := s.bucket.Delete(ctx, key, hard); err != nil {
 				me = multierror.Append(me, fmt.Errorf("Error deleting blob: %w", err))
@@ -92,6 +93,8 @@ func (s *server) deleteAll(ctx context.Context, blobs []*ppb.Blob, hard bool) er
 			}
 		} else if err != nil {
 			me = multierror.Append(me, fmt.Errorf("Error reading blob: %w", err))
+		} else {
+			log.Warning("blob not found: %s", key)
 		}
 	}
 	return me.ErrorOrNil()
