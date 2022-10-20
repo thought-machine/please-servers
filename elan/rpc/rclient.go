@@ -33,39 +33,53 @@ func (r *remoteClient) Healthcheck() error {
 }
 
 func (r *remoteClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
-	return r.c.ReadBlob(context.Background(), digest.NewFromProtoUnvalidated(dg))
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
+	return r.c.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
 }
 
 func (r *remoteClient) WriteBlob(b []byte) (*pb.Digest, error) {
-	dg, err := r.c.WriteBlob(context.Background(), b)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
+	dg, err := r.c.WriteBlob(ctx, b)
 	return dg.ToProto(), err
 }
 
 func (r *remoteClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
-	return r.c.UpdateActionResult(context.Background(), req)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
+	return r.c.UpdateActionResult(ctx, req)
 }
 
 func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
-	_, _, err := r.c.UploadIfMissing(context.Background(), entries...)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
+	_, _, err := r.c.UploadIfMissing(ctx, entries...)
 	return err
 }
 
 func (r *remoteClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
-	return r.c.BatchDownloadCompressedBlobs(context.Background(), digests, compressors)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
+	return r.c.BatchDownloadCompressedBlobs(ctx, digests, compressors)
 }
 
 func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
 	if !compressed {
-		_, err := r.c.ReadBlobToFileUncompressed(context.Background(), dg, filename)
+		_, err := r.c.ReadBlobToFileUncompressed(ctx, dg, filename)
 		return err
 	}
-	_, err := r.c.ReadBlobToFile(context.Background(), dg, filename)
+	_, err := r.c.ReadBlobToFile(ctx, dg, filename)
 	return err
 }
 
 func (r *remoteClient) GetDirectoryTree(dg *pb.Digest, stopAtPack bool) ([]*pb.Directory, error) {
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cnx()
 	if stopAtPack {
-		return r.c.GetDirectoryTree(rexclient.StopAtPack(context.Background()), dg)
+		return r.c.GetDirectoryTree(rexclient.StopAtPack(ctx), dg)
 	}
-	return r.c.GetDirectoryTree(context.Background(), dg)
+	return r.c.GetDirectoryTree(ctx, dg)
 }
