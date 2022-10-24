@@ -2,14 +2,14 @@ Version 10.2.0
 -------------
     * Add timeouts to Elan's remote client
     * Add metrics to Elan's remote client
-	* Only return delete errors in Elan's gc
-	* Fix purity clean
+    * Only return delete errors in Elan's gc
+    * Fix purity clean
 
 Version 10.1.0
 -------------
     * Remove blob not found error from elan gc
-	* Improve errors returned from elan gc
-	* Fix concurrency bugs in purity
+    * Improve errors returned from elan gc
+    * Fix concurrency bugs in purity
 
 Version 10.0.1
 -------------
@@ -19,9 +19,9 @@ Version 10.0.0
 -------------
     * Restructure Purity so that it deletes action results before
       marking their blobs as live.
-	* Add cache prefix field to purity action results proto
-	* Add cache prefix field to purity blobs proto
-	* Elan List() returns blobs with cache preflix field populated 
+    * Add cache prefix field to purity action results proto
+    * Add cache prefix field to purity blobs proto
+    * Elan List() returns blobs with cache preflix field populated 
     * Wrap prom registerer to avoid collector collisions.
 
 Version 9.9.4
