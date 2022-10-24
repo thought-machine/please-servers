@@ -79,7 +79,9 @@ func Clean(url, instanceName, tokenFile string, tls, dryRun bool) error {
 		return err
 	} else if err := gc.LoadAllBlobs(); err != nil {
 		return err
-	} else if err := gc.MarkReferencedBlobs(); err != nil {
+	}
+	gc.MarkActionResults()
+	if err := gc.MarkReferencedBlobs(); err != nil {
 		return err
 	}
 	return gc.RemoveBrokenBlobs()
@@ -463,6 +465,15 @@ func (c *collector) checkDirectories(dirs []*pb.Directory) {
 	}
 }
 
+func (c *collector) MarkActionResults() {
+	for _, ar := range c.actionResults {
+		if !c.shouldDelete(ar) {
+			c.liveActionResults[ar.Hash] = ar.SizeBytes
+		}
+	}
+}
+
+// RemoveActionResults removes ARs that should be deleted or marks them live.
 func (c *collector) RemoveActionResults() error {
 	log.Notice("Determining action results to remove...")
 	ars := []*ppb.Blob{}

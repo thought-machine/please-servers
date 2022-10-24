@@ -92,7 +92,7 @@ func (s *server) deleteAll(ctx context.Context, blobs []*ppb.Blob, hard bool) er
 				s.knownBlobCache.Del(key)
 			}
 		} else if err != nil {
-			me = multierror.Append(me, fmt.Errorf("Error reading blob: %w", err))
+			log.Warning("Error reading blob: %v", err)
 		} else {
 			log.Warning("blob not found: %s", key)
 		}
