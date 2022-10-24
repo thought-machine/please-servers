@@ -1,9 +1,12 @@
+Version 10.3.0
+-------------
+    * Only return delete errors in Elans gc
+    * Fix purity clean
+
 Version 10.2.0
 -------------
     * Add timeouts to Elan's remote client
     * Add metrics to Elan's remote client
-    * Only return delete errors in Elan's gc
-    * Fix purity clean
 
 Version 10.1.0
 -------------
