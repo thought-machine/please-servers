@@ -128,13 +128,26 @@ func compareCommands(b, a *pb.Command) {
 		compareRepeatedString("OutputFiles", b.OutputFiles, a.OutputFiles)
 		compareRepeatedString("OutputDirectories", b.OutputDirectories, a.OutputDirectories)
 	}
-	// We could do a better test here and match up names but c'est la vie.
-	for i, v := range b.EnvironmentVariables {
-		if i >= len(a.EnvironmentVariables) {
-			log.Warning("Environment variable %s not in 'after' action")
-		} else if v2 := a.EnvironmentVariables[i]; v2.Name != v.Name || v2.Value != v.Value {
-			log.Warning("Environment variables differ: %s=%s / %s=%s", v.Name, v.Value, v2.Name, v2.Value)
+	enva := map[string]string{}
+	envb := map[string]string{}
+	for _, v := range a.EnvironmentVariables {
+		enva[v.Name] = v.Value
+	}
+	for _, v := range b.EnvironmentVariables {
+		envb[v.Name] = v.Value
+	}
+	for _, va := range a.EnvironmentVariables {
+		if vb, present := envb[va.Name]; !present {
+			log.Warning("Environment variables differ: %s=%s / <not present>", va.Name, va.Value)
+		} else if va.Value != vb {
+			log.Warning("Environment variables differ: %s=%s / %s=%s", va.Name, va.Value, va.Name, vb)
 		}
+	}
+	for _, vb := range b.EnvironmentVariables {
+		if _, present := enva[vb.Name]; !present {
+			log.Warning("Environment variables differ: <not present> / %s=%s", vb.Name, vb.Value)
+		}
+		// Don't re-report differences here.
 	}
 	// TODO(peterebden): check platform properties too
 }

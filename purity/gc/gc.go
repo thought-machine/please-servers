@@ -48,6 +48,8 @@ func Run(url, instanceName, tokenFile string, tls bool, minAge time.Duration, re
 		return err
 	} else if err := gc.LoadAllBlobs(); err != nil {
 		return err
+	} else if err := gc.RemoveActionResults(); err != nil {
+		return err
 	} else if err := gc.MarkReferencedBlobs(); err != nil {
 		return err
 	} else if err := gc.RemoveBlobs(); err != nil {
@@ -125,21 +127,24 @@ type Action struct {
 }
 
 type collector struct {
-	client          *client.Client
-	gcclient        ppb.GCClient
-	actionResults   []*ppb.ActionResult
-	allBlobs        map[string]int64
-	actionSizes     map[string]int64
-	referencedBlobs map[string]struct{}
-	brokenResults   map[string]int64
-	inputSizes      map[string]int
-	outputSizes     map[string]int
-	actionRFs       map[string]int
-	blobRFs         map[string]int
-	mutex           sync.Mutex
-	ageThreshold    int64
-	missingInputs   int64
-	dryRun          bool
+	client            *client.Client
+	gcclient          ppb.GCClient
+	actionResults     []*ppb.ActionResult
+	liveActionResults map[string]int64
+	allBlobs          map[string]*ppb.Blob
+	blobSizes         map[string]int64
+	actionSizes       map[string]int64
+	referencedBlobs   map[string]struct{}
+	brokenResults     map[string]int64
+	inputSizes        map[string]int
+	outputSizes       map[string]int
+	actionRFs         map[string]int
+	blobRFs           map[string]int
+	mutex             sync.Mutex
+	ageThreshold      int64
+	missingInputs     int64
+	dryRun            bool
+	parallelism       int
 }
 
 func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge time.Duration) (*collector, error) {
@@ -148,11 +153,13 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		return nil, err
 	}
 	return &collector{
-		client:      client,
-		gcclient:    ppb.NewGCClient(client.Connection),
-		dryRun:      dryRun,
-		allBlobs:    map[string]int64{},
-		actionSizes: map[string]int64{},
+		client:            client,
+		gcclient:          ppb.NewGCClient(client.Connection),
+		dryRun:            dryRun,
+		allBlobs:          map[string]*ppb.Blob{},
+		blobSizes:         map[string]int64{},
+		actionSizes:       map[string]int64{},
+		liveActionResults: map[string]int64{},
 		referencedBlobs: map[string]struct{}{
 			digest.Empty.Hash: {}, // The empty blob always counts as referenced.
 		},
@@ -162,6 +169,7 @@ func newCollector(url, instanceName, tokenFile string, tls, dryRun bool, minAge 
 		actionRFs:     map[string]int{},
 		blobRFs:       map[string]int{},
 		ageThreshold:  time.Now().Add(-minAge).Unix(),
+		parallelism:   16,
 	}, nil
 }
 
@@ -194,7 +202,8 @@ func (c *collector) LoadAllBlobs() error {
 					c.actionSizes[ar.Hash] = ar.SizeBytes
 				}
 				for _, b := range resp.Blobs {
-					c.allBlobs[b.Hash] = b.SizeBytes
+					c.allBlobs[b.Hash] = b
+					c.blobSizes[b.Hash] = b.SizeBytes
 					c.blobRFs[b.Hash] = int(b.Replicas)
 				}
 				mutex.Unlock()
@@ -214,8 +223,6 @@ func min(a, b int) int {
 }
 
 func (c *collector) MarkReferencedBlobs() error {
-	// Get a little bit of parallelism here, but not too much.
-	const parallelism = 16
 	log.Notice("Finding referenced blobs...")
 	ch := newProgressBar("Checking action results", len(c.actionResults))
 	var live int64
@@ -229,19 +236,12 @@ func (c *collector) MarkReferencedBlobs() error {
 	}()
 	var wg sync.WaitGroup
 	// Loop one extra time to catch the remaining ars as the step size is rounded down
-	wg.Add(parallelism + 1)
-	step := len(c.actionResults) / parallelism
-	for i := 0; i < (parallelism + 1); i++ {
+	wg.Add(c.parallelism + 1)
+	step := len(c.actionResults) / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
-				// Temporary logging for debug purposes
-				if c.shouldDelete(ar) {
-					accessed := time.Unix(ar.LastAccessed, 0)
-					threshold := time.Unix(c.ageThreshold, 0)
-					log.Debug("Should delete action result %s. LastAccessed is %s, ageThreshold is %s", ar.Hash, accessed, threshold)
-				}
-				// End temporary logging
-				if !c.shouldDelete(ar) {
+				if _, present := c.liveActionResults[ar.Hash]; present {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
 						log.Debug("Failed to find referenced blobs for %s: %s", ar.Hash, err)
@@ -340,7 +340,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest
 	defer cancel()
 	action := &pb.Action{}
 	var size int64
-	digestSize, present := c.allBlobs[dg.Hash]
+	blob, present := c.allBlobs[dg.Hash]
 	if !present {
 		log.Debug("missing action for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
@@ -348,7 +348,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest
 	}
 	if err := c.client.ReadProto(ctx, digest.Digest{
 		Hash: dg.Hash,
-		Size: digestSize,
+		Size: blob.SizeBytes,
 	}, action); err != nil {
 		log.Debug("Failed to read action %s: %s", dg.Hash, err)
 		atomic.AddInt64(&c.missingInputs, 1)
@@ -463,72 +463,116 @@ func (c *collector) checkDirectories(dirs []*pb.Directory) {
 	}
 }
 
-func (c *collector) RemoveBlobs() error {
-	log.Notice("Determining blobs to remove...")
-	blobs := map[string][]*ppb.Blob{}
-	ars := map[string][]*ppb.Blob{}
+func (c *collector) RemoveActionResults() error {
+	log.Notice("Determining action results to remove...")
+	ars := []*ppb.Blob{}
 	numArs := 0
-	numBlobs := 0
 	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
 			log.Debug("Identified action result %s for deletion", ar.Hash)
-			key := ar.Hash[:2]
-			ars[key] = append(ars[key], &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes})
-			delete(c.actionRFs, ar.Hash)
+			ars = append(ars, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes, CachePrefix: ar.CachePrefix})
 			totalSize += ar.SizeBytes
 			numArs++
+		} else {
+			c.liveActionResults[ar.Hash] = ar.SizeBytes
 		}
 	}
-	for hash, size := range c.allBlobs {
+	if c.dryRun {
+		log.Notice("Would delete %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
+		return nil
+	}
+	log.Notice("Deleting %d action results, total size %s", numArs, humanize.Bytes(uint64(totalSize)))
+	ch := newProgressBar("Deleting action results", len(ars))
+	defer func() {
+		close(ch)
+		time.Sleep(10 * time.Millisecond)
+	}()
+	var wg sync.WaitGroup
+	wg.Add(c.parallelism + 1)
+	step := numArs / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
+		go func(ars []*ppb.Blob) {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+			defer cancel()
+			for _, ar := range ars {
+				log.Debug("Removing action result %s", ar.Hash)
+				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+					Prefix:        ar.Hash[:2],
+					ActionResults: []*ppb.Blob{ar},
+					Hard:          true,
+				}); err != nil {
+					log.Warning("Failed to delete action result %s%s marking as live: %v", ar.CachePrefix, ar.Hash, err)
+					c.mutex.Lock()
+					c.liveActionResults[ar.Hash] = ar.SizeBytes
+					c.mutex.Unlock()
+				} else {
+					log.Debug("Deleted action result: %s", ar.Hash)
+					c.mutex.Lock()
+					delete(c.actionRFs, ar.Hash)
+					c.mutex.Unlock()
+				}
+				ch <- 1
+			}
+			wg.Done()
+		}(ars[step*i : min(step*(i+1), numArs)])
+	}
+	wg.Wait()
+	return nil
+}
+
+func (c *collector) RemoveBlobs() error {
+	log.Notice("Determining blobs to remove...")
+	blobs := make(map[string][]*ppb.Blob)
+	numBlobs := 0
+	var totalSize int64
+	for hash, blob := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
 			log.Debug("Identified blob %s for deletion", hash)
-			key := hash[:2]
-			blobs[key] = append(blobs[key], &ppb.Blob{Hash: hash, SizeBytes: size})
+			key := blob.Hash[:2]
+			blobs[key] = append(blobs[key], blob)
 			delete(c.blobRFs, hash)
-			totalSize += size
+			totalSize += blob.SizeBytes
 			numBlobs++
 		}
 	}
 	if c.dryRun {
-		log.Notice("Would delete %d action results and %d blobs, total size %s", numArs, numBlobs, humanize.Bytes(uint64(totalSize)))
+		log.Notice("Would delete %d blobs, total size %s", numBlobs, humanize.Bytes(uint64(totalSize)))
 		return nil
 	}
-	log.Notice("Deleting %d action results and %d blobs, total size %s", numArs, numBlobs, humanize.Bytes(uint64(totalSize)))
+	log.Notice("Deleting %d blobs, total size %s", numBlobs, humanize.Bytes(uint64(totalSize)))
 	ch := newProgressBar("Deleting blobs", 256)
 	defer func() {
 		close(ch)
 		time.Sleep(10 * time.Millisecond)
 	}()
-	var g multierror.Group
-	for i := 0; i < 16; i++ {
-		i := i
-		g.Go(func() error {
-			var me *multierror.Error
-			for j := 0; j < 16; j++ {
-				key := hex.EncodeToString([]byte{byte(i*16 + j)})
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
-				defer cancel()
-				_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
-					Prefix:        key,
-					Blobs:         blobs[key],
-					ActionResults: ars[key],
-				})
-				if err != nil {
-					me = multierror.Append(me, err)
-				}
-				ch <- 1
+	var wg sync.WaitGroup
+	wg.Add(len(blobs))
+	for k, v := range blobs {
+		go func(prefix string, blobs []*ppb.Blob) {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
+			defer cancel()
+			_, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
+				Prefix: prefix,
+				Blobs:  blobs,
+				Hard:   true,
+			})
+			if err != nil {
+				log.Warning("Failed to delete blobs: %v", err)
 			}
-			return me.ErrorOrNil()
-		})
+			ch <- 1
+			wg.Done()
+		}(k, v)
 	}
-	return g.Wait().ErrorOrNil()
+	wg.Wait()
+	return nil
 }
 
 func (c *collector) shouldDelete(ar *ppb.ActionResult) bool {
 	return ar.LastAccessed < c.ageThreshold || len(ar.Hash) != 64
 }
 
+// RemoveSpecificBlobs removes blobs from the cache. It's best effort and returns a multierror or nil
 func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	for _, d := range digests {
 		delete(c.actionRFs, d.Hash)
@@ -551,18 +595,20 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	var merr *multierror.Error
 	for _, digest := range digests {
-		log.Debug("Removing action result %s", digest.Hash)
+		cachePrefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
+		log.Debug("Removing action result %s%s", cachePrefix, digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
-			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes}},
+			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, CachePrefix: cachePrefix}},
 			Hard:          true,
 		}); err != nil {
-			return err
+			merr = multierror.Append(merr, err)
 		}
 		ch <- 1
 	}
-	return nil
+	return merr.ErrorOrNil()
 }
 
 // RemoveBrokenBlobs removes any blobs previously marked as broken.
@@ -581,7 +627,7 @@ func (c *collector) Sizes(n int) []Action {
 		ret[i] = Action{
 			Digest: pb.Digest{
 				Hash:      ar.Hash,
-				SizeBytes: c.allBlobs[ar.Hash],
+				SizeBytes: c.allBlobs[ar.Hash].SizeBytes,
 			},
 			InputSize:  c.inputSizes[ar.Hash],
 			OutputSize: c.outputSizes[ar.Hash],
@@ -598,7 +644,7 @@ func (c *collector) Sizes(n int) []Action {
 
 // ReplicateBlobs re-replicates any blobs with a replication factor lower than expected.
 func (c *collector) ReplicateBlobs(rf int) error {
-	blobs := c.underreplicatedDigests(c.blobRFs, c.allBlobs, rf)
+	blobs := c.underreplicatedDigests(c.blobRFs, c.blobSizes, rf)
 	ars := c.underreplicatedDigests(c.actionRFs, c.actionSizes, rf)
 	if err := c.replicateBlobs("blobs", blobs, func(dg *pb.Digest) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -709,8 +755,6 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		}
 	}
 
-	// Get a little bit of parallelism here, but not too much.
-	const parallelism = 16
 	log.Notice("Finding all input blobs...")
 	ch := newProgressBar("Searching input actions", len(c.actionResults))
 	defer func() {
@@ -719,9 +763,9 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	}()
 	var wg sync.WaitGroup
 	// Loop one extra time to catch the remaining ars as the step size is rounded down
-	wg.Add(parallelism + 1)
-	step := len(c.actionResults) / parallelism
-	for i := 0; i < (parallelism + 1); i++ {
+	wg.Add(c.parallelism + 1)
+	step := len(c.actionResults) / c.parallelism
+	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
 				_, dirs, digest := c.inputDirs(&pb.Digest{
