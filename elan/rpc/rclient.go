@@ -66,7 +66,7 @@ func (r *remoteClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*p
 
 func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	defer observeTime(time.Now(), "UploadIfMissing")
-	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cnx()
 	_, _, err := r.c.UploadIfMissing(ctx, entries...)
 	return err
@@ -74,7 +74,7 @@ func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 
 func (r *remoteClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
 	defer observeTime(time.Now(), "BatchDownload")
-	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cnx()
 	return r.c.BatchDownloadCompressedBlobs(ctx, digests, compressors)
 }
