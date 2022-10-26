@@ -103,5 +103,5 @@ func (r *remoteClient) GetDirectoryTree(dg *pb.Digest, stopAtPack bool) ([]*pb.D
 
 func observeTime(start time.Time, rpcMethod string) {
 	total := time.Since(start)
-	rpcLatencies.WithLabelValues("rpc_method", rpcMethod).Observe(total.Seconds())
+	rpcLatencies.WithLabelValues(rpcMethod).Observe(total.Seconds())
 }
