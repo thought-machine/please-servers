@@ -1,3 +1,6 @@
+Version 10.3.1
+-------------
+    * Fix metric cardinality
 Version 10.3.0
 -------------
     * Only return delete errors in Elans gc
