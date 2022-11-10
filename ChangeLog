@@ -1,3 +1,6 @@
+Version 10.3.2
+-------------
+    * Add workers name label to the blobNotFoundErrors counter
 Version 10.3.1
 -------------
     * Fix metric cardinality
@@ -27,7 +30,7 @@ Version 10.0.0
       marking their blobs as live.
     * Add cache prefix field to purity action results proto
     * Add cache prefix field to purity blobs proto
-    * Elan List() returns blobs with cache preflix field populated 
+    * Elan List() returns blobs with cache preflix field populated
     * Wrap prom registerer to avoid collector collisions.
 
 Version 9.9.4
