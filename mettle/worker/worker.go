@@ -94,7 +94,7 @@ var cacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
 var blobNotFoundErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "blob_not_found_errors_total",
-}, []string{"version", "worker_name"})
+}, []string{"version"})
 var packsDownloaded = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "packs_downloaded_total",
@@ -593,7 +593,7 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
 	if err := w.downloadDirectory(action.InputRootDigest, usePacks); err != nil {
 		if grpcstatus.Code(err) == codes.NotFound {
-			blobNotFoundErrors.WithLabelValues(w.version, w.name).Inc()
+			blobNotFoundErrors.WithLabelValues(w.version).Inc()
 		}
 		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
 	}
@@ -1047,7 +1047,7 @@ func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteRespo
 func (w *worker) periodicallyPushMetrics() {
 	if w.promGatewayURL != "" {
 		// Set up the metrics
-		pusher := push.New(w.promGatewayURL, "mettle")
+		pusher := push.New(w.promGatewayURL, w.name)
 		for _, metric := range metrics {
 			pusher = pusher.Collector(metric).Format(expfmt.FmtText)
 		}
