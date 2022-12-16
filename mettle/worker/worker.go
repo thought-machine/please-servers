@@ -192,7 +192,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 
 		for {
 			select {
-			case <-time.After(5 * time.Minute):
+			case <-time.After(10 * time.Minute):
 				w.forceShutdown("Exceeded timeout, shutting down immediately...")
 			case sig = <-ch:
 				w.forceShutdown(fmt.Sprintf("Received another signal %s, shutting down immediately...", sig))
@@ -422,9 +422,12 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	w.downloadedBytes = 0
 	w.cachedBytes = 0
 	response := w.runTask(msg)
-	msg.Ack()
+	if err = w.update(pb.ExecutionStage_COMPLETED, response); err != nil {
+		msg.Nack()
+	} else {
+		msg.Ack()
+	}
 	w.currentMsg = nil
-	err = w.update(pb.ExecutionStage_COMPLETED, response)
 	w.actionDigest = nil
 	return response, err
 }
