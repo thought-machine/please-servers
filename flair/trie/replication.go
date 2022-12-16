@@ -84,9 +84,9 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 		}
 		merr = multierror.Append(merr, err)
 		if i < r.Replicas-1 {
-			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
+			log.Error("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
-			log.Debug("Error reading from replica for %s: %s.", key, err)
+			log.Error("Error reading from replica for %s: %s.", key, err)
 		}
 		offset += r.increment
 	}
@@ -128,7 +128,7 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 	}
 	if err := g.Wait(); err != nil {
 		if len(err.Errors) < r.Replicas {
-			log.Debug("Writes to some replicas for %s failed: %s", key, err)
+			log.Error("Writes to some replicas for %s failed: %s", key, err)
 			return nil
 		}
 		log.Info("Writes to all replicas for %s failed: %s", key, err)
