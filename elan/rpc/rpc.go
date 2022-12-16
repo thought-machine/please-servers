@@ -419,7 +419,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 }
 
 func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsRequest_Request) *pb.BatchReadBlobsResponse_Response {
-	log.Debug("Received batch read request for %s", r.Digest)
+	log.Debug("Received batch read request for %s", req.Digest)
 	r := &pb.BatchReadBlobsResponse_Response{
 		Status: &rpcstatus.Status{},
 		Digest: req.Digest,
@@ -523,7 +523,6 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
-	log.Debug("Received ByteStream.Write request for %s", digest.Hash)
 	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
 	defer cancel()
 	start := time.Now()
@@ -538,6 +537,7 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	if err != nil {
 		return err
 	}
+	log.Debug("Received ByteStream.Write request for %s", digest.Hash)
 	r := &bytestreamReader{stream: srv, buf: req.Data}
 	if err := s.writeBlob(ctx, "cas", digest, bufio.NewReaderSize(r, 65536), compressed); err != nil {
 		return err
