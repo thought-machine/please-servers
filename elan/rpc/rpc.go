@@ -345,6 +345,7 @@ func (s *server) isEmpty(digest *pb.Digest) bool {
 }
 
 func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsRequest) (*pb.BatchUpdateBlobsResponse, error) {
+	log.Debug("received batch update request for %v blobs", len(req.Requests))
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	resp := &pb.BatchUpdateBlobsResponse{
@@ -369,6 +370,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if s.blobExists(ctx, s.compressedKey("cas", r.Digest, compressed)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
+				log.Error("Error writing blob %s: %v", r.Digest, err)
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 				blobsReceived.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Inc()
@@ -380,6 +382,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 		}(i, r)
 	}
 	wg.Wait()
+	log.Debug("Updated %v blobs", len(req.Requests))
 	return resp, nil
 }
 
@@ -389,6 +392,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	defer cancel()
 	n := len(req.Digests)
 	m := n + len(req.Requests)
+	log.Debug("Received batch read request for %v blobs", m)
 	resp := &pb.BatchReadBlobsResponse{
 		Responses: make([]*pb.BatchReadBlobsResponse_Response, m),
 	}
@@ -415,6 +419,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 }
 
 func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsRequest_Request) *pb.BatchReadBlobsResponse_Response {
+	log.Debug("Received batch read request for %s", r.Digest)
 	r := &pb.BatchReadBlobsResponse_Response{
 		Status: &rpcstatus.Status{},
 		Digest: req.Digest,
@@ -423,10 +428,12 @@ func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsReques
 	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, compressed); err != nil {
 		r.Status.Code = int32(status.Code(err))
 		r.Status.Message = err.Error()
+		log.Error("Error reading blob %s: %v", r.Digest, err)
 	} else {
 		r.Data = data
 		r.Compressor = req.Compressor
 		bytesServed.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Add(float64(req.Digest.SizeBytes))
+		log.Debug("Served batchReadBlob request for %s", r.Digest)
 	}
 	return r
 }
@@ -455,6 +462,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if err != nil {
 		return err
 	}
+	log.Debug("Received ByteStream.Read request for %s", digest.Hash)
 	if req.ReadOffset < 0 || req.ReadOffset > digest.SizeBytes {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
 	} else if req.ReadOffset == digest.SizeBytes {
@@ -515,6 +523,7 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 }
 
 func (s *server) Write(srv bs.ByteStream_WriteServer) error {
+	log.Debug("Received ByteStream.Write request for %s", digest.Hash)
 	ctx, cancel := context.WithTimeout(srv.Context(), timeout)
 	defer cancel()
 	start := time.Now()
