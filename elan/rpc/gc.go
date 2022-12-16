@@ -85,7 +85,7 @@ func (s *server) deleteAll(ctx context.Context, blobs []*ppb.Blob, hard bool) er
 		key := blob.CachePrefix + blob.Hash
 		if exists, err := s.bucket.Exists(ctx, key); exists {
 			if err := s.bucket.Delete(ctx, key, hard); err != nil {
-				log.Error("Error deleting blob: %v/home/hpitkeathly/.local/state/nvim/swap//%home%hpitkeathly%please-servers%elan%rpc%rpc.go.swp", err)
+				log.Error("Error deleting blob: %v", err)
 				me = multierror.Append(me, fmt.Errorf("Error deleting blob: %w", err))
 			}
 			if s.knownBlobCache != nil {
