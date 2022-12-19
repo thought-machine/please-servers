@@ -4,6 +4,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -107,6 +108,9 @@ var collectOutputErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "collect_output_errors_total",
 })
+
+// ErrTimeout is returned when the build action exceeds the action timeout
+var ErrTimeout = errors.New("action execution timed out")
 
 var metrics = []prometheus.Collector{
 	totalBuilds,
@@ -715,8 +719,15 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		msg += w.writeUncachedResult(ar, msg)
 		// Attempt to collect outputs. They may exist and contain useful information such as a test.results file
 		_ = w.collectOutputs(ar, command)
+		// Still counts as OK on a status code.
+		status := &rpcstatus.Status{Code: int32(codes.OK)}
+		if err == ErrTimeout {
+			// For timeouts, the execution did not complete, so we should return this status as the docs suggest.
+			status.Code = int32(codes.DeadlineExceeded)
+			status.Message = ErrTimeout.Error()
+		}
 		return &pb.ExecuteResponse{
-			Status:  &rpcstatus.Status{Code: int32(codes.OK)}, // Still counts as OK on a status code.
+			Status:  status,
 			Result:  ar,
 			Message: msg,
 		}
@@ -840,14 +851,15 @@ func (w *worker) runCommand(cmd *exec.Cmd, timeout time.Duration) error {
 	case <-time.After(timeout):
 		log.Warning("Terminating process for %s due to timeout", w.actionDigest.Hash)
 		cmd.Process.Signal(os.Signal(syscall.SIGTERM))
-	}
-	select {
-	case err := <-ch:
-		return err
-	case <-time.After(5 * time.Second):
-		log.Warning("Killing process for %s", w.actionDigest.Hash)
-		cmd.Process.Kill()
-		return fmt.Errorf("Process timed out")
+
+		select {
+		case <-ch:
+			return ErrTimeout
+		case <-time.After(5 * time.Second):
+			log.Warning("Killing process for %s", w.actionDigest.Hash)
+			cmd.Process.Kill()
+			return ErrTimeout
+		}
 	}
 }
 

@@ -1,0 +1,8 @@
+[Remote]
+URL = 127.0.0.1:7772
+CasUrl = 127.0.0.1:7777
+AssetUrl = 127.0.0.1:7776
+NumExecutors = 1
+TokenFile = grpcutil/token.txt
+Secure = false
+DisplayUrl = https://blah.com

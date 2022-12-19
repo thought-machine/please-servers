@@ -21,7 +21,7 @@ c_library(
     name = "lua",
     srcs = glob(["deps/lua/src/*.c"], exclude = ["lua.c", "luac.c"]),
     hdrs = glob(["deps/lua/src/*.h", "src/solarisfixes.h"]),
-    cflags = ["-Wno-implicit-function-declaration"],  # They do slightly the wrong thing with strncasecmp
+    cflags = ["-Wno-implicit-function-declaration", "-Wmisleading-indentation"],  # They do slightly the wrong thing with strncasecmp
     includes = ["deps/lua/src"],
     defines = ["LUA_USE_MKSTEMP"],
 )
