@@ -1,12 +1,23 @@
+Version 10.3.4
+-------------
+    * Add some error logging to flair when failing to perform some actions.
+    * Added some debug level logging to elan to aid with debugging.
+    * Increase grace period for shutdowns in mettle and handle nack and acks correctly
+    * Returns DeadlineExceeded gRPC status code on action timeouts as required by
+      the specification.
+
 Version 10.3.3
 -------------
     * Use workers name as a job label when pushing metrics to the gateway
+
 Version 10.3.2
 -------------
     * Add workers name label to the blobNotFoundErrors counter
+
 Version 10.3.1
 -------------
     * Fix metric cardinality
+
 Version 10.3.0
 -------------
     * Only return delete errors in Elans gc
