@@ -85,14 +85,14 @@ func (s *server) deleteAll(ctx context.Context, blobs []*ppb.Blob, hard bool) er
 		key := blob.CachePrefix + blob.Hash
 		if exists, err := s.bucket.Exists(ctx, key); exists {
 			if err := s.bucket.Delete(ctx, key, hard); err != nil {
-				log.Error("Error deleting blob: %v", err)
+				log.Error("Error deleting blob: %s", err)
 				me = multierror.Append(me, fmt.Errorf("Error deleting blob: %w", err))
 			}
 			if s.knownBlobCache != nil {
 				s.knownBlobCache.Del(key)
 			}
 		} else if err != nil {
-			log.Warning("Error reading blob: %v", err)
+			log.Warning("Error reading blob: %s", err)
 		} else {
 			log.Warning("blob not found: %s", key)
 		}

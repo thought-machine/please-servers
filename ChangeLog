@@ -1,3 +1,7 @@
+Version 10.3.5
+-------------
+    * Fix logs in Flair and Elan
+
 Version 10.3.4
 -------------
     * Add some error logging to flair when failing to perform some actions.
