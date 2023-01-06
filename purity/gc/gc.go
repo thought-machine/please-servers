@@ -301,6 +301,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	if resp != nil && len(resp.MissingBlobDigests) > 0 {
 		return fmt.Errorf("Action result %s is missing %d digests", ar.Hash, len(resp.MissingBlobDigests))
 	}
+	c.referencedBlobs[ar.Hash] = struct{}{}
 	return nil
 }
 

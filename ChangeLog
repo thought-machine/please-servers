@@ -1,3 +1,7 @@
+Version 10.3.6
+-------------
+    * Mark action digests in cas, purity.
+
 Version 10.3.5
 -------------
     * Fix logs in Flair and Elan
