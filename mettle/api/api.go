@@ -58,10 +58,29 @@ var totalFailedActions = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "failed_actions_total",
 })
 
+var totalSuccessfulActions = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "Successful_actions_total",
+})
+
+var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "mettle",
+	Name:      "time_to_complete_action_secs",
+	Buckets:   []float64{1, 5, 10, 30, 60, 120, 300, 600, 900, 1200},
+})
+
+var metrics = []prometheus.Collector{
+	totalRequests,
+	currentRequests,
+	totalFailedActions,
+	totalSuccessfulActions,
+	timeToComplete,
+}
+
 func init() {
-	prometheus.MustRegister(totalRequests)
-	prometheus.MustRegister(currentRequests)
-	prometheus.MustRegister(totalFailedActions)
+	for _, metric := range metrics {
+		prometheus.MustRegister(metric)
+	}
 }
 
 // ServeForever serves on the given port until terminated.
@@ -138,6 +157,7 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 			ID:         k,
 			Current:    current,
 			LastUpdate: v.LastUpdate.Unix(),
+			StartTime:  v.StartTime.Unix(),
 			SentFirst:  v.SentFirst,
 			Done:       v.Done,
 		}
@@ -180,6 +200,7 @@ func getExecutions(opts grpcutil.Opts, apiURL string, connTLS bool) (map[string]
 		jobs[j.ID] = &job{
 			Current:    current,
 			LastUpdate: time.Unix(j.LastUpdate, 0),
+			StartTime:  time.Unix(j.StartTime, 0),
 			SentFirst:  j.SentFirst,
 			Done:       j.Done,
 		}
@@ -314,6 +335,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		})
 		j = &job{
 			Current:    &longrunning.Operation{Metadata: any},
+			StartTime:  time.Now(),
 			LastUpdate: time.Now(),
 		}
 		s.jobs[digest.Hash] = j
@@ -333,6 +355,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		// This request is creating a new stream, clear out any existing current job info; it is now
 		// at best irrelevant and at worst outdated.
 		j.Current = nil
+		j.StartTime = time.Now()
 	} else if j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
@@ -408,6 +431,7 @@ func (s *server) process(msg *pubsub.Message) {
 			totalFailedActions.Inc()
 		} else {
 			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
+			totalSuccessfulActions.Inc()
 		}
 	} else {
 		log.Notice("Got an update for %s from %s, now %s. Done: %v", key, worker, metadata.Stage, op.Done)
@@ -456,6 +480,9 @@ func (s *server) process(msg *pubsub.Message) {
 			}(stream)
 		}
 		if op.Done {
+			if !j.StartTime.IsZero() {
+				timeToComplete.Observe(j.LastUpdate.Sub(j.StartTime).Seconds())
+			}
 			log.Info("Job %s completed by %s", key, worker)
 			go s.deleteJob(key, j)
 		}
@@ -550,6 +577,7 @@ func contains(haystack []string, needle string) bool {
 type job struct {
 	Streams    []chan *longrunning.Operation
 	Current    *longrunning.Operation
+	StartTime  time.Time
 	LastUpdate time.Time
 	SentFirst  bool
 	Done       bool

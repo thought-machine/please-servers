@@ -109,6 +109,11 @@ var collectOutputErrors = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "collect_output_errors_total",
 })
 
+var nackedMessages = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "nacked_messages_total",
+})
+
 // ErrTimeout is returned when the build action exceeds the action timeout
 var ErrTimeout = errors.New("action execution timed out")
 
@@ -129,6 +134,7 @@ var metrics = []prometheus.Collector{
 	packsDownloaded,
 	packBytesRead,
 	collectOutputErrors,
+	nackedMessages,
 }
 
 func registerMetrics(name string) {
@@ -428,6 +434,7 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 	response := w.runTask(msg)
 	if err = w.update(pb.ExecutionStage_COMPLETED, response); err != nil {
 		msg.Nack()
+		nackedMessages.Inc()
 	} else {
 		msg.Ack()
 	}
@@ -438,7 +445,7 @@ func (w *worker) RunTask(ctx context.Context) (*pb.ExecuteResponse, error) {
 
 // receiveTask receives a task off the queue.
 func (w *worker) receiveTask(ctx context.Context) (*pubsub.Message, error) {
-	log.Notice("Waiting for next task...")
+	log.Debug("Waiting for next task...")
 	for {
 		msg, err := w.receiveOne(ctx)
 		if err == context.DeadlineExceeded {
@@ -519,6 +526,7 @@ func (w *worker) forceShutdown(shutdownMsg string) {
 			log.Error("Nacking action but action digest is nil")
 		}
 		w.currentMsg.Nack()
+		nackedMessages.Inc()
 	}
 	log.Fatal(shutdownMsg)
 }
@@ -621,7 +629,7 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	} else {
 		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
 	}
-	log.Notice("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
+	log.Debug("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
 	return nil
 }
 
@@ -649,8 +657,6 @@ func (w *worker) createTempDir() error {
 
 // execute runs the actual commands once the inputs are prepared.
 func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.Command) *pb.ExecuteResponse {
-	log.Notice("Beginning execution for %s", w.actionDigest.Hash)
-	log.Debug("Executing %s: %s", w.actionDigest.Hash, command.Arguments)
 	if w.clean {
 		defer func() {
 			if err := os.RemoveAll(w.dir); err != nil {
@@ -662,7 +668,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	start := time.Now()
 	w.metadata.ExecutionStartTimestamp = toTimestamp(start)
 	duration, _ := ptypes.Duration(action.Timeout)
-	log.Info("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
+	log.Notice("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
 	cmd := exec.Command(command.Arguments[0], command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 	cmd.SysProcAttr = sysProcAttr()

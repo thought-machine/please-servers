@@ -14,6 +14,7 @@ message Job {
     int64 LastUpdate = 5;
     bool SentFirst = 3;
     bool Done = 4;
+    int64 StartTime = 6;
 }
 
 message ServeExecutionsRequest {}
