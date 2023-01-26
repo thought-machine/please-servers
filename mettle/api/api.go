@@ -60,7 +60,7 @@ var totalFailedActions = prometheus.NewCounter(prometheus.CounterOpts{
 
 var totalSuccessfulActions = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
-	Name:      "Successful_actions_total",
+	Name:      "successful_actions_total",
 })
 
 var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
