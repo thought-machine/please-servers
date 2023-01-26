@@ -349,7 +349,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest
 	var size int64
 	blob, present := c.allBlobs[dg.Hash]
 	if !present {
-		log.Error("missing action for %s", dg.Hash)
+		log.Errorf("missing action for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil, nil
 	}
@@ -357,20 +357,20 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest
 		Hash: dg.Hash,
 		Size: blob.SizeBytes,
 	}, action); err != nil {
-		log.Error("Failed to read action %s: %s", dg.Hash, err)
+		log.Errorf("Failed to read action %s: %s", dg.Hash, err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil, nil
 	}
 	size += dg.SizeBytes
 	if action.InputRootDigest == nil {
-		log.Error("nil input root for %s", dg.Hash)
+		log.Errorf("nil input root for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil, nil
 	}
 	size += action.InputRootDigest.SizeBytes
 	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
 	if err != nil {
-		log.Error("Failed to read directory tree for %s (input root %s): %s", dg.Hash, action.InputRootDigest, err)
+		log.Errorf("Failed to read directory tree for %s (input root %s): %s", dg.Hash, action.InputRootDigest, err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil, action.InputRootDigest
 	}
@@ -760,7 +760,7 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		}
 		dir, present := m[digest.Hash]
 		if !present {
-			log.Error("Failed to find input directory with hash %s", digest.Hash)
+			log.Errorf("Failed to find input directory with hash %s", digest.Hash)
 			return
 		}
 		for _, file := range dir.Files {

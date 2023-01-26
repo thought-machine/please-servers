@@ -75,7 +75,7 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 			if !shouldContinue {
 				return nil // No need to do any more.
 			}
-			log.Debug("Caller requested to continue on next replica for %s", key)
+			log.Debugf("Caller requested to continue on next replica for %s", key)
 			success = true // we're always successful from here on
 			offset += r.increment
 			continue
@@ -84,9 +84,9 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 		}
 		merr = multierror.Append(merr, err)
 		if i < r.Replicas-1 {
-			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
+			log.Debugf("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
-			log.Debug("Error reading from replica for %s: %s.", key, err)
+			log.Debugf("Error reading from replica for %s: %s.", key, err)
 		}
 		offset += r.increment
 	}
