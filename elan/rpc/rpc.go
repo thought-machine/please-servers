@@ -298,7 +298,6 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 				mutex.Lock()
 				resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
 				mutex.Unlock()
-				log.Debug("Blob %s found to be missing", d.Hash)
 			}
 			wg.Done()
 		}(d)
@@ -370,7 +369,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 			} else if s.blobExists(ctx, s.compressedKey("cas", r.Digest, compressed)) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
-				log.Error("Error writing blob %s: %s", r.Digest, err)
+				log.Errorf("Error writing blob %s: %s", r.Digest, err)
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 				blobsReceived.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Inc()

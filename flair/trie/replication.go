@@ -84,9 +84,9 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 		}
 		merr = multierror.Append(merr, err)
 		if i < r.Replicas-1 {
-			log.Error("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
+			log.Debug("Error reading from replica for %s: %s. Will retry on next replica.", key, err)
 		} else {
-			log.Error("Error reading from replica for %s: %s.", key, err)
+			log.Debug("Error reading from replica for %s: %s.", key, err)
 		}
 		offset += r.increment
 	}
@@ -97,7 +97,7 @@ func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 		// Don't log anything on a global NotFound; this is returned by GetActionResult to
 		// simply indicate the action result is not present, so it legitimately comes up often.
 		if code != codes.NotFound {
-			log.Warning("Reads from all replicas failed: %s", merr)
+			log.Warningf("Reads from all replicas failed: %s", merr)
 		}
 		return status.Errorf(code, "Reads from all replicas failed: %s", merr)
 	}
@@ -128,10 +128,9 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 	}
 	if err := g.Wait(); err != nil {
 		if len(err.Errors) < r.Replicas {
-			log.Error("Writes to some replicas for %s failed: %s", key, err)
+			log.Errorf("Writes to some replicas for %s failed: %s", key, err)
 			return nil
 		}
-		log.Error("Writes to all replicas for %s failed: %s", key, err)
 		return err
 	}
 	return nil
