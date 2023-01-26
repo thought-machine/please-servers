@@ -303,7 +303,7 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 		for i, dg := range resp.MissingBlobDigests {
 			digests[i] = fmt.Sprintf("%s/%d", dg.Hash, dg.SizeBytes)
 		}
-		return fmt.Errorf("Action result is missing %d digests: %s", ar.Hash, len(resp.MissingBlobDigests), strings.Join(digests, ", "))
+		return fmt.Errorf("Action result is missing %d digests: %s", len(resp.MissingBlobDigests), strings.Join(digests, ", "))
 	}
 	c.referencedBlobs[ar.Hash] = struct{}{}
 	return nil
