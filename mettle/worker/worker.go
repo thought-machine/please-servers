@@ -137,7 +137,7 @@ var metrics = []prometheus.Collector{
 	nackedMessages,
 }
 
-func registerMetrics(name string) {
+func init() {
 	for _, metric := range metrics {
 		prometheus.MustRegister(metric)
 	}
@@ -350,7 +350,6 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
-	registerMetrics(name)
 	for name, cost := range costs {
 		w.costs[name] = &bbru.MonetaryResourceUsage_Expense{Currency: cost.Denomination, Cost: cost.Amount}
 	}
