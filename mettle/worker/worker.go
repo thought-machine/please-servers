@@ -62,7 +62,7 @@ var currentBuilds = prometheus.NewGauge(prometheus.GaugeOpts{
 var executeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "build_durations_secs",
-	Buckets:   []float64{1, 2, 5, 10, 20, 50, 200, 500},
+	Buckets:   []float64{1, 5, 10, 30, 60, 120, 300, 600, 900, 1200},
 })
 var fetchDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
@@ -137,12 +137,9 @@ var metrics = []prometheus.Collector{
 	nackedMessages,
 }
 
-func registerMetrics(name string) {
-	r := prometheus.WrapRegistererWith(prometheus.Labels{
-		"worker": name,
-	}, prometheus.DefaultRegisterer)
+func init() {
 	for _, metric := range metrics {
-		r.MustRegister(metric)
+		prometheus.MustRegister(metric)
 	}
 }
 
@@ -353,7 +350,6 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		w.lucidity = lpb.NewLucidityClient(conn)
 		go w.sendReports()
 	}
-	registerMetrics(name)
 	for name, cost := range costs {
 		w.costs[name] = &bbru.MonetaryResourceUsage_Expense{Currency: cost.Denomination, Cost: cost.Amount}
 	}
