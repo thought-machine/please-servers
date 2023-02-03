@@ -187,7 +187,7 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 	if len(keys) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	resp, err := r.redis.MGet(ctx, keys...).Result()
 	if err != nil {
@@ -228,6 +228,8 @@ func (r *redisClient) writeBlobs(uploads []interface{}) {
 		return
 	}
 	log.Debug("Writing %d blobs to Redis...", len(uploads)/2)
+	// we are not using the client timeout, as this will most likely take more than the default 10s
+	// plus this is not in the critical path, so it's not a big issue
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	if cmd := r.redis.MSet(ctx, uploads...); cmd.Val() != "OK" {
@@ -237,7 +239,7 @@ func (r *redisClient) writeBlobs(uploads []interface{}) {
 }
 
 func (r *redisClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	blob, err := r.redis.Get(ctx, dg.Hash).Bytes()
 	if err != nil {
