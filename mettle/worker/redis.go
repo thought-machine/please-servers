@@ -30,28 +30,41 @@ var redisBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
 
 // newRedisClient augments an existing elan.Client with a Redis connection.
 // All usage of Redis is best-effort only.
-func newRedisClient(client elan.Client, url, password string, useTLS bool) elan.Client {
-	var tlsConfig *tls.Config
+// If readURL is set, all reads will happen on this URL. If not, everything
+// will go to url.
+func newRedisClient(client elan.Client, url, readURL, password string, useTLS bool) elan.Client {
+	primaryOpts := &redis.Options{
+		Addr:     url,
+		Password: password,
+	}
+	readOpts := &redis.Options{
+		Addr:     readURL,
+		Password: password,
+	}
 	if useTLS {
-		tlsConfig = &tls.Config{}
+		primaryOpts.TLSConfig = &tls.Config{}
+		readOpts.TLSConfig = &tls.Config{}
+	}
+	primaryClient := redis.NewClient(primaryOpts)
+	readClient := primaryClient
+	if readURL != "" {
+		readClient = redis.NewClient(readOpts)
 	}
 	return &redisClient{
-		elan: client,
-		redis: redis.NewClient(&redis.Options{
-			Addr:      url,
-			Password:  password,
-			TLSConfig: tlsConfig,
-		}),
-		timeout: 10 * time.Second,
-		maxSize: 200 * 1012, // 200 Kelly-Bootle standard units
+		elan:      client,
+		redis:     primaryClient,
+		readRedis: readClient,
+		timeout:   10 * time.Second,
+		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
 	}
 }
 
 type redisClient struct {
-	elan    elan.Client
-	redis   *redis.Client
-	timeout time.Duration
-	maxSize int64
+	elan      elan.Client
+	redis     *redis.Client
+	readRedis *redis.Client
+	timeout   time.Duration
+	maxSize   int64
 }
 
 func (r *redisClient) Healthcheck() error {
@@ -61,7 +74,7 @@ func (r *redisClient) Healthcheck() error {
 func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	cmd := r.redis.Get(ctx, dg.Hash)
+	cmd := r.readRedis.Get(ctx, dg.Hash)
 	if err := cmd.Err(); err == nil {
 		blob, _ := cmd.Bytes()
 		return blob, nil
@@ -189,7 +202,7 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	resp, err := r.redis.MGet(ctx, keys...).Result()
+	resp, err := r.readRedis.MGet(ctx, keys...).Result()
 	if err != nil {
 		log.Warning("Failed to check blobs in Redis: %s", err)
 		return nil
@@ -241,7 +254,7 @@ func (r *redisClient) writeBlobs(uploads []interface{}) {
 func (r *redisClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	blob, err := r.redis.Get(ctx, dg.Hash).Bytes()
+	blob, err := r.readRedis.Get(ctx, dg.Hash).Bytes()
 	if err != nil {
 		if err != redis.Nil { // Not found.
 			log.Warning("Error reading blob from Redis: %s", err)
