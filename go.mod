@@ -26,8 +26,8 @@ require (
 	github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c
 	github.com/peterebden/go-sri v1.1.1
 	github.com/pkg/xattr v0.4.3 // indirect
-	github.com/prometheus/client_golang v1.7.1
-	github.com/prometheus/common v0.10.0
+	github.com/prometheus/client_golang v1.11.1
+	github.com/prometheus/common v0.26.0
 	github.com/shirou/gopsutil v3.21.1+incompatible
 	github.com/stretchr/testify v1.7.0
 	github.com/thought-machine/http-admin v1.1.0
