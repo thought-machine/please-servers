@@ -5,6 +5,7 @@ package trie
 
 import (
 	"fmt"
+	mathrand "math/rand"
 	"strings"
 
 	apb "github.com/bazelbuild/remote-apis/build/bazel/remote/asset/v1"
@@ -22,6 +23,7 @@ type Trie struct {
 	root         node
 	nodes        []node // premature optimisation
 	servers      []Server
+	loadBalance  bool
 }
 
 // A Server holds several gRPC connections to the same server.
@@ -52,6 +54,11 @@ type DialCallback func(address string) (*grpc.ClientConn, error)
 // New creates a new trie.
 func New(callback DialCallback) *Trie {
 	return &Trie{dialCallback: callback}
+}
+
+func (t *Trie) WithLoadBalancing(balance bool) *Trie {
+	t.loadBalance = balance
+	return t
 }
 
 // Add adds a node to this trie.
@@ -189,7 +196,11 @@ func toHex(i int) byte {
 // Get returns a server from this trie.
 // It is assumed not to fail since the trie is already complete.
 func (t *Trie) Get(key string) *Server {
-	return t.GetOffset(key, 0)
+	offset := 0
+	if t.loadBalance {
+		offset = mathrand.Intn(len(t.nodes))
+	}
+	return t.GetOffset(key, offset)
 }
 
 // GetOffset gets a server with the hash offset by a given amount.
