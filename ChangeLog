@@ -1,3 +1,7 @@
+Version 10.5.0
+-------------
+    * Allow load balancing in Flair server-hash.
+
 Version 10.4.0
 -------------
     * Allow using read replicas with Redis client.
