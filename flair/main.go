@@ -50,7 +50,7 @@ func main() {
 	go cli.ServeAdmin(opts.Admin, info)
 	cr := newReplicator(opts.Geometry, opts.Replicas, opts.LoadBalance)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas, opts.LoadBalance)
-	er := newReplicator(opts.ExecutorGeometry, opts.Replicas, opts.LoadBalance)
+	er := newReplicator(opts.ExecutorGeometry, opts.Replicas, false)
 	rpc.ServeForever(opts.GRPC, cr, ar, er, time.Duration(opts.Timeout))
 }
 
