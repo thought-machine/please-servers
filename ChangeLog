@@ -1,3 +1,6 @@
+Version 10.5.1
+-------------
+    * Load balance correctly
 Version 10.5.0
 -------------
     * Allow load balancing in Flair server-hash.
