@@ -188,7 +188,7 @@ func TestRandomisedLoadBalancing(t *testing.T) {
 	} {
 		tc := testcase
 		t.Run(fmt.Sprintf("Seed: %d", tc.Seed), func(t *testing.T) {
-			rnd = rand.New(rand.NewSource(tc.Seed))
+			intN = rand.New(rand.NewSource(tc.Seed)).Intn
 			r := NewReplicator(testTrie(t), 4, true)
 
 			var all []string
@@ -223,7 +223,7 @@ func TestRandomisedSequentialLoadBalancing(t *testing.T) {
 	} {
 		tc := testcase
 		t.Run(fmt.Sprintf("Seed: %d", tc.Seed), func(t *testing.T) {
-			rnd = rand.New(rand.NewSource(tc.Seed))
+			intN = rand.New(rand.NewSource(tc.Seed)).Intn
 			r := NewReplicator(testTrie(t), 4, true)
 
 			var all []string

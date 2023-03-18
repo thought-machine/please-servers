@@ -20,7 +20,7 @@ var log = logging.MustGetLogger()
 
 var serverDead = status.Errorf(codes.DeadlineExceeded, "Server is down")
 
-var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+var intN = rand.Intn
 
 // failureThreshold is the number of timeouts we tolerate on a server before marking it
 // out of service.
@@ -143,7 +143,7 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 
 func (r *Replicator) startingOffset() int {
 	if r.loadBalance {
-		return rnd.Intn(r.Replicas) * r.increment
+		return intN(r.Replicas) * r.increment
 	}
 	return 0
 }
