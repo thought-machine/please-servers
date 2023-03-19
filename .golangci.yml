@@ -14,6 +14,9 @@ issues:
     - appendAssign
     - halp  # Make misspell be quiet about this.
     - exitAfterDefer # Potentially useful but not in any cases it fires right now.
+    - unused-parameter # Quite a few of these, some legit, many are fulfilling interfaces
+    - redefines-builtin # Not really a big issue
+    - empty-block # Only came up once and was a false positive. This should be easily handled by review.
   exclude-rules:
     - path: _test\.go
       linters:
@@ -22,15 +25,12 @@ issues:
 linters:
   disable-all: true
   enable:
-    - deadcode
     - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
     - asciicheck
     - bodyclose
     - dogsled
