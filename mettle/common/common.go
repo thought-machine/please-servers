@@ -142,10 +142,7 @@ func CheckOutputPaths(cmd *pb.Command) error {
 	if err := checkOutputPaths(cmd.OutputFiles); err != nil {
 		return err
 	}
-	if err := checkOutputPaths(cmd.OutputPaths); err != nil {
-		return err
-	}
-	return nil
+	return checkOutputPaths(cmd.OutputPaths)
 }
 
 func checkOutputPaths(paths []string) error {
