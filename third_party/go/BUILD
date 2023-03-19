@@ -2,7 +2,11 @@ package(default_visibility = ["PUBLIC"])
 
 go_toolchain(
     name = "toolchain",
-    version = "1.19",
+    version = "1.20.2",
+)
+
+go_system_toolchain(
+    name = "system_toolchain",
 )
 
 go_module(

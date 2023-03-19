@@ -1,8 +1,8 @@
 subinclude("///cc//build_defs:c")
 
 package(cc = {
-    "default_opt_cflags": "--std=c99 -O3 -pipe -DNDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation",
-    "default_dbg_cflags": "--std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation",
+    "default_opt_cflags": "--std=c99 -O3 -pipe -DNDEBUG -Wall -Wno-error=stringop-overflow -Wno-error=misleading-indentation",
+    "default_dbg_cflags": "--std=c99 -g3 -pipe -DDEBUG -Wall -Wno-error=stringop-overflow -Wno-error=misleading-indentation",
 })
 
 _release_h = """

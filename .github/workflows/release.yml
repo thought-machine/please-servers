@@ -4,7 +4,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: thoughtmachine/please-servers:20220816
+      image: thoughtmachine/please-servers:20230319
     steps:
       - name: Checkout code
         uses: actions/checkout@v2

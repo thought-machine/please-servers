@@ -5,6 +5,7 @@ dircompress = true
 
 [plugin "go"]
 defaultstatic = true
+gotool = //third_party/go:system_toolchain|go
 
 [proto]
 protoctool = protoc

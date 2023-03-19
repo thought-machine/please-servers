@@ -1,5 +1,5 @@
 [please]
-version = >=16.22.0
+version = >=16.27.5
 
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
@@ -10,6 +10,7 @@ preloadsubincludes = ///go//build_defs:go
 [plugin "go"]
 target = //plugins:go
 importpath = github.com/thought-machine/please-servers
+gotool = //third_party/go:toolchain|go
 
 [python]
 moduledir = third_party/python
