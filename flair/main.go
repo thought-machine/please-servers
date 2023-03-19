@@ -60,11 +60,11 @@ func newReplicator(geometry map[string]string, replicas int, loadBalance bool) *
 	}
 	t := trie.New(func(address string) (*grpc.ClientConn, error) {
 		return grpcutil.Dial(address, opts.ConnTLS, opts.CA, opts.GRPC.TokenFile)
-	}).WithLoadBalancing(loadBalance)
+	})
 	if err := t.AddAll(geometry); err != nil {
 		log.Fatalf("Failed to create trie for provided geometry: %s", err)
 	} else if err := t.Check(); err != nil {
 		log.Fatalf("Failed to construct trie: %s", err)
 	}
-	return trie.NewReplicator(t, replicas)
+	return trie.NewReplicator(t, replicas, loadBalance)
 }
