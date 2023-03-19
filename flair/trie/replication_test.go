@@ -2,6 +2,7 @@ package trie
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,7 +16,7 @@ import (
 func TestReplicatedSequentialSuccess(t *testing.T) {
 	called := 0
 	trie := testTrie(t)
-	r := NewReplicator(trie, 2)
+	r := NewReplicator(trie, 2, false)
 	// This should succeed on the second call.
 	assert.NoError(t, r.Sequential("0000", func(s *Server) error {
 		called++
@@ -29,7 +30,7 @@ func TestReplicatedSequentialSuccess(t *testing.T) {
 
 func TestReplicatedSequentialFailure(t *testing.T) {
 	called := 0
-	r := NewReplicator(testTrie(t), 2)
+	r := NewReplicator(testTrie(t), 2, false)
 	// This should fail on all calls.
 	assert.Error(t, r.Sequential("0000", func(s *Server) error {
 		called++
@@ -40,7 +41,7 @@ func TestReplicatedSequentialFailure(t *testing.T) {
 
 func TestReplicatedSequentialNotRetryable(t *testing.T) {
 	called := 0
-	r := NewReplicator(testTrie(t), 4)
+	r := NewReplicator(testTrie(t), 4, false)
 	// This should fail on the first call but not retry.
 	assert.Error(t, r.Sequential("0000", func(s *Server) error {
 		called++
@@ -54,7 +55,7 @@ func TestReplicatedParallelSuccess(t *testing.T) {
 	wg.Add(2)
 	var called int64
 	trie := testTrie(t)
-	r := NewReplicator(trie, 2)
+	r := NewReplicator(trie, 2, false)
 	// This should succeed on the second server, and hence overall
 	assert.NoError(t, r.Parallel("0000", func(s *Server) error {
 		defer wg.Done()
@@ -72,7 +73,7 @@ func TestReplicatedParallelFailure(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	var called int64
-	r := NewReplicator(testTrie(t), 3)
+	r := NewReplicator(testTrie(t), 3, false)
 	// This should fail since all writes fail
 	assert.Error(t, r.Parallel("0000", func(s *Server) error {
 		defer wg.Done()
@@ -85,7 +86,7 @@ func TestReplicatedParallelFailure(t *testing.T) {
 
 func TestSingleServerDown(t *testing.T) {
 	trie := testTrie(t)
-	r := NewReplicator(trie, 2)
+	r := NewReplicator(trie, 2, false)
 
 	// Fail it enough times to mark the first one down.
 	for i := 0; i < failureThreshold; i++ {
@@ -104,7 +105,7 @@ func TestSingleServerDown(t *testing.T) {
 }
 
 func TestServerDeadIsContinuable(t *testing.T) {
-	r := NewReplicator(testTrie(t), 3)
+	r := NewReplicator(testTrie(t), 3, false)
 	assert.True(t, r.isContinuable(serverDead))
 }
 
@@ -160,6 +161,77 @@ func TestErrorCode(t *testing.T) {
 				merr = multierror.Append(merr, status.Errorf(input, input.String()))
 			}
 			assert.Equal(t, tc.Output, errorCode(merr))
+		})
+	}
+}
+
+func TestRandomisedLoadBalancing(t *testing.T) {
+	for _, testcase := range []struct {
+		Output []string
+		Seed   int64
+	}{
+		{
+			Seed:   42,
+			Output: []string{"40", "80", "b0", "00"},
+		}, {
+			Seed:   3,
+			Output: []string{"00", "40", "80", "b0"},
+		},
+		{
+			Seed:   51,
+			Output: []string{"80", "b0", "00", "40"},
+		},
+		{
+			Seed:   54,
+			Output: []string{"b0", "00", "40", "80"},
+		},
+	} {
+		tc := testcase
+		t.Run(fmt.Sprintf("Seed: %d", tc.Seed), func(t *testing.T) {
+			intN = rand.New(rand.NewSource(tc.Seed)).Intn
+			r := NewReplicator(testTrie(t), 4, true)
+
+			var all []string
+			assert.NoError(t, r.SequentialAck("0000", func(s *Server) (bool, error) {
+				all = append(all, s.Start)
+				return true, nil
+			}))
+			assert.Equal(t, tc.Output, all)
+		})
+	}
+}
+func TestRandomisedSequentialLoadBalancing(t *testing.T) {
+	for _, testcase := range []struct {
+		Output []string
+		Seed   int64
+	}{
+		{
+			Seed:   42,
+			Output: []string{"40"},
+		}, {
+			Seed:   3,
+			Output: []string{"00"},
+		},
+		{
+			Seed:   51,
+			Output: []string{"80"},
+		},
+		{
+			Seed:   54,
+			Output: []string{"b0"},
+		},
+	} {
+		tc := testcase
+		t.Run(fmt.Sprintf("Seed: %d", tc.Seed), func(t *testing.T) {
+			intN = rand.New(rand.NewSource(tc.Seed)).Intn
+			r := NewReplicator(testTrie(t), 4, true)
+
+			var all []string
+			assert.NoError(t, r.Sequential("0000", func(s *Server) error {
+				all = append(all, s.Start)
+				return nil
+			}))
+			assert.Equal(t, tc.Output, all)
 		})
 	}
 }
