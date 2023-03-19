@@ -26,16 +26,16 @@ require (
 	github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c
 	github.com/peterebden/go-sri v1.1.1
 	github.com/pkg/xattr v0.4.3 // indirect
-	github.com/prometheus/client_golang v1.7.1
-	github.com/prometheus/common v0.10.0
+	github.com/prometheus/client_golang v1.11.1
+	github.com/prometheus/common v0.26.0
 	github.com/shirou/gopsutil v3.21.1+incompatible
 	github.com/stretchr/testify v1.7.0
 	github.com/thought-machine/http-admin v1.1.0
 	github.com/thought-machine/please v13.4.0+incompatible
 	go.uber.org/automaxprocs v1.4.0
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
-	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
+	golang.org/x/crypto v0.1.0
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	google.golang.org/api v0.88.0
 	google.golang.org/genproto v0.0.0-20220720214146-176da50484ac
 	google.golang.org/grpc v1.48.0
