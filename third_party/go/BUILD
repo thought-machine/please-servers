@@ -5,6 +5,10 @@ go_toolchain(
     version = "1.20.2",
 )
 
+go_system_toolchain(
+    name = "system_toolchain",
+)
+
 go_module(
     name = "logging",
     module = "gopkg.in/op/go-logging.v1",
