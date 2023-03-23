@@ -31,12 +31,14 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+	log.Debugf("marking input blobs for %s: %v", ar.Hash, inputBlobs)
 	var inputSize int64
 	for _, b := range inputBlobs {
 		c.referencedBlobs[b.Hash] = struct{}{}
 		inputSize += b.SizeBytes
 	}
 	c.inputSizes[ar.Hash] = int(inputSize)
+	log.Debugf("marking output blobs for %s: %v", ar.Hash, outputBlobs)
 	var outputSize int64
 	for _, b := range outputBlobs {
 		c.referencedBlobs[b.Hash] = struct{}{}
