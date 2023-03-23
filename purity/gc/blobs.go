@@ -82,7 +82,7 @@ func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 }
 
 func (c *collector) blobsForAction(action *pb.Action) ([]*pb.Digest, error) {
-	var digests []*pb.Digest
+	digests := make([]*pb.Digest, 0, 2)
 	if action.InputRootDigest == nil {
 		return nil, errors.New("nil input root")
 	}
@@ -142,7 +142,7 @@ func (c *collector) outputBlobs(ar *ppb.ActionResult) ([]*pb.Digest, error) {
 }
 
 func (c *collector) blobsForActionResult(ar *pb.ActionResult) ([]*pb.Digest, error) {
-	var digests []*pb.Digest
+	digests := make([]*pb.Digest, 0, len(ar.OutputDirectories))
 	for _, d := range ar.OutputDirectories {
 		dgs, err := c.blobsForOutputDir(d)
 		if err != nil {
