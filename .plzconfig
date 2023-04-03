@@ -11,6 +11,7 @@ preloadsubincludes = ///go//build_defs:go
 target = //plugins:go
 importpath = github.com/thought-machine/please-servers
 gotool = //third_party/go:toolchain|go
+coverageredesign = true
 
 [python]
 moduledir = third_party/python
