@@ -112,7 +112,7 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 				if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
 					InstanceName: s.storageClient.InstanceName,
 					BlobDigests:  []*rpb.Digest{ar.OutputFiles[0].Digest},
-				}); err == nil || len(resp.MissingBlobDigests) == 0 {
+				}); err == nil && len(resp.MissingBlobDigests) == 0 {
 					log.Info("Retrieved %s from action cache (as %s/%d) and exists in CAS", req.Uris, dg.Hash, dg.Size)
 					return &pb.FetchBlobResponse{
 						Status:     &rpcstatus.Status{},
