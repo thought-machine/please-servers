@@ -119,11 +119,11 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 						BlobDigest: ar.OutputFiles[0].Digest,
 					}, nil
 				} else {
-					log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
+					//  Missed the CAS, note it down, and move on to usual times.
+					casMissing.Inc()
 				}
 			} else {
-				//  Missed the CAS, note it down, and move on to usual times.
-				casMissing.Inc()
+				log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 			}
 		}
 		if len(ar.OutputFiles) == 1 {
