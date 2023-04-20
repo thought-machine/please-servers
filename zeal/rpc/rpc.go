@@ -118,10 +118,9 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 						Status:     &rpcstatus.Status{},
 						BlobDigest: ar.OutputFiles[0].Digest,
 					}, nil
-				} else {
-					//  Missed the CAS, note it down, and move on to usual times.
-					casMissing.Inc()
 				}
+				//  Missed the CAS, note it down, and move on to usual times.
+				casMissing.Inc()
 			} else {
 				log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 			}
