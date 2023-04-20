@@ -1,3 +1,6 @@
+Version 10.6.0
+-------------
+    * Add ability for Zeal to always check the CAS for the ActionResult Output.
 Version 10.5.1
 -------------
     * Load balance correctly
