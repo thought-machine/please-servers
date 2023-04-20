@@ -99,14 +99,19 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 	if ar, err := s.storageClient.CheckActionCache(ctx, dg.ToProto()); err != nil {
 		log.Error("Failed to check action cache: %s", err)
 	} else if ar != nil {
-		if len(ar.OutputFiles) == 1 {
-			log.Info("Retrieved %s from action cache (as %s/%d)", req.Uris, dg.Hash, dg.Size)
-			return &pb.FetchBlobResponse{
-				Status:     &rpcstatus.Status{},
-				BlobDigest: ar.OutputFiles[0].Digest,
-			}, nil
+		if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
+			InstanceName: s.storageClient.InstanceName,
+			BlobDigests:  []*rpb.Digest{dg.ToProto()},
+		}); err == nil || len(resp.MissingBlobDigests) == 0 {
+			if len(ar.OutputFiles) == 1 {
+				log.Info("Retrieved %s from action cache (as %s/%d)", req.Uris, dg.Hash, dg.Size)
+				return &pb.FetchBlobResponse{
+					Status:     &rpcstatus.Status{},
+					BlobDigest: ar.OutputFiles[0].Digest,
+				}, nil
+			}
+			log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 		}
-		log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 	}
 	resp, err := s.fetchBlob(ctx, req)
 	if err != nil {
