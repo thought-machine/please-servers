@@ -108,11 +108,11 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 		log.Error("Failed to check action cache: %s", err)
 	} else if ar != nil {
 		if s.forceCasCheck {
-			if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
-				InstanceName: s.storageClient.InstanceName,
-				BlobDigests:  []*rpb.Digest{dg.ToProto()},
-			}); err == nil || len(resp.MissingBlobDigests) == 0 {
-				if len(ar.OutputFiles) == 1 {
+			if len(ar.OutputFiles) == 1 {
+				if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
+					InstanceName: s.storageClient.InstanceName,
+					BlobDigests:  []*rpb.Digest{ar.OutputFiles[0].Digest},
+				}); err == nil || len(resp.MissingBlobDigests) == 0 {
 					log.Info("Retrieved %s from action cache (as %s/%d) and exists in CAS", req.Uris, dg.Hash, dg.Size)
 					return &pb.FetchBlobResponse{
 						Status:     &rpcstatus.Status{},
