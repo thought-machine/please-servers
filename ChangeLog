@@ -1,3 +1,7 @@
+Version 10.6.1
+-------------
+    * Write the boolean logic for the missing blob check in Zeal correctly
+
 Version 10.6.0
 -------------
     * Add ability for Zeal to always check the CAS for the ActionResult Output.
