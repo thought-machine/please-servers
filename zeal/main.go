@@ -23,7 +23,8 @@ var opts = struct {
 		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling communication with the CAS server"`
-	Admin cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Admin         cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
+	ForceCasCheck bool          `long:"force-check" description:"Force check for the CAS even when we have an action result"`
 }{
 	Usage: `
 Zeal is a partial implementation of the Remote Asset API.
@@ -69,5 +70,5 @@ func main() {
 		log.Notice("Loaded auth credentials for %s", prefix)
 	}
 
-	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism, opts.Headers, auth)
+	rpc.ServeForever(opts.GRPC, opts.Storage.Storage, opts.Storage.TLS, opts.Parallelism, opts.Headers, auth, opts.ForceCasCheck)
 }
