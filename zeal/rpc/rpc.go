@@ -124,15 +124,16 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 			} else {
 				log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 			}
+		} else {
+			if len(ar.OutputFiles) == 1 {
+				log.Info("Retrieved %s from action cache (as %s/%d). Did not check CAS", req.Uris, dg.Hash, dg.Size)
+				return &pb.FetchBlobResponse{
+					Status:     &rpcstatus.Status{},
+					BlobDigest: ar.OutputFiles[0].Digest,
+				}, nil
+			}
+			log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 		}
-		if len(ar.OutputFiles) == 1 {
-			log.Info("Retrieved %s from action cache (as %s/%d). Did not check CAS", req.Uris, dg.Hash, dg.Size)
-			return &pb.FetchBlobResponse{
-				Status:     &rpcstatus.Status{},
-				BlobDigest: ar.OutputFiles[0].Digest,
-			}, nil
-		}
-		log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 	}
 	resp, err := s.fetchBlob(ctx, req)
 	if err != nil {
