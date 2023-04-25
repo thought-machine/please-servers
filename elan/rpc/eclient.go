@@ -135,7 +135,7 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 
 func (e *elanClient) BatchDownload(digests []digest.Digest) (map[digest.Digest][]byte, error) {
 	m := make(map[digest.Digest][]byte, len(digests))
-	for i, dg := range digests {
+	for _, dg := range digests {
 		d, err := e.downloadOne(dg.ToProto())
 		if err != nil {
 			return nil, err
