@@ -72,11 +72,11 @@ func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	return err
 }
 
-func (r *remoteClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+func (r *remoteClient) BatchDownload(digests []digest.Digest) (map[digest.Digest][]byte, error) {
 	defer observeTime(time.Now(), "BatchDownload")
 	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cnx()
-	return r.c.BatchDownloadCompressedBlobs(ctx, digests, compressors)
+	return r.c.BatchDownloadBlobs(ctx, digests)
 }
 
 func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {

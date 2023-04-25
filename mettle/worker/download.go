@@ -300,12 +300,10 @@ func (w *worker) downloadFiles(files map[sdkdigest.Digest][]fileNode) error {
 
 	log.Debug("Downloading batch of %d files...", len(files))
 	digests := make([]sdkdigest.Digest, 0, len(files))
-	compressors := make([]pb.Compressor_Value, 0, len(files))
 	for dg, filenames := range files {
 		digests = append(digests, dg)
-		compressors = append(compressors, w.compressor(filenames, dg.Size))
 	}
-	responses, err := w.client.BatchDownload(digests, compressors)
+	responses, err := w.client.BatchDownload(digests)
 	if err != nil {
 		return err
 	}

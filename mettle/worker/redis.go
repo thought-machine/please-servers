@@ -156,7 +156,7 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	return nil // We never propagate Redis errors regardless.
 }
 
-func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+func (r *redisClient) BatchDownload(dgs []digest.Digest) (map[digest.Digest][]byte, error) {
 	log.Debug("Checking Redis for batch of %d files...", len(dgs))
 	keys := make([]string, len(dgs))
 	for i, dg := range dgs {
@@ -164,15 +164,13 @@ func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_V
 	}
 	blobs := r.readBlobs(keys, true)
 	if blobs == nil {
-		return r.elan.BatchDownload(dgs, comps)
+		return r.elan.BatchDownload(dgs)
 	}
 	missingDigests := make([]digest.Digest, 0, len(dgs))
-	missingComps := make([]pb.Compressor_Value, 0, len(comps))
 	ret := make(map[digest.Digest][]byte, len(dgs))
 	for i, blob := range blobs {
 		if blob == nil {
 			missingDigests = append(missingDigests, dgs[i])
-			missingComps = append(missingComps, comps[i])
 		} else {
 			ret[dgs[i]] = blob
 		}
@@ -181,7 +179,7 @@ func (r *redisClient) BatchDownload(dgs []digest.Digest, comps []pb.Compressor_V
 		return ret, nil
 	}
 	log.Debug("Found %d / %d files in Redis", len(dgs)-len(missingDigests), len(dgs))
-	m, err := r.elan.BatchDownload(missingDigests, missingComps)
+	m, err := r.elan.BatchDownload(missingDigests)
 	if err != nil {
 		return nil, err
 	}

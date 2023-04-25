@@ -133,10 +133,10 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 	return nil
 }
 
-func (e *elanClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+func (e *elanClient) BatchDownload(digests []digest.Digest) (map[digest.Digest][]byte, error) {
 	m := make(map[digest.Digest][]byte, len(digests))
 	for i, dg := range digests {
-		d, err := e.downloadOne(dg.ToProto(), compressors[i] != pb.Compressor_IDENTITY)
+		d, err := e.downloadOne(dg.ToProto())
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +145,7 @@ func (e *elanClient) BatchDownload(digests []digest.Digest, compressors []pb.Com
 	return m, nil
 }
 
-func (e *elanClient) downloadOne(dg *pb.Digest, compressed bool) ([]byte, error) {
+func (e *elanClient) downloadOne(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
 	return e.s.readAllBlob(ctx, "cas", dg, true, false)
