@@ -190,6 +190,7 @@ func mustCache(size int64) *ristretto.Cache {
 }
 
 type server struct {
+	ppb.UnimplementedGCServer
 	storageRoot              string
 	isFileStorage            bool
 	bucket                   bucket

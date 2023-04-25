@@ -2,23 +2,22 @@ syntax = "proto3";
 
 package build.please.remote.mettle;
 
+option go_package = "github.com/thought-machine/please-servers/proto/mettle";
 
 service Bootstrap {
 
-    rpc ServeExecutions(ServeExecutionsRequest) returns (ServeExecutionsResponse);
+  rpc ServeExecutions(ServeExecutionsRequest) returns (ServeExecutionsResponse);
 }
 
 message Job {
-    string ID = 1;
-    bytes Current = 2;
-    int64 LastUpdate = 5;
-    bool SentFirst = 3;
-    bool Done = 4;
-    int64 StartTime = 6;
+  string ID = 1;
+  bytes Current = 2;
+  int64 LastUpdate = 5;
+  bool SentFirst = 3;
+  bool Done = 4;
+  int64 StartTime = 6;
 }
 
 message ServeExecutionsRequest {}
 
-message ServeExecutionsResponse {
-    repeated Job jobs = 1;
-}
+message ServeExecutionsResponse { repeated Job jobs = 1; }
