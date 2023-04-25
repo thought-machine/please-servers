@@ -22,3 +22,8 @@ plugin_repo(
     name = "go-proto",
     revision = "v0.2.0",
 )
+
+plugin_repo(
+    name = "python",
+    revision = "v1.2.4",
+)
