@@ -280,23 +280,17 @@ go_module(
 
 go_module(
     name = "remote-apis",
-    download = ":remote-apis-download",
     install = [
         "build/bazel/...",
     ],
     module = "github.com/bazelbuild/remote-apis",
+    version = "35aee1c4a4250d3df846f7ba3e4a4e66cb014ecd",
     deps = [
         ":genproto",
         ":grpc",
         ":protobuf",
         ":rpc",
     ],
-)
-
-go_mod_download(
-    name = "remote-apis-download",
-    module = "github.com/peterebden/remote-apis",
-    version = "5306a2d66a1b879350f1a474cc639d569953fb48",
 )
 
 go_module(
@@ -325,7 +319,7 @@ go_module(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "94bf9a16399445ca7dc5e4036f9d1a9d2d353d13",
+    version = "1e9eb60669afd2b001df0873f0357646fae6ae97",
 )
 
 go_module(
