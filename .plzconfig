@@ -6,6 +6,8 @@ path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
 [parse]
 preloadsubincludes = ///go//build_defs:go
+preloadsubincludes = ///shell//build_defs:shell
+preloadsubincludes = ///proto//build_defs:proto
 
 [plugin "go"]
 target = //plugins:go
@@ -25,6 +27,13 @@ language = go
 target = //plugins:cc
 defaultoptcflags = --std=c99 -O3 -pipe -DNDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
 defaultdbgcflags = --std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
+
+[plugin "shell"]
+target = //plugins:shell
+
+[plugin "proto"]
+target = //plugins:proto
+languagedef = ///go_proto//build_defs:go
 
 [featureflags]
 excludeccrules = true
