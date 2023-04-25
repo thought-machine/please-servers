@@ -1038,11 +1038,12 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		return err
 	}
 	entries := make([]*uploadinfo.Entry, 0, len(m))
+	compressors := make([]pb.Compressor_Value, 0, len(m))
 	for _, e := range m {
-		e.Compressor = w.entryCompressor(e)
 		entries = append(entries, e)
+		compressors = append(compressors, w.entryCompressor(e))
 	}
-	err = w.client.UploadIfMissing(entries)
+	err = w.client.UploadIfMissing(entries, compressors)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories
