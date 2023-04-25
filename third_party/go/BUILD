@@ -284,7 +284,7 @@ go_module(
     install = [
         "build/bazel/...",
     ],
-    module = "github.com/bazelbuild/remote-apis/",
+    module = "github.com/bazelbuild/remote-apis",
     deps = [
         ":genproto",
         ":grpc",

@@ -40,7 +40,7 @@ type Client interface {
 	WriteBlob([]byte) (*pb.Digest, error)
 	UpdateActionResult(*pb.UpdateActionResultRequest) (*pb.ActionResult, error)
 	UploadIfMissing([]*uploadinfo.Entry) error
-	BatchDownload([]digest.Digest, []pb.Compressor_Value) (map[digest.Digest][]byte, error)
+	BatchDownload([]digest.Digest) (map[digest.Digest][]byte, error)
 	ReadToFile(digest.Digest, string, bool) error
 	GetDirectoryTree(*pb.Digest, bool) ([]*pb.Directory, error)
 }
