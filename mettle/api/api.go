@@ -135,6 +135,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 }
 
 type server struct {
+	bpb.UnimplementedBootstrapServer
 	name         string
 	client       *client.Client
 	requests     *pubsub.Topic

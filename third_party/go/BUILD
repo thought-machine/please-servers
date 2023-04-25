@@ -145,12 +145,22 @@ go_module(
 )
 
 go_module(
+    name = "protoc-gen-go-grpc",
+    binary = True,
+    module = "google.golang.org/grpc/cmd/protoc-gen-go-grpc",
+    version = "v1.1.0",
+    visibility = ["PUBLIC"],
+    deps = [":protobuf"],
+)
+
+go_module(
     name = "protoc-gen-go",
     binary = True,
-    download = ":protobuf_download",
-    install = ["protoc-gen-go"],
-    module = "github.com/golang/protobuf",
+    version = "v1.27.1",
+    install = ["cmd/protoc-gen-go"],
+    module = "google.golang.org/protobuf",
     deps = [":golang-protobuf"],
+    visibility = ["PUBLIC"],
 )
 
 go_module(
@@ -322,7 +332,7 @@ go_module(
     name = "golang-protobuf",
     install = ["..."],
     module = "google.golang.org/protobuf",
-    version = "v1.25.0",
+    version = "v1.27.1",
     deps = [
         ":cmp",
     ],

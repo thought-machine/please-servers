@@ -65,6 +65,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 }
 
 type server struct {
+	ppb.UnimplementedGCServer
 	replicator, assetReplicator, exeReplicator *trie.Replicator
 	bytestreamRe                               *regexp.Regexp
 	timeout                                    time.Duration

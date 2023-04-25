@@ -69,6 +69,7 @@ func ServeForever(opts grpcutil.Opts, httpPort int, maxAge time.Duration, minPro
 // server implements prometheus.Collector, which allows us to compute metrics
 // on the fly.
 type server struct {
+	pb.UnimplementedLucidityServer
 	workers, validVersions sync.Map
 	minProportion          float64
 }
