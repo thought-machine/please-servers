@@ -3,7 +3,6 @@ package rexclient
 
 import (
 	"context"
-	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/peterebden/go-cli-init/v4/logging"

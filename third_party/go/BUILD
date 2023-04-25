@@ -137,6 +137,7 @@ go_module(
     download = ":genproto_download",
     install = [
         "googleapis/rpc/code",
+        "googleapis/rpc/errdetails",
         "googleapis/rpc/status",
         "googleapis/type/date",
     ],
@@ -259,7 +260,7 @@ go_module(
 go_module(
     name = "errors",
     module = "github.com/pkg/errors",
-    version = "30136e27e2ac8d167177e8a583aa4c3fea5be833",
+    version = "v0.9.1",
 )
 
 go_module(
@@ -299,6 +300,7 @@ go_module(
     install = ["go/..."],
     module = "github.com/bazelbuild/remote-apis-sdks",
     deps = [
+        ":api",
         ":cmp",
         ":errgroup",
         ":errors",
@@ -311,6 +313,7 @@ go_module(
         ":protobuf",
         ":remote-apis",
         ":rpc",
+        ":xattr",
         ":zstd",
         ":zstdpool",
     ],
@@ -541,7 +544,7 @@ go_module(
 go_module(
     name = "xattr",
     module = "github.com/pkg/xattr",
-    version = "v0.4.1",
+    version = "v0.4.9",
     deps = [":unix"],
 )
 
