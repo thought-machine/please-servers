@@ -24,12 +24,20 @@ const CompressionThreshold = 1024
 // It automatically handles some things like compression.
 func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, error) {
 	log.Notice("Dialling remote %s...", url)
-	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            url,
-		NoSecurity:         !tls,
-		TransportCredsOnly: tls,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold), client.UsePackName(PackName))
+	client, err := client.NewClient(context.Background(), instanceName,
+		client.DialParams{
+			Service:            url,
+			NoSecurity:         !tls,
+			TransportCredsOnly: tls,
+			DialOpts:           grpcutil.DialOptions(tokenFile),
+		},
+		client.UseBatchOps(true),
+		client.RetryTransient(),
+		&client.TreeSymlinkOpts{Preserved: true},
+		client.CompressedBytestreamThreshold(CompressionThreshold),
+		client.UploadCompressionClassifier(client.DetectArchiveUploads),
+		client.UsePackName(PackName),
+	)
 	if err != nil {
 		log.Error("Error initialising remote execution client: %s", err)
 		return nil, err
