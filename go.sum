@@ -706,6 +706,8 @@ github.com/peterebden/go-sri v1.1.1 h1:KK8yZ5/NX8YzWUY9QvhrP220QsvEKANLLAgvw35Ak
 github.com/peterebden/go-sri v1.1.1/go.mod h1:KIRxtog35NfDWec5LV/iBqqfOEPcMpePZLc7EPE6goQ=
 github.com/peterebden/remote-apis-sdks v0.0.0-20230425155624-1e9eb60669af h1:b34fMlr9+PqoW4gWxqVfVmDwqI0i2mrpbrQB+kN73mM=
 github.com/peterebden/remote-apis-sdks v0.0.0-20230425155624-1e9eb60669af/go.mod h1:T2+pLXY+BbqUfahfZlRG6AqJJgr4vXE8zpAs3aIwMfo=
+github.com/peterebden/remote-apis-sdks v0.0.0-20230426111713-724899d7c644 h1:oZzUkmd5UGDvr/YCY2wU3OKXWFitNDAO9TV50j/OLXQ=
+github.com/peterebden/remote-apis-sdks v0.0.0-20230426111713-724899d7c644/go.mod h1:fUQHOmdjqFNgE7CGmwwqcM0a4f/8/oy23iDvdvELExY=
 github.com/pierrec/lz4 v2.5.2+incompatible/go.mod h1:pdkljMzZIN41W+lC3N2tnIh5sFi+IEE17M5jbnwPHcY=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
