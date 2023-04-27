@@ -428,7 +428,7 @@ func (s *server) batchReadBlob(ctx context.Context, d *pb.Digest) *pb.BatchReadB
 		r.Data = data
 		r.Compressor = compressor(compressed)
 		bytesServed.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Add(float64(d.SizeBytes))
-		log.Debug("Served batchReadBlob request for %s", r.Digest)
+		log.Debug("Served batchReadBlob request for %s; compressor: %s", r.Digest, r.Compressor)
 	}
 	return r
 }
@@ -587,15 +587,15 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 	// TODO(peterebden): Is it worth trying to cache any knowledge of where to go first for blobs?
 	//                   Or just guessing based on blob size?
 	if allowCompression {
-		if b, err := s.readAllBlob2(ctx, prefix, digest, batched, true); err == nil {
+		if b, err := s.readAllBlobCompressed(ctx, prefix, digest, batched, true); err == nil {
 			return b, true, nil
 		}
 	}
-	b, err := s.readAllBlob2(ctx, prefix, digest, batched, false)
+	b, err := s.readAllBlobCompressed(ctx, prefix, digest, batched, false)
 	return b, false, err
 }
 
-func (s *server) readAllBlob2(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
+func (s *server) readAllBlobCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	start := time.Now()
