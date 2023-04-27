@@ -12,8 +12,8 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/peterebden/go-cli-init/v4/logging"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
@@ -116,7 +116,7 @@ func diff(client *client.Client) {
 func mustGetProto(client *client.Client, dg *pb.Digest, msg proto.Message) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), msg); err != nil {
+	if _, err := client.ReadProto(ctx, digest.NewFromProtoUnvalidated(dg), msg); err != nil {
 		log.Fatalf("Failed to fetch digest %s: %s", dg.Hash, err)
 	}
 }
@@ -228,7 +228,7 @@ func show(client *client.Client) {
 
 func showDir(client *client.Client, dg *pb.Digest, indent string) {
 	dir := &pb.Directory{}
-	if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(dg), dir); err != nil {
+	if _, err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(dg), dir); err != nil {
 		log.Error("[%s/%08d] %s: Not found!", dg.Hash, dg.SizeBytes, indent)
 		return
 	}
@@ -286,7 +286,7 @@ func showActionResult(client *client.Client, ar *pb.ActionResult) {
 	showFiles(client, files, "")
 	for _, d := range ar.OutputDirectories {
 		tree := &pb.Tree{}
-		if err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
+		if _, err := client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
 			log.Error("Failed to download output tree: %s", err)
 		} else {
 			log.Notice("[%s/%08d] %s", d.TreeDigest.Hash, d.TreeDigest.SizeBytes, d.Path)
