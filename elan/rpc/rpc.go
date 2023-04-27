@@ -589,20 +589,29 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 	// TODO(peterebden): Is it worth trying to cache any knowledge of where to go first for blobs?
 	//                   Or just guessing based on blob size?
 	if allowCompression {
-		if b, err := s.readAllBlobCompressed(ctx, prefix, digest, batched, true); err == nil {
+		if b, err := s.readAllBlobCompressed(ctx, digest, s.compressedKey(prefix, digest, true), batched, true); err == nil {
 			return b, true, nil
 		}
 	}
-	b, err := s.readAllBlobCompressed(ctx, prefix, digest, batched, false)
+	// Try uncompressed
+	if b, err := s.readAllBlobCompressed(ctx, digest, s.compressedKey(prefix, digest, false), batched, false); err == nil || allowCompression || prefix == "ac" {
+		return b, false, err
+	}
+	// If we don't allow compression, we still have to check the compressed CAS for the client
+	b, err := s.readAllBlobCompressed(ctx, digest, s.compressedKey(prefix, digest, true), batched, true)
+	if err != nil {
+		return nil, false, err
+	}
+	b, err = s.decompressor.DecodeAll(b, make([]byte, 0, digest.SizeBytes))
 	return b, false, err
 }
 
-func (s *server) readAllBlobCompressed(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
+func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	b, err := s.bucket.ReadAll(ctx, s.compressedKey(prefix, digest, compressed))
+	b, err := s.bucket.ReadAll(ctx, key)
 	if err != nil {
 		return nil, handleNotFound(err, digest.Hash)
 	}
