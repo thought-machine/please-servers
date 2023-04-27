@@ -43,6 +43,16 @@ go_module(
 )
 
 go_module(
+    name = "exp",
+    install = [
+        "constraints",
+        "slices",
+    ],
+    module = "golang.org/x/exp",
+    version = "v0.0.0-20230425010034-47ecfdc1ba53",
+)
+
+go_module(
     name = "tools",
     install = [
         "cover",

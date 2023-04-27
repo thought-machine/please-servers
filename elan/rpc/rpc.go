@@ -37,6 +37,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
+	"golang.org/x/exp/slices"
 	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -399,13 +400,14 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	resp := &pb.BatchReadBlobsResponse{
 		Responses: make([]*pb.BatchReadBlobsResponse_Response, n),
 	}
+	allowCompression := slices.Contains(req.AcceptableCompressors, pb.Compressor_ZSTD)
 	var wg sync.WaitGroup
 	var size int64
 	wg.Add(n)
 	for i, d := range req.Digests {
 		size += d.SizeBytes
 		go func(i int, d *pb.Digest) {
-			resp.Responses[i] = s.batchReadBlob(ctx, d)
+			resp.Responses[i] = s.batchReadBlob(ctx, d, allowCompression)
 			wg.Done()
 		}(i, d)
 	}
@@ -414,13 +416,13 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	return resp, nil
 }
 
-func (s *server) batchReadBlob(ctx context.Context, d *pb.Digest) *pb.BatchReadBlobsResponse_Response {
+func (s *server) batchReadBlob(ctx context.Context, d *pb.Digest, allowCompression bool) *pb.BatchReadBlobsResponse_Response {
 	log.Debug("Received batch read request for %s", d)
 	r := &pb.BatchReadBlobsResponse_Response{
 		Status: &rpcstatus.Status{},
 		Digest: d,
 	}
-	if data, compressed, err := s.readAllBlobBatched(ctx, "cas", d, true, true); err != nil {
+	if data, compressed, err := s.readAllBlobBatched(ctx, "cas", d, true, allowCompression); err != nil {
 		r.Status.Code = int32(status.Code(err))
 		r.Status.Message = err.Error()
 		log.Error("Error reading blob %s: %s", r.Digest, err)
