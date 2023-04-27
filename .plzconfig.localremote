@@ -5,4 +5,4 @@ AssetUrl = 127.0.0.1:7776
 NumExecutors = 1
 TokenFile = grpcutil/token.txt
 Secure = false
-DisplayUrl = https://blah.com
+DisplayUrl = http://localhost:7779

@@ -1034,7 +1034,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		}
 	}
 
-	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, w.dir, cmd.OutputPaths, filemetadata.NewNoopCache(), command.PreserveSymlink)
+	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, ".", cmd.OutputPaths, filemetadata.NewNoopCache(), command.PreserveSymlink)
 	if err != nil {
 		return err
 	}
