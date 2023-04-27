@@ -602,7 +602,7 @@ func (s *server) readAllBlob2(ctx context.Context, prefix string, digest *pb.Dig
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	b, err := s.bucket.ReadAll(ctx, s.compressedKey(prefix, digest, compressed))
 	if err != nil {
-		return nil, err
+		return nil, handleNotFound(err, digest.Hash)
 	}
 	blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), compressorLabel(compressed)).Inc()
 	return b, nil
