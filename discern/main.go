@@ -302,7 +302,7 @@ func topn() error {
 		return err
 	}
 	log.Notice("Top %d actions:", opts.TopN.N)
-	for i, a := range actions {
+	for i, a := range actions { //nolint:govet
 		in := humanize.Bytes(uint64(a.InputSize))
 		out := humanize.Bytes(uint64(a.OutputSize))
 		if opts.TopN.BrowserURL != "" {
