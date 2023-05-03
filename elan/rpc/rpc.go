@@ -615,7 +615,7 @@ func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, k
 	if err != nil {
 		return nil, handleNotFound(err, digest.Hash)
 	}
-	blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), compressorLabel(compressed)).Inc()
+	blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), "n/a").Inc()
 	return b, nil
 }
 
