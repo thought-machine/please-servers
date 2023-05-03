@@ -21,6 +21,7 @@ import (
 
 	psraw "cloud.google.com/go/pubsub/apiv1"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
+	"github.com/bazelbuild/remote-apis-sdks/go/pkg/command"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -1033,16 +1034,17 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 		}
 	}
 
-	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, cmd.OutputPaths, filemetadata.NewNoopCache())
+	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, ".", cmd.OutputPaths, filemetadata.NewNoopCache(), command.PreserveSymlink)
 	if err != nil {
 		return err
 	}
 	entries := make([]*uploadinfo.Entry, 0, len(m))
+	compressors := make([]pb.Compressor_Value, 0, len(m))
 	for _, e := range m {
-		e.Compressor = w.entryCompressor(e)
 		entries = append(entries, e)
+		compressors = append(compressors, w.entryCompressor(e))
 	}
-	err = w.client.UploadIfMissing(entries)
+	err = w.client.UploadIfMissing(entries, compressors)
 
 	ar.OutputFiles = ar2.OutputFiles
 	ar.OutputDirectories = ar2.OutputDirectories

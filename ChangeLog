@@ -1,3 +1,7 @@
+Version 11.0.0-beta.1
+--------------
+    * Brought protocol in line with upstream's batch compression.
+
 Version 10.7.0
 --------------
     * Compression alterations to move more inline with upstream (part the first)

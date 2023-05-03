@@ -404,8 +404,19 @@ func (c cas) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusReque
 func (c cas) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
 	return &pb.ServerCapabilities{
 		CacheCapabilities: &pb.CacheCapabilities{
-			DigestFunction: []pb.DigestFunction_Value{
+			DigestFunctions: []pb.DigestFunction_Value{
 				pb.DigestFunction_SHA256,
+			},
+			ActionCacheUpdateCapabilities: &pb.ActionCacheUpdateCapabilities{
+				UpdateEnabled: true,
+			},
+			SupportedCompressors: []pb.Compressor_Value{
+				pb.Compressor_IDENTITY,
+				pb.Compressor_ZSTD,
+			},
+			SupportedBatchUpdateCompressors: []pb.Compressor_Value{
+				pb.Compressor_IDENTITY,
+				pb.Compressor_ZSTD,
 			},
 		},
 	}, nil

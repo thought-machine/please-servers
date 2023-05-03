@@ -106,7 +106,7 @@ func (r *redisClient) UpdateActionResult(ar *pb.UpdateActionResultRequest) (*pb.
 	return r.elan.UpdateActionResult(ar)
 }
 
-func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
+func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry, compressors []pb.Compressor_Value) error {
 	// All we use Redis for is to filter down the missing set.
 	// This is approximate only and assumes that Redis always has a strict subset of the total keys.
 	missing := make([]*uploadinfo.Entry, 0, len(entries))
@@ -119,7 +119,7 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	}
 	blobs := r.readBlobs(keys, false)
 	if blobs == nil {
-		return r.elan.UploadIfMissing(entries)
+		return r.elan.UploadIfMissing(entries, compressors)
 	}
 	for i, blob := range blobs {
 		if blob == nil {
@@ -144,7 +144,7 @@ func (r *redisClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	if len(missing) == 0 {
 		return nil // Redis had everything
 	}
-	if err := r.elan.UploadIfMissing(missing); err != nil {
+	if err := r.elan.UploadIfMissing(missing, compressors); err != nil {
 		return err
 	}
 	if len(uploads) == 0 {

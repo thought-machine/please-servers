@@ -251,35 +251,11 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	blob := buf.Bytes()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if s.shouldSkipCompression(blob) {
-		digest, err := s.storageClient.WriteBlobUncompressed(ctx, blob)
-		if err == nil {
-			log.Info("Wrote %s as uncompressed blob %s", url, digest.Hash)
-		}
-		return digest.ToProto(), err
-	}
 	digest, err := s.storageClient.WriteBlob(ctx, blob)
 	if err == nil {
 		log.Info("Wrote %s as compressed blob %s", url, digest.Hash)
 	}
 	return digest.ToProto(), err
-}
-
-// shouldSkipCompression returns true if we should skip compression for uploading this
-// blob because it is already compressed (e.g. it's a zip / gzip / etc).
-func (s *server) shouldSkipCompression(blob []byte) bool {
-	mime := http.DetectContentType(blob)
-	switch mime {
-	case "application/x-rar-compressed", "application/x-gzip", "application/zip", "video/webm", "image/gif", "image/webp", "image/png", "image/jpeg":
-		return true
-	}
-	// xz and bzip2 aren't detected by the net/http package
-	if bytes.HasPrefix(blob, []byte{0xFD, '7', 'z', 'X', 'Z', 0x00}) {
-		return true
-	} else if bytes.HasPrefix(blob, []byte{0x42, 0x5A, 0x68}) {
-		return true
-	}
-	return false
 }
 
 func (s *server) logHTTPRequests(logger retryablehttp.Logger, req *http.Request, n int) {
