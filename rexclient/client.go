@@ -3,7 +3,6 @@ package rexclient
 
 import (
 	"context"
-	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/peterebden/go-cli-init/v4/logging"
@@ -25,34 +24,23 @@ const CompressionThreshold = 1024
 // It automatically handles some things like compression.
 func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, error) {
 	log.Notice("Dialling remote %s...", url)
-	client, err := client.NewClient(context.Background(), instanceName, client.DialParams{
-		Service:            url,
-		NoSecurity:         !tls,
-		TransportCredsOnly: tls,
-		DialOpts:           grpcutil.DialOptions(tokenFile),
-	}, client.UseBatchOps(true), client.RetryTransient(), &client.TreeSymlinkOpts{Preserved: true}, client.CompressedBytestreamThreshold(CompressionThreshold), client.UsePackName(PackName))
+	client, err := client.NewClient(context.Background(), instanceName,
+		client.DialParams{
+			Service:            url,
+			NoSecurity:         !tls,
+			TransportCredsOnly: tls,
+			DialOpts:           grpcutil.DialOptions(tokenFile),
+		},
+		client.UseBatchOps(true),
+		client.RetryTransient(),
+		&client.TreeSymlinkOpts{Preserved: true},
+		client.CompressedBytestreamThreshold(CompressionThreshold),
+		client.UploadCompressionClassifier(client.DetectArchiveUploads),
+		client.UsePackName(PackName),
+	)
 	if err != nil {
 		log.Error("Error initialising remote execution client: %s", err)
 		return nil, err
-	}
-
-	// Unfortunately we need to re-fetch capabilities to determine whether batch compression is
-	// supported; the client has already done that but we can't get at the response :(
-	// Fortunately none of our use cases are especially time-critical at this point.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if caps, err := client.GetCapabilities(ctx); err != nil {
-		log.Error("Error initialising remote execution client: %s", err)
-		return nil, err
-	} else if caps.CacheCapabilities == nil {
-		// This is an error since none of the clients in this repo want an execution-only server.
-		log.Error("Remote execution server doesn't support cache capabilities")
-		return nil, err
-	} else if !caps.CacheCapabilities.BatchCompression {
-		// Theoretically we could check stream compression separately, but in practice our servers
-		// will only support both or neither.
-		log.Warning("Remote execution server doesn't advertise batch compression support, disabling all compression")
-		client.CompressedBytestreamThreshold = -1 // Disables all compression.
 	}
 	log.Notice("Connected to remote server on %s", url)
 	return client, nil

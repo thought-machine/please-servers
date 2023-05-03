@@ -7,7 +7,7 @@ go_binary(
         "//rexclient",
         "//third_party/go:cli-init",
         "//third_party/go:humanize",
-        "//third_party/go:protobuf",
+        "//third_party/go:golang-protobuf",
         "//third_party/go:remote-apis",
         "//third_party/go:remote-apis-sdks",
     ],

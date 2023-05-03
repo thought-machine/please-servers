@@ -353,7 +353,7 @@ func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest
 		atomic.AddInt64(&c.missingInputs, 1)
 		return size, nil, nil
 	}
-	if err := c.client.ReadProto(ctx, digest.Digest{
+	if _, err := c.client.ReadProto(ctx, digest.Digest{
 		Hash: dg.Hash,
 		Size: blob.SizeBytes,
 	}, action); err != nil {
@@ -399,7 +399,7 @@ func (c *collector) markBroken(hash string, size int64) {
 
 func (c *collector) markTree(d *pb.OutputDirectory) (int64, []*pb.Digest, error) {
 	tree := &pb.Tree{}
-	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
+	if _, err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
 		return 0, nil, err
 	}
 	// Here we attempt to fix up any outputs that don't also have the input facet.
@@ -665,7 +665,7 @@ func (c *collector) ReplicateBlobs(rf int) error {
 	if err := c.replicateBlobs("blobs", blobs, func(dg *pb.Digest) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		blob, err := c.client.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
+		blob, _, err := c.client.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
 		if err != nil {
 			return err
 		}
