@@ -230,8 +230,9 @@ go_module(
     name = "grpc-middleware",
     install = [
         ".",
-        "recovery",
-        "retry",
+        "interceptors/recovery",
+        "interceptors",
+        "metadata",
         "util/metautils",
         "util/backoffutils",
     ],
