@@ -439,13 +439,15 @@ func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
 		digests = append(digests, pack.ToProto())
 	}
 	// If the dir has any node properties, save a copy of one that doesn't.
-	if d.NodeProperties != nil {
-		d2 := proto.Clone(d).(*pb.Directory)
-		d2.NodeProperties = nil
-		ue, _ := uploadinfo.EntryFromProto(d2)
-		digests = append(digests, ue.Digest.ToProto())
-		size += ue.Digest.Size
+	cp := d
+	if cp.NodeProperties != nil {
+		cp = proto.Clone(d).(*pb.Directory)
+		cp.NodeProperties = nil
 	}
+	ue, _ := uploadinfo.EntryFromProto(cp)
+	c.referencedBlobs[ue.Digest.Hash] = struct{}{}
+	digests = append(digests, ue.Digest.ToProto())
+	size += ue.Digest.Size
 	return size, digests
 }
 
