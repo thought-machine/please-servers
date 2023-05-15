@@ -1,15 +1,20 @@
 [please]
-version = >=16.22.0
+version = >=17.0.0-beta.7
 
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
 [parse]
 preloadsubincludes = ///go//build_defs:go
+preloadsubincludes = ///shell//build_defs:shell
+preloadsubincludes = ///proto//build_defs:proto
 
 [plugin "go"]
 target = //plugins:go
 importpath = github.com/thought-machine/please-servers
+gotool = //third_party/go:toolchain|go
+coverageredesign = true
+legacyimports = false
 
 [python]
 moduledir = third_party/python
@@ -24,9 +29,19 @@ target = //plugins:cc
 defaultoptcflags = --std=c99 -O3 -pipe -DNDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
 defaultdbgcflags = --std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop-overflow -Wno-error=misleading-indentation
 
-[featureflags]
-excludeccrules = true
-excludegorules = true
+[plugin "shell"]
+target = //plugins:shell
+
+[plugin "proto"]
+target = //plugins:proto
+languagedef = ///go_proto//build_defs:go
+
+[plugin "go_proto"]
+target = //plugins:go-proto
+grpcplugin = //third_party/go:protoc-gen-go-grpc
+protoplugin = //third_party/go:protoc-gen-go
+protodep = //third_party/go:golang-protobuf
+grpcdep = //third_party/go:grpc
 
 [alias "runlocal"]
 cmd = run parallel //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local //redis:run_local

@@ -65,6 +65,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 }
 
 type server struct {
+	ppb.UnimplementedGCServer
 	replicator, assetReplicator, exeReplicator *trie.Replicator
 	bytestreamRe                               *regexp.Regexp
 	timeout                                    time.Duration
@@ -93,7 +94,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 	// efficient with bigger ones than Elan would be on its own.
 	caps := &pb.ServerCapabilities{
 		CacheCapabilities: &pb.CacheCapabilities{
-			DigestFunction: []pb.DigestFunction_Value{
+			DigestFunctions: []pb.DigestFunction_Value{
 				pb.DigestFunction_SHA1,
 				pb.DigestFunction_SHA256,
 			},
@@ -113,11 +114,15 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				},
 			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
-			SupportedCompressor: []pb.Compressor_Value{
+			SupportedCompressors: []pb.Compressor_Value{
 				pb.Compressor_IDENTITY,
 				pb.Compressor_ZSTD,
 			},
-			BatchCompression: true,
+			// TODO(peterebden): Disabled for temporary compatibility. Re-add this once Mettle has updated.
+			// SupportedBatchUpdateCompressors: []pb.Compressor_Value{
+			// 	pb.Compressor_IDENTITY,
+			// 	pb.Compressor_ZSTD,
+			// },
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1}, // optimistic
@@ -271,14 +276,10 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
-	blobs := map[*trie.Server][]*pb.BatchReadBlobsRequest_Request{}
+	blobs := map[*trie.Server][]*pb.Digest{}
 	for _, d := range req.Digests {
 		s := s.replicator.Trie.Get(d.Hash)
-		blobs[s] = append(blobs[s], &pb.BatchReadBlobsRequest_Request{Digest: d})
-	}
-	for _, r := range req.Requests {
-		s := s.replicator.Trie.Get(r.Digest.Hash)
-		blobs[s] = append(blobs[s], r)
+		blobs[s] = append(blobs[s], d)
 	}
 	resp := &pb.BatchReadBlobsResponse{}
 	var g errgroup.Group
@@ -305,7 +306,7 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 				defer cancel()
 				r, err := s2.CAS.BatchReadBlobs(ctx, &pb.BatchReadBlobsRequest{
 					InstanceName: req.InstanceName,
-					Requests:     d,
+					Digests:      d,
 				})
 				if err != nil {
 					return false, err

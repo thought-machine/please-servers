@@ -28,7 +28,7 @@ func (e *elanClient) Healthcheck() error {
 func (e *elanClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
-	return e.s.readAllBlob(ctx, "cas", dg, false, false)
+	return e.s.readAllBlob(ctx, "cas", dg)
 }
 
 func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
@@ -56,11 +56,13 @@ func (e *elanClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*pb.
 	return e.s.UpdateActionResult(ctx, req)
 }
 
-func (e *elanClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
+func (e *elanClient) UploadIfMissing(entries []*uploadinfo.Entry, compressors []pb.Compressor_Value) error {
 	m := make(map[string]*uploadinfo.Entry, len(entries))
+	m2 := make(map[string]pb.Compressor_Value, len(entries))
 	digests := make([]*pb.Digest, len(entries))
 	for i, e := range entries {
 		m[e.Digest.Hash] = e
+		m2[e.Digest.Hash] = compressors[i]
 		digests[i] = e.Digest.ToProto()
 	}
 	resp, err := e.s.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
@@ -72,24 +74,22 @@ func (e *elanClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	var g errgroup.Group
 	for _, dg := range resp.MissingBlobDigests {
 		entry := m[dg.Hash]
+		compressor := m2[dg.Hash]
 		g.Go(func() error {
-			return e.uploadOne(entry)
+			return e.uploadOne(entry, compressor)
 		})
 	}
 	return g.Wait()
 }
 
-func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
+func (e *elanClient) uploadOne(entry *uploadinfo.Entry, compressor pb.Compressor_Value) (err error) {
 	if entry.Digest.Hash == digest.Empty.Hash {
 		return nil
 	}
-	compressed := entry.Compressor != pb.Compressor_IDENTITY
+	compressed := compressor != pb.Compressor_IDENTITY
 	key := e.s.compressedKey("cas", entry.Digest.ToProto(), compressed)
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
-	if e.s.blobExists(ctx, key) {
-		return nil
-	}
 	e.s.limiter <- struct{}{}
 	defer func() { <-e.s.limiter }()
 	if len(entry.Contents) > 0 {
@@ -133,10 +133,10 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry) (err error) {
 	return nil
 }
 
-func (e *elanClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+func (e *elanClient) BatchDownload(digests []digest.Digest) (map[digest.Digest][]byte, error) {
 	m := make(map[digest.Digest][]byte, len(digests))
-	for i, dg := range digests {
-		d, err := e.downloadOne(dg.ToProto(), compressors[i] != pb.Compressor_IDENTITY)
+	for _, dg := range digests {
+		d, err := e.downloadOne(dg.ToProto())
 		if err != nil {
 			return nil, err
 		}
@@ -145,10 +145,11 @@ func (e *elanClient) BatchDownload(digests []digest.Digest, compressors []pb.Com
 	return m, nil
 }
 
-func (e *elanClient) downloadOne(dg *pb.Digest, compressed bool) ([]byte, error) {
+func (e *elanClient) downloadOne(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
-	return e.s.readAllBlob(ctx, "cas", dg, true, false)
+	b, _, err := e.s.readAllBlobBatched(ctx, "cas", dg, true, false)
+	return b, err
 }
 
 func (e *elanClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {

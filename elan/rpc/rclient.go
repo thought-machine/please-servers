@@ -46,7 +46,8 @@ func (r *remoteClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	defer observeTime(time.Now(), "ReadBlob")
 	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
 	defer cnx()
-	return r.c.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
+	b, _, err := r.c.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
+	return b, err
 }
 
 func (r *remoteClient) WriteBlob(b []byte) (*pb.Digest, error) {
@@ -64,7 +65,7 @@ func (r *remoteClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*p
 	return r.c.UpdateActionResult(ctx, req)
 }
 
-func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
+func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry, compressors []pb.Compressor_Value) error {
 	defer observeTime(time.Now(), "UploadIfMissing")
 	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cnx()
@@ -72,11 +73,11 @@ func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry) error {
 	return err
 }
 
-func (r *remoteClient) BatchDownload(digests []digest.Digest, compressors []pb.Compressor_Value) (map[digest.Digest][]byte, error) {
+func (r *remoteClient) BatchDownload(digests []digest.Digest) (map[digest.Digest][]byte, error) {
 	defer observeTime(time.Now(), "BatchDownload")
 	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cnx()
-	return r.c.BatchDownloadCompressedBlobs(ctx, digests, compressors)
+	return r.c.BatchDownloadBlobs(ctx, digests)
 }
 
 func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
@@ -84,7 +85,7 @@ func (r *remoteClient) ReadToFile(dg digest.Digest, filename string, compressed 
 	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*2)
 	defer cnx()
 	if !compressed {
-		_, err := r.c.ReadBlobToFileUncompressed(ctx, dg, filename)
+		_, err := r.c.ReadBlobToFile(ctx, dg, filename)
 		return err
 	}
 	_, err := r.c.ReadBlobToFile(ctx, dg, filename)

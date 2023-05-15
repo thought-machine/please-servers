@@ -37,6 +37,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
+	"golang.org/x/exp/slices"
 	"google.golang.org/api/googleapi"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -190,6 +191,7 @@ func mustCache(size int64) *ristretto.Cache {
 }
 
 type server struct {
+	ppb.UnimplementedGCServer
 	storageRoot              string
 	isFileStorage            bool
 	bucket                   bucket
@@ -203,7 +205,7 @@ type server struct {
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
 	return &pb.ServerCapabilities{
 		CacheCapabilities: &pb.CacheCapabilities{
-			DigestFunction: []pb.DigestFunction_Value{
+			DigestFunctions: []pb.DigestFunction_Value{
 				pb.DigestFunction_SHA1,
 				pb.DigestFunction_SHA256,
 			},
@@ -223,11 +225,15 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				},
 			},
 			MaxBatchTotalSizeBytes: 4048000, // 4000 Kelly-Bootle standard units
-			SupportedCompressor: []pb.Compressor_Value{
+			SupportedCompressors: []pb.Compressor_Value{
 				pb.Compressor_IDENTITY,
 				pb.Compressor_ZSTD,
 			},
-			BatchCompression: true,
+			// TODO(peterebden): Disabled for temporary compatibility. Re-add this once Mettle has updated.
+			// SupportedBatchUpdateCompressors: []pb.Compressor_Value{
+			// 	pb.Compressor_IDENTITY,
+			// 	pb.Compressor_ZSTD,
+			// },
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1},
@@ -247,7 +253,7 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 		// The docs say that the server MAY omit inlining, even if asked. Hence we assume that if we can't find it here
 		// we might be in a sharded setup where we don't have the stdout digest, and it's better to return what we can
 		// (the client can still request the actual blob themselves).
-		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest, false, false); err == nil {
+		if b, err := s.readAllBlob(ctx, "cas", ar.StdoutDigest); err == nil {
 			ar.StdoutRaw = b
 		}
 	}
@@ -390,51 +396,50 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	n := len(req.Digests)
-	m := n + len(req.Requests)
-	log.Debug("Received batch read request for %d blobs", m)
+	log.Debug("Received batch read request for %d blobs", n)
 	resp := &pb.BatchReadBlobsResponse{
-		Responses: make([]*pb.BatchReadBlobsResponse_Response, m),
+		Responses: make([]*pb.BatchReadBlobsResponse_Response, n),
 	}
+	allowCompression := slices.Contains(req.AcceptableCompressors, pb.Compressor_ZSTD)
 	var wg sync.WaitGroup
 	var size int64
-	wg.Add(m)
+	wg.Add(n)
 	for i, d := range req.Digests {
 		size += d.SizeBytes
 		go func(i int, d *pb.Digest) {
-			resp.Responses[i] = s.batchReadBlob(ctx, &pb.BatchReadBlobsRequest_Request{Digest: d})
+			resp.Responses[i] = s.batchReadBlob(ctx, d, allowCompression)
 			wg.Done()
 		}(i, d)
-	}
-	for i, r := range req.Requests {
-		size += r.Digest.SizeBytes
-		go func(i int, r *pb.BatchReadBlobsRequest_Request) {
-			resp.Responses[n+i] = s.batchReadBlob(ctx, r)
-			wg.Done()
-		}(i, r)
 	}
 	wg.Wait()
 	log.Debug("Served BatchReadBlobs request of %d blobs, total %d bytes in %s", len(resp.Responses), size, time.Since(start))
 	return resp, nil
 }
 
-func (s *server) batchReadBlob(ctx context.Context, req *pb.BatchReadBlobsRequest_Request) *pb.BatchReadBlobsResponse_Response {
-	log.Debug("Received batch read request for %s", req.Digest)
+func (s *server) batchReadBlob(ctx context.Context, d *pb.Digest, allowCompression bool) *pb.BatchReadBlobsResponse_Response {
+	log.Debug("Received batch read request for %s", d)
 	r := &pb.BatchReadBlobsResponse_Response{
 		Status: &rpcstatus.Status{},
-		Digest: req.Digest,
+		Digest: d,
 	}
-	compressed := req.Compressor == pb.Compressor_ZSTD
-	if data, err := s.readAllBlob(ctx, "cas", req.Digest, true, compressed); err != nil {
+	if data, compressed, err := s.readAllBlobBatched(ctx, "cas", d, true, allowCompression); err != nil {
 		r.Status.Code = int32(status.Code(err))
 		r.Status.Message = err.Error()
 		log.Error("Error reading blob %s: %s", r.Digest, err)
 	} else {
 		r.Data = data
-		r.Compressor = req.Compressor
-		bytesServed.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Add(float64(req.Digest.SizeBytes))
-		log.Debug("Served batchReadBlob request for %s", r.Digest)
+		r.Compressor = compressor(compressed)
+		bytesServed.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Add(float64(d.SizeBytes))
+		log.Debug("Served batchReadBlob request for %s; compressor: %s", r.Digest, r.Compressor)
 	}
 	return r
+}
+
+func compressor(compressed bool) pb.Compressor_Value {
+	if compressed {
+		return pb.Compressor_ZSTD
+	}
+	return pb.Compressor_IDENTITY
 }
 
 func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorage_GetTreeServer) error {
@@ -570,42 +575,52 @@ func (s *server) readBlob(ctx context.Context, key string, offset, length int64)
 	return r, nil
 }
 
-func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest, batched, compressed bool) ([]byte, error) {
+func (s *server) readAllBlob(ctx context.Context, prefix string, digest *pb.Digest) ([]byte, error) {
+	b, _, err := s.readAllBlobBatched(ctx, prefix, digest, false, false)
+	return b, err
+}
+
+func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *pb.Digest, batched, allowCompression bool) ([]byte, bool, error) {
 	if len(digest.Hash) < 2 {
-		return nil, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
+		return nil, false, fmt.Errorf("Invalid hash: [%s]", digest.Hash)
 	} else if s.isEmpty(digest) {
-		return nil, nil
+		return nil, false, nil
 	}
+	// TODO(peterebden): Is it worth trying to cache any knowledge of where to go first for blobs?
+	//                   Or just guessing based on blob size?
+	if allowCompression {
+		if b, err := s.readAllBlobCompressed(ctx, digest, s.compressedKey(prefix, digest, true), batched, true); err == nil {
+			return b, true, nil
+		}
+	}
+	// Try uncompressed
+	if b, err := s.readAllBlobCompressed(ctx, digest, s.compressedKey(prefix, digest, false), batched, false); err == nil || allowCompression || prefix == "ac" {
+		return b, false, err
+	}
+	// If we don't allow compression, we still have to check the compressed CAS for the client
+	b, err := s.readAllBlobCompressed(ctx, digest, s.compressedKey(prefix, digest, true), batched, true)
+	if err != nil {
+		return nil, false, err
+	}
+	b, err = s.decompressor.DecodeAll(b, make([]byte, 0, digest.SizeBytes))
+	return b, false, err
+}
+
+func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
-	if b, err := s.bucket.ReadAll(ctx, s.compressedKey(prefix, digest, compressed)); err == nil {
-		blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), compressorLabel(compressed)).Inc()
-		return b, nil
-	} else if prefix != "cas" {
-		return nil, handleNotFound(err, digest.Hash) // No point going on, the AC is never compressed.
-	}
-	// If we get here, it failed, so we need to check the compressed / non-compressed version.
-	b, err := s.bucket.ReadAll(ctx, s.compressedKey(prefix, digest, !compressed))
+	b, err := s.bucket.ReadAll(ctx, key)
 	if err != nil {
 		return nil, handleNotFound(err, digest.Hash)
 	}
-	// We now need to either compress or decompress the payload, since we read the other version.
-	buf := make([]byte, 0, digest.SizeBytes)
-	if compressed {
-		return s.compressor.EncodeAll(b, buf), nil
-	}
-	b, err = s.decompressor.DecodeAll(b, buf)
-	if err != nil {
-		return nil, err
-	}
-	blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), compressorLabel(!compressed)).Inc()
+	blobsServed.WithLabelValues(batchLabel(batched, false), compressorLabel(compressed), "n/a").Inc()
 	return b, nil
 }
 
 func (s *server) readBlobIntoMessage(ctx context.Context, prefix string, digest *pb.Digest, message proto.Message) error {
-	if b, err := s.readAllBlob(ctx, prefix, digest, false, false); err != nil {
+	if b, err := s.readAllBlob(ctx, prefix, digest); err != nil {
 		return err
 	} else if err := proto.Unmarshal(b, message); err != nil {
 		return status.Errorf(codes.Unknown, "%s", err)

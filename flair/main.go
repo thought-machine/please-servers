@@ -28,6 +28,7 @@ var opts = struct {
 	Timeout          flags.Duration    `long:"timeout" default:"20s" description:"Default timeout for all RPCs"`
 	CA               string            `long:"ca" description:"File containing PEM-formatted CA certificate to verify TLS connections with"`
 	Admin            cli.AdminOpts     `group:"Options controlling HTTP admin server" namespace:"admin"`
+	LoadBalance      bool              `short:"b" long:"load_balance" description:"Enable basic load balancing on server requests"`
 }{
 	Usage: `
 Flair is a proxy server used to forward requests to Elan.
@@ -47,13 +48,13 @@ want to have more than the minimum number of instances of it (hopefully more tha
 func main() {
 	_, info := cli.ParseFlagsOrDie("Flair", &opts, &opts.Logging)
 	go cli.ServeAdmin(opts.Admin, info)
-	cr := newReplicator(opts.Geometry, opts.Replicas)
-	ar := newReplicator(opts.AssetGeometry, opts.Replicas)
-	er := newReplicator(opts.ExecutorGeometry, opts.Replicas)
+	cr := newReplicator(opts.Geometry, opts.Replicas, opts.LoadBalance)
+	ar := newReplicator(opts.AssetGeometry, opts.Replicas, opts.LoadBalance)
+	er := newReplicator(opts.ExecutorGeometry, opts.Replicas, opts.LoadBalance)
 	rpc.ServeForever(opts.GRPC, cr, ar, er, time.Duration(opts.Timeout))
 }
 
-func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {
+func newReplicator(geometry map[string]string, replicas int, loadBalance bool) *trie.Replicator {
 	if len(geometry) == 0 {
 		return nil
 	}
@@ -65,5 +66,5 @@ func newReplicator(geometry map[string]string, replicas int) *trie.Replicator {
 	} else if err := t.Check(); err != nil {
 		log.Fatalf("Failed to construct trie: %s", err)
 	}
-	return trie.NewReplicator(t, replicas)
+	return trie.NewReplicator(t, replicas, loadBalance)
 }

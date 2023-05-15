@@ -2,7 +2,11 @@ package(default_visibility = ["PUBLIC"])
 
 go_toolchain(
     name = "toolchain",
-    version = "1.19",
+    version = "1.20.2",
+)
+
+go_system_toolchain(
+    name = "system_toolchain",
 )
 
 go_module(
@@ -36,6 +40,16 @@ go_module(
         ":x_term",
         ":text",
     ],
+)
+
+go_module(
+    name = "exp",
+    install = [
+        "constraints",
+        "slices",
+    ],
+    module = "golang.org/x/exp",
+    version = "v0.0.0-20230425010034-47ecfdc1ba53",
 )
 
 go_module(
@@ -133,6 +147,7 @@ go_module(
     download = ":genproto_download",
     install = [
         "googleapis/rpc/code",
+        "googleapis/rpc/errdetails",
         "googleapis/rpc/status",
         "googleapis/type/date",
     ],
@@ -141,12 +156,22 @@ go_module(
 )
 
 go_module(
+    name = "protoc-gen-go-grpc",
+    binary = True,
+    module = "google.golang.org/grpc/cmd/protoc-gen-go-grpc",
+    version = "v1.1.0",
+    visibility = ["PUBLIC"],
+    deps = [":protobuf"],
+)
+
+go_module(
     name = "protoc-gen-go",
     binary = True,
-    download = ":protobuf_download",
-    install = ["protoc-gen-go"],
-    module = "github.com/golang/protobuf",
+    version = "v1.27.1",
+    install = ["cmd/protoc-gen-go"],
+    module = "google.golang.org/protobuf",
     deps = [":golang-protobuf"],
+    visibility = ["PUBLIC"],
 )
 
 go_module(
@@ -245,7 +270,7 @@ go_module(
 go_module(
     name = "errors",
     module = "github.com/pkg/errors",
-    version = "30136e27e2ac8d167177e8a583aa4c3fea5be833",
+    version = "v0.9.1",
 )
 
 go_module(
@@ -266,11 +291,11 @@ go_module(
 
 go_module(
     name = "remote-apis",
-    download = ":remote-apis-download",
     install = [
         "build/bazel/...",
     ],
-    module = "github.com/bazelbuild/remote-apis/",
+    module = "github.com/bazelbuild/remote-apis",
+    version = "35aee1c4a4250d3df846f7ba3e4a4e66cb014ecd",
     deps = [
         ":genproto",
         ":grpc",
@@ -279,18 +304,13 @@ go_module(
     ],
 )
 
-go_mod_download(
-    name = "remote-apis-download",
-    module = "github.com/peterebden/remote-apis",
-    version = "5306a2d66a1b879350f1a474cc639d569953fb48",
-)
-
 go_module(
     name = "remote-apis-sdks",
     download = ":remote-apis-sdks_download",
     install = ["go/..."],
     module = "github.com/bazelbuild/remote-apis-sdks",
     deps = [
+        ":api",
         ":cmp",
         ":errgroup",
         ":errors",
@@ -303,6 +323,7 @@ go_module(
         ":protobuf",
         ":remote-apis",
         ":rpc",
+        ":xattr",
         ":zstd",
         ":zstdpool",
     ],
@@ -311,14 +332,14 @@ go_module(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "94bf9a16399445ca7dc5e4036f9d1a9d2d353d13",
+    version = "724899d7c644a47389609c7014d510ab37561eda",
 )
 
 go_module(
     name = "golang-protobuf",
     install = ["..."],
     module = "google.golang.org/protobuf",
-    version = "v1.25.0",
+    version = "v1.27.1",
     deps = [
         ":cmp",
     ],
@@ -533,7 +554,7 @@ go_module(
 go_module(
     name = "xattr",
     module = "github.com/pkg/xattr",
-    version = "v0.4.1",
+    version = "v0.4.9",
     deps = [":unix"],
 )
 

@@ -1,3 +1,29 @@
+Version 11.0.0-beta.2
+--------------
+    * Stop deleting directory blobs when they are referenced in purity.
+
+Version 11.0.0-beta.1
+--------------
+    * Brought protocol in line with upstream's batch compression.
+
+Version 10.7.0
+--------------
+    * Compression alterations to move more inline with upstream (part the first)
+
+Version 10.6.1
+-------------
+    * Write the boolean logic for the missing blob check in Zeal correctly
+
+Version 10.6.0
+-------------
+    * Add ability for Zeal to always check the CAS for the ActionResult Output.
+Version 10.5.1
+-------------
+    * Load balance correctly
+Version 10.5.0
+-------------
+    * Allow load balancing in Flair server-hash.
+
 Version 10.4.0
 -------------
     * Allow using read replicas with Redis client.

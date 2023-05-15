@@ -70,7 +70,7 @@ func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	if err := c.client.ReadProto(ctx, digest.Digest{
+	if _, err := c.client.ReadProto(ctx, digest.Digest{
 		Hash: dg.Hash,
 		Size: blob.SizeBytes,
 	}, action); err != nil {
@@ -190,7 +190,7 @@ func (c *collector) blobsForActionResult(ar *pb.ActionResult) ([]*pb.Digest, err
 // blobs (see blobsForTree).
 func (c *collector) blobsForOutputDir(d *pb.OutputDirectory) ([]*pb.Digest, error) {
 	tree := &pb.Tree{}
-	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
+	if _, err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
 		return nil, err
 	}
 

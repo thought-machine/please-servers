@@ -46,13 +46,19 @@ var downloadDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Buckets:   prometheus.DefBuckets,
 })
 
+var casMissing = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "zeal",
+	Name:      "cas_missing",
+})
+
 func init() {
 	prometheus.MustRegister(bytesReceived)
 	prometheus.MustRegister(downloadDurations)
+	prometheus.MustRegister(casMissing)
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parallelism int, headers map[string]map[string]string, auth map[string]string) {
+func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parallelism int, headers map[string]map[string]string, auth map[string]string, forceCasCheck bool) {
 	client := rexclient.MustNew("mettle", storage, secureStorage, opts.TokenFile)
 	srv := &server{
 		client:        retryablehttp.NewClient(),
@@ -60,6 +66,7 @@ func ServeForever(opts grpcutil.Opts, storage string, secureStorage bool, parall
 		limiter:       make(chan struct{}, parallelism),
 		headers:       headers,
 		auth:          auth,
+		forceCasCheck: forceCasCheck,
 	}
 	srv.client.HTTPClient.Timeout = 5 * time.Minute // Always put some kind of limit on
 	srv.client.RequestLogHook = srv.logHTTPRequests
@@ -76,6 +83,7 @@ type server struct {
 	downloads     sync.Map
 	headers       map[string]map[string]string
 	auth          map[string]string
+	forceCasCheck bool
 }
 
 type download struct {
@@ -99,14 +107,33 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 	if ar, err := s.storageClient.CheckActionCache(ctx, dg.ToProto()); err != nil {
 		log.Error("Failed to check action cache: %s", err)
 	} else if ar != nil {
-		if len(ar.OutputFiles) == 1 {
-			log.Info("Retrieved %s from action cache (as %s/%d)", req.Uris, dg.Hash, dg.Size)
-			return &pb.FetchBlobResponse{
-				Status:     &rpcstatus.Status{},
-				BlobDigest: ar.OutputFiles[0].Digest,
-			}, nil
+		if s.forceCasCheck {
+			if len(ar.OutputFiles) == 1 {
+				if resp, err := s.storageClient.FindMissingBlobs(ctx, &rpb.FindMissingBlobsRequest{
+					InstanceName: s.storageClient.InstanceName,
+					BlobDigests:  []*rpb.Digest{ar.OutputFiles[0].Digest},
+				}); err == nil && len(resp.MissingBlobDigests) == 0 {
+					log.Info("Retrieved %s from action cache (as %s/%d) and exists in CAS", req.Uris, dg.Hash, dg.Size)
+					return &pb.FetchBlobResponse{
+						Status:     &rpcstatus.Status{},
+						BlobDigest: ar.OutputFiles[0].Digest,
+					}, nil
+				}
+				//  Missed the CAS, note it down, and move on to usual times.
+				casMissing.Inc()
+			} else {
+				log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
+			}
+		} else {
+			if len(ar.OutputFiles) == 1 {
+				log.Info("Retrieved %s from action cache (as %s/%d). Did not check CAS", req.Uris, dg.Hash, dg.Size)
+				return &pb.FetchBlobResponse{
+					Status:     &rpcstatus.Status{},
+					BlobDigest: ar.OutputFiles[0].Digest,
+				}, nil
+			}
+			log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 		}
-		log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
 	}
 	resp, err := s.fetchBlob(ctx, req)
 	if err != nil {
@@ -224,35 +251,11 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	blob := buf.Bytes()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if s.shouldSkipCompression(blob) {
-		digest, err := s.storageClient.WriteBlobUncompressed(ctx, blob)
-		if err == nil {
-			log.Info("Wrote %s as uncompressed blob %s", url, digest.Hash)
-		}
-		return digest.ToProto(), err
-	}
 	digest, err := s.storageClient.WriteBlob(ctx, blob)
 	if err == nil {
 		log.Info("Wrote %s as compressed blob %s", url, digest.Hash)
 	}
 	return digest.ToProto(), err
-}
-
-// shouldSkipCompression returns true if we should skip compression for uploading this
-// blob because it is already compressed (e.g. it's a zip / gzip / etc).
-func (s *server) shouldSkipCompression(blob []byte) bool {
-	mime := http.DetectContentType(blob)
-	switch mime {
-	case "application/x-rar-compressed", "application/x-gzip", "application/zip", "video/webm", "image/gif", "image/webp", "image/png", "image/jpeg":
-		return true
-	}
-	// xz and bzip2 aren't detected by the net/http package
-	if bytes.HasPrefix(blob, []byte{0xFD, '7', 'z', 'X', 'Z', 0x00}) {
-		return true
-	} else if bytes.HasPrefix(blob, []byte{0x42, 0x5A, 0x68}) {
-		return true
-	}
-	return false
 }
 
 func (s *server) logHTTPRequests(logger retryablehttp.Logger, req *http.Request, n int) {

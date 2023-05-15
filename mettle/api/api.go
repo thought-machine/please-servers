@@ -135,6 +135,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 }
 
 type server struct {
+	bpb.UnimplementedBootstrapServer
 	name         string
 	client       *client.Client
 	requests     *pubsub.Topic
@@ -541,7 +542,7 @@ func (s *server) maybeExpireJob(hash string, force bool) bool {
 // validatePlatform fetches the platform requirements for this request and checks them.
 func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, error) {
 	action := &pb.Action{}
-	if err := s.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(req.ActionDigest), action); err != nil {
+	if _, err := s.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(req.ActionDigest), action); err != nil {
 		return nil, err
 	}
 	if action.Platform == nil {

@@ -39,8 +39,8 @@ type Client interface {
 	ReadBlob(*pb.Digest) ([]byte, error)
 	WriteBlob([]byte) (*pb.Digest, error)
 	UpdateActionResult(*pb.UpdateActionResultRequest) (*pb.ActionResult, error)
-	UploadIfMissing([]*uploadinfo.Entry) error
-	BatchDownload([]digest.Digest, []pb.Compressor_Value) (map[digest.Digest][]byte, error)
+	UploadIfMissing([]*uploadinfo.Entry, []pb.Compressor_Value) error
+	BatchDownload([]digest.Digest) (map[digest.Digest][]byte, error)
 	ReadToFile(digest.Digest, string, bool) error
 	GetDirectoryTree(*pb.Digest, bool) ([]*pb.Directory, error)
 }

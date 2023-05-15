@@ -1,26 +1,30 @@
+subinclude("///python//build_defs:python")
+
 package(
     default_visibility = ["PUBLIC"],
-    python_wheel_repo = "https://get.please.build/third_party/python/py3",
+    python = {
+        "wheel_repo": "https://get.please.build/third_party/python/py3",
+    },
 )
 
 python_wheel(
     name = "requests",
     hashes = [
-        "sha1: e43b552c4a6063d32b8c9bf742fb3e9ce579c4d8",
+        "0e3c6b1de3156c66bae6ef74ed9c54320bcf39b98760b3356b9c9517da2c919f",
     ],
     version = "2.5.0",
 )
 
 python_wheel(
     name = "colorlog",
-    hashes = ["sha1: 73eef4e430c84b2235ec6be2212aad42fc0a83c7"],
+    hashes = ["8b234ebae1ba1237bc79c0d5f1f47b31a3f3e90c0b4c2b0ebdde63a174d3b97b"],
     version = "3.1.4",
 )
 
 python_wheel(
     name = "absl",
     package_name = "absl_py",
-    hashes = ["sha1: eb015a38bdc765b54626ca47af80bab9e3099ac2"],
+    hashes = ["0d8b1136d969ab9d795cf0dcd2b369ad9fc17eeccc4f8f10b253e188f5634e17"],
     version = "0.5.0",
     deps = [":six"],
 )
@@ -28,6 +32,6 @@ python_wheel(
 python_wheel(
     name = "six",
     outs = ["six.py"],
-    hashes = ["sha1: a96bbdb19bd254689e8687cef85593bc6b3d9703"],
+    hashes = ["832dc0e10feb1aa2c68dcc57dbb658f1c7e65b9b61af69048abc87a2db00a0eb"],
     version = "1.11.0",
 )

@@ -3,6 +3,7 @@ package trie
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,8 @@ var log = logging.MustGetLogger()
 
 var serverDead = status.Errorf(codes.DeadlineExceeded, "Server is down")
 
+var intN = rand.Intn
+
 // failureThreshold is the number of timeouts we tolerate on a server before marking it
 // out of service.
 const failureThreshold = 5
@@ -28,17 +31,19 @@ const recheckFrequency = 10 * time.Second
 
 // A Replicator implements replication for our RPCs.
 type Replicator struct {
-	Trie      *Trie
-	Replicas  int
-	increment int
+	Trie        *Trie
+	Replicas    int
+	increment   int
+	loadBalance bool
 }
 
 // NewReplicator returns a new Replicator instance.
-func NewReplicator(t *Trie, replicas int) *Replicator {
+func NewReplicator(t *Trie, replicas int, loadBalance bool) *Replicator {
 	return &Replicator{
-		Trie:      t,
-		Replicas:  replicas,
-		increment: 16 / replicas,
+		Trie:        t,
+		Replicas:    replicas,
+		increment:   16 / replicas,
+		loadBalance: loadBalance,
 	}
 }
 
@@ -68,7 +73,7 @@ func (r *Replicator) Sequential(key string, f ReplicatedFunc) error {
 func (r *Replicator) SequentialAck(key string, f ReplicatedAckFunc) error {
 	var merr *multierror.Error
 	success := false
-	offset := 0
+	offset := r.startingOffset()
 	for i := 0; i < r.Replicas; i++ {
 		shouldContinue, err := r.callAck(f, r.Trie.GetOffset(key, offset))
 		if err == nil {
@@ -118,7 +123,7 @@ func (r *Replicator) SequentialDigest(digest *pb.Digest, f ReplicatedFunc) error
 // It returns an error if all replicas fail, hence it is possible for some replicas not to receive data.
 func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 	var g multierror.Group
-	offset := 0
+	offset := r.startingOffset()
 	for i := 0; i < r.Replicas; i++ {
 		o := offset
 		g.Go(func() error {
@@ -136,6 +141,13 @@ func (r *Replicator) Parallel(key string, f ReplicatedFunc) error {
 	return nil
 }
 
+func (r *Replicator) startingOffset() int {
+	if r.loadBalance {
+		return intN(r.Replicas) * r.increment
+	}
+	return 0
+}
+
 // ParallelDigest is like Parallel but takes a digest instead of the raw hash.
 func (r *Replicator) ParallelDigest(digest *pb.Digest, f ReplicatedFunc) error {
 	if digest == nil {
@@ -150,7 +162,7 @@ func (r *Replicator) ParallelDigest(digest *pb.Digest, f ReplicatedFunc) error {
 // it is like Parallel but waits for all replicas to complete.
 func (r *Replicator) All(key string, f ReplicatedFunc) error {
 	var g multierror.Group
-	offset := 0
+	offset := r.startingOffset()
 	for i := 0; i < r.Replicas; i++ {
 		o := offset
 		g.Go(func() error {
