@@ -19,6 +19,12 @@ import (
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
+// markReferencedBlobs takes an action result and adds all blobs on which this
+// action result depends (either directly or indirectly) to the
+// `referencedBlobs` map. To do so, it has to traverse the whole tree of blobs
+// at which this action result point and collect the various blob digests.
+// Missing input blobs are non-fatal, but missing output blobs will return an
+// error and will not mark any blob as referenced.
 func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 	outputBlobs, err := c.outputBlobs(ar)
 	if err != nil {
@@ -54,33 +60,39 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 	dg := &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes}
 	action := &pb.Action{}
+	// Actions are stored separately from ARs. They are located in the CAS
+	// like any other blob with the same digest as the AR.
 	blob, present := c.allBlobs[dg.Hash]
 	if !present {
 		log.Errorf("missing action for %s", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	if err := c.client.ReadProto(ctx, digest.Digest{
 		Hash: dg.Hash,
 		Size: blob.SizeBytes,
 	}, action); err != nil {
-		log.Errorf("Failed to read action %s: %s", dg.Hash, err)
+		log.Errorf("Failed to read action %s: %v", dg.Hash, err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
 
 	digests, err := c.blobsForAction(action)
 	if err != nil {
-		log.Errorf("Failed to get blobs for action %s: %s", dg.Hash, err)
+		log.Errorf("Failed to get blobs for action %s: %v", dg.Hash, err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
 	return append(digests, dg)
 }
 
+// blobsForAction returns the list of blob digests on which the given action
+// "depends" (directly and indirectly).
+// An action can point to the following blobs:
+// - a command
+// - an input root (which contains the directory tree for inputs)
 func (c *collector) blobsForAction(action *pb.Action) ([]*pb.Digest, error) {
 	digests := make([]*pb.Digest, 0, 2)
 	if action.InputRootDigest == nil {
@@ -95,7 +107,7 @@ func (c *collector) blobsForAction(action *pb.Action) ([]*pb.Digest, error) {
 	defer cancel()
 	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory tree for input root %s: %s", action.InputRootDigest, err)
+		return nil, fmt.Errorf("failed to read directory tree for input root %s: %v", action.InputRootDigest, err)
 	}
 	for _, dir := range dirs {
 		digests = append(digests, c.blobsForDirectory(dir)...)
@@ -103,6 +115,8 @@ func (c *collector) blobsForAction(action *pb.Action) ([]*pb.Digest, error) {
 	return digests, nil
 }
 
+// outputBlobs collects the list of output blobs from the given action result.
+// It also checks those are not missing and returns an error if some are.
 func (c *collector) outputBlobs(ar *ppb.ActionResult) ([]*pb.Digest, error) {
 	dg := &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -141,6 +155,12 @@ func (c *collector) outputBlobs(ar *ppb.ActionResult) ([]*pb.Digest, error) {
 	return outputBlobs, nil
 }
 
+// blobsForActionResult returns the list of blobs on which the given action
+// result depends (directly and indirectly).
+// An action result can point to the following blobs:
+// - blobs with output directories and files
+// - a blob containing the standard output of the action
+// - a blob containing the standard error of the action
 func (c *collector) blobsForActionResult(ar *pb.ActionResult) ([]*pb.Digest, error) {
 	digests := make([]*pb.Digest, 0, len(ar.OutputDirectories))
 	for _, d := range ar.OutputDirectories {
@@ -164,6 +184,10 @@ func (c *collector) blobsForActionResult(ar *pb.ActionResult) ([]*pb.Digest, err
 	return digests, nil
 }
 
+// blobsForOutputDir returns the list of blob digests on which an output
+// directory depends (directly and indirectly).
+// An output directory only points to a tree, which in turns points to more
+// blobs (see blobsForTree).
 func (c *collector) blobsForOutputDir(d *pb.OutputDirectory) ([]*pb.Digest, error) {
 	tree := &pb.Tree{}
 	if err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
@@ -173,6 +197,11 @@ func (c *collector) blobsForOutputDir(d *pb.OutputDirectory) ([]*pb.Digest, erro
 	return append(c.blobsForTree(tree), d.TreeDigest), nil
 }
 
+// blobsForTree returns the list of blob digests on which a tree depends
+// (directly and indirectly).
+// A tree points to the root directory blob, as well as child directory blobs.
+// For each of those we first check whether they exist. If not, we try to
+// repair (see checkDirectories).
 func (c *collector) blobsForTree(tree *pb.Tree) []*pb.Digest {
 	// Here we attempt to fix up any outputs that don't also have the input facet.
 	// This is an incredibly sucky part of the API; the output doesn't contain some of the blobs
@@ -202,6 +231,10 @@ func (c *collector) checkDirectories(dirs []*pb.Directory) {
 	}
 }
 
+// blobsForDirectory returns the list of blob digests on which a directory
+// depends (directly and indirectly).
+// A directory consists of file and sub-directory blobs. It can also point to
+// a mettle pack, which we include in this list.
 func (c *collector) blobsForDirectory(d *pb.Directory) []*pb.Digest {
 	// If the dir has any node properties, save a copy of one that doesn't.
 	cp := d

@@ -220,6 +220,13 @@ func min(a, b int) int {
 	return b
 }
 
+// MarkReferencedBlobs traverses the internal list of "live" action results
+// and for each of them marks all the blobs they point to (either directly or
+// indirectly) as "referenced" by adding their digest to an internal map. See
+// `RemoveBlobs` on how this map is then used.
+// Missing input blobs are non-fatal, but missing output blobs will get the
+// action result marked as "broken" and none of the blobs will be marked as
+// referenced.
 func (c *collector) MarkReferencedBlobs() error {
 	log.Notice("Finding referenced blobs...")
 	ch := newProgressBar("Checking action results", len(c.actionResults))
@@ -330,6 +337,9 @@ func (c *collector) RemoveActionResults() error {
 	return nil
 }
 
+// RemoveBlobs goes through the list of blobs and tells mettle
+// to remove any that is not referenced by a live action result
+// (see `MarkReferencedBlobs` for this process).
 func (c *collector) RemoveBlobs() error {
 	log.Notice("Determining blobs to remove...")
 	blobs := make(map[string][]*ppb.Blob)
