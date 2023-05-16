@@ -7,21 +7,16 @@ import (
 	"fmt"
 	"path"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
-	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v4/logging"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 	"github.com/thought-machine/please-servers/rexclient"
@@ -225,6 +220,20 @@ func min(a, b int) int {
 	return b
 }
 
+// MarkReferencedBlobs traverses the internal list of "live" action results
+// and for each of them marks all the blobs they point to (either directly or
+// indirectly) as "referenced" by adding their digest to an internal map. See
+// `RemoveBlobs` on how this map is then used.
+// Any missing output blob will get the action result marked as "broken" and
+// none of the blobs will be marked as referenced. On the other hand, missing
+// input blobs are non-fatal for 2 reasons:
+//   - since the action has already been run, we no longer need them (at least
+//     in the case of that specific action). The only thing that will be used
+//     by the mettle is the output blobs;
+//   - input blobs of an action are output blobs of another, so following the
+//     statement on output blobs above, if any input blob is missing, the action
+//     that was supposed to produce those will be marked as broken (and removed)
+//     anyway.
 func (c *collector) MarkReferencedBlobs() error {
 	log.Notice("Finding referenced blobs...")
 	ch := newProgressBar("Checking action results", len(c.actionResults))
@@ -261,215 +270,11 @@ func (c *collector) MarkReferencedBlobs() error {
 	return nil
 }
 
-func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-	dg := &pb.Digest{Hash: ar.Hash, SizeBytes: ar.SizeBytes}
-	result, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
-		InstanceName: c.client.InstanceName,
-		ActionDigest: dg,
-	})
-	if err != nil {
-		return fmt.Errorf("Couldn't download action result for %s: %s", ar.Hash, err)
-	}
-	if result.ExitCode != 0 {
-		log.Debug("Found failed action result %s: exit code %d", ar.Hash, result.ExitCode)
-		c.markBroken(ar.Hash, ar.SizeBytes)
-	}
-	outputSize, digests, err := c.outputs(result)
-	if err != nil {
-		return err
-	}
-	// Check whether all these outputs exist.
-	resp, err := c.client.FindMissingBlobs(context.Background(), &pb.FindMissingBlobsRequest{
-		InstanceName: c.client.InstanceName,
-		BlobDigests:  digests,
-	})
-	if err != nil {
-		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
-	}
-	// Mark all the inputs as well. There are some fringe cases that make things awkward
-	// and it means things look more sensible in the browser.
-	inputSize, dirs, _ := c.inputDirs(dg)
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	for _, d := range dirs {
-		c.markDirectory(d)
-	}
-	c.inputSizes[ar.Hash] = int(inputSize)
-	c.outputSizes[ar.Hash] = int(outputSize)
-	if resp != nil && len(resp.MissingBlobDigests) > 0 {
-		digests := make([]string, len(resp.MissingBlobDigests))
-		for i, dg := range resp.MissingBlobDigests {
-			digests[i] = fmt.Sprintf("%s/%d", dg.Hash, dg.SizeBytes)
-		}
-		return fmt.Errorf("Action result is missing %d digests: %s", len(resp.MissingBlobDigests), strings.Join(digests, ", "))
-	}
-	c.referencedBlobs[ar.Hash] = struct{}{}
-	return nil
-}
-
-func (c *collector) outputs(ar *pb.ActionResult) (int64, []*pb.Digest, error) {
-	var size int64
-	digests := []*pb.Digest{}
-	for _, d := range ar.OutputDirectories {
-		sz, dgs, err := c.markTree(d)
-		if err != nil {
-			if status.Code(err) == codes.NotFound {
-				return size, []*pb.Digest{}, err
-			}
-		}
-		size += sz
-		digests = append(digests, dgs...)
-	}
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	for _, f := range ar.OutputFiles {
-		c.referencedBlobs[f.Digest.Hash] = struct{}{}
-		size += f.Digest.SizeBytes
-		digests = append(digests, f.Digest)
-	}
-	if ar.StdoutDigest != nil {
-		c.referencedBlobs[ar.StdoutDigest.Hash] = struct{}{}
-		digests = append(digests, ar.StdoutDigest)
-	}
-	if ar.StderrDigest != nil {
-		c.referencedBlobs[ar.StderrDigest.Hash] = struct{}{}
-		digests = append(digests, ar.StderrDigest)
-	}
-	return size, digests, nil
-}
-
-// inputDirs returns all the inputs for an action. It doesn't return any errors because we don't
-// want it to be fatal on failure; otherwise anything missing breaks the whole process.
-func (c *collector) inputDirs(dg *pb.Digest) (int64, []*pb.Directory, *pb.Digest) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-	action := &pb.Action{}
-	var size int64
-	blob, present := c.allBlobs[dg.Hash]
-	if !present {
-		log.Errorf("missing action for %s", dg.Hash)
-		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil, nil
-	}
-	if _, err := c.client.ReadProto(ctx, digest.Digest{
-		Hash: dg.Hash,
-		Size: blob.SizeBytes,
-	}, action); err != nil {
-		log.Errorf("Failed to read action %s: %s", dg.Hash, err)
-		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil, nil
-	}
-	size += dg.SizeBytes
-	if action.InputRootDigest == nil {
-		log.Errorf("nil input root for %s", dg.Hash)
-		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil, nil
-	}
-	size += action.InputRootDigest.SizeBytes
-	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
-	if err != nil {
-		log.Errorf("Failed to read directory tree for %s (input root %s): %s", dg.Hash, action.InputRootDigest, err)
-		atomic.AddInt64(&c.missingInputs, 1)
-		return size, nil, action.InputRootDigest
-	}
-	for _, dir := range dirs {
-		for _, d := range dir.Directories {
-			size += d.Digest.SizeBytes
-		}
-		for _, f := range dir.Files {
-			size += f.Digest.SizeBytes
-		}
-	}
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.referencedBlobs[action.CommandDigest.Hash] = struct{}{}
-	c.referencedBlobs[dg.Hash] = struct{}{}
-	c.referencedBlobs[action.InputRootDigest.Hash] = struct{}{}
-	return size, dirs, action.InputRootDigest
-}
-
 // markBroken marks an action result as missing some relevant files.
 func (c *collector) markBroken(hash string, size int64) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.brokenResults[hash] = size
-}
-
-func (c *collector) markTree(d *pb.OutputDirectory) (int64, []*pb.Digest, error) {
-	tree := &pb.Tree{}
-	if _, err := c.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(d.TreeDigest), tree); err != nil {
-		return 0, nil, err
-	}
-	// Here we attempt to fix up any outputs that don't also have the input facet.
-	// This is an incredibly sucky part of the API; the output doesn't contain some of the blobs
-	// that will get used on the input facet, so it's really nonobvious where they come from.
-	c.checkDirectories(append(tree.Children, tree.Root))
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.referencedBlobs[d.TreeDigest.Hash] = struct{}{}
-	size, digests := c.markDirectory(tree.Root)
-	for _, child := range tree.Children {
-		s2, d2 := c.markDirectory(child)
-		size += s2
-		digests = append(digests, d2...)
-	}
-	return size, digests, nil
-}
-
-func (c *collector) markDirectory(d *pb.Directory) (int64, []*pb.Digest) {
-	var size int64
-	digests := []*pb.Digest{}
-	for _, f := range d.Files {
-		c.referencedBlobs[f.Digest.Hash] = struct{}{}
-		size += f.Digest.SizeBytes
-		digests = append(digests, f.Digest)
-	}
-	for _, d := range d.Directories {
-		c.referencedBlobs[d.Digest.Hash] = struct{}{}
-		size += d.Digest.SizeBytes
-		digests = append(digests, d.Digest)
-	}
-	// If this directory has a pack associated, mark that too.
-	if pack := rexclient.PackDigest(d); pack.Hash != "" {
-		c.referencedBlobs[pack.Hash] = struct{}{}
-		size += pack.Size
-		digests = append(digests, pack.ToProto())
-	}
-	// If the dir has any node properties, save a copy of one that doesn't.
-	cp := d
-	if cp.NodeProperties != nil {
-		cp = proto.Clone(d).(*pb.Directory)
-		cp.NodeProperties = nil
-	}
-	ue, _ := uploadinfo.EntryFromProto(cp)
-	c.referencedBlobs[ue.Digest.Hash] = struct{}{}
-	digests = append(digests, ue.Digest.ToProto())
-	size += ue.Digest.Size
-	return size, digests
-}
-
-// checkDirectory checks that the directory protos from a Tree still exist in the CAS and uploads it if not.
-func (c *collector) checkDirectories(dirs []*pb.Directory) {
-	entries := make([]*uploadinfo.Entry, len(dirs))
-	for i, d := range dirs {
-		e, _ := uploadinfo.EntryFromProto(d)
-		entries[i] = e
-	}
-	if !c.dryRun {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-		defer cancel()
-		if _, _, err := c.client.UploadIfMissing(ctx, entries...); err != nil {
-			log.Warning("Failed to upload missing directory protos: %s", err)
-		}
-	}
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	for _, e := range entries {
-		c.referencedBlobs[e.Digest.Hash] = struct{}{}
-	}
 }
 
 func (c *collector) MarkActionResults() {
@@ -539,6 +344,9 @@ func (c *collector) RemoveActionResults() error {
 	return nil
 }
 
+// RemoveBlobs goes through the list of blobs and tells mettle
+// to remove any that is not referenced by a live action result
+// (see `MarkReferencedBlobs` for this process).
 func (c *collector) RemoveBlobs() error {
 	log.Notice("Determining blobs to remove...")
 	blobs := make(map[string][]*ppb.Blob)
@@ -786,11 +594,12 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 	for i := 0; i < (c.parallelism + 1); i++ {
 		go func(ars []*ppb.ActionResult) {
 			for _, ar := range ars {
-				_, dirs, digest := c.inputDirs(&pb.Digest{
-					Hash:      ar.Hash,
-					SizeBytes: ar.SizeBytes,
-				})
-				markBlobs(c.inputDirMap(dirs), digest, "")
+				action, dirs, err := c.inputDirs(ar)
+				if err != nil {
+					log.Errorf("failed to get input dir for %s: %v", ar.Hash, err)
+				} else {
+					markBlobs(c.inputDirMap(dirs), action.InputRootDigest, "")
+				}
 				ch <- 1
 			}
 			wg.Done()
@@ -802,6 +611,30 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		ret = append(ret, *blob)
 	}
 	return ret, nil
+}
+
+func (c *collector) inputDirs(ar *ppb.ActionResult) (*pb.Action, []*pb.Directory, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	action := &pb.Action{}
+	blob, present := c.allBlobs[ar.Hash]
+	if !present {
+		return nil, nil, fmt.Errorf("missing action for %s", ar.Hash)
+	}
+	if _, err := c.client.ReadProto(ctx, digest.Digest{
+		Hash: ar.Hash,
+		Size: blob.SizeBytes,
+	}, action); err != nil {
+		return nil, nil, fmt.Errorf("Failed to read action %s: %w", ar.Hash, err)
+	}
+	if action.InputRootDigest == nil {
+		return nil, nil, fmt.Errorf("nil input root for %s", ar.Hash)
+	}
+	dirs, err := c.client.GetDirectoryTree(ctx, action.InputRootDigest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to read directory tree for %s (input root %s): %w", ar.Hash, action.InputRootDigest, err)
+	}
+	return action, dirs, nil
 }
 
 func (c *collector) inputDirMap(dirs []*pb.Directory) map[string]*pb.Directory {
