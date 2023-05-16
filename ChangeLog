@@ -1,3 +1,7 @@
+Version 11.0.0-beta.3
+--------------
+    * [Purity] Collect all blobs first before marking them (and some debug logs)
+
 Version 11.0.0-beta.2
 --------------
     * Stop deleting directory blobs when they are referenced in purity.
