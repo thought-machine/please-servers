@@ -150,7 +150,7 @@ func (c *collector) outputBlobs(ar *ppb.ActionResult) ([]*pb.Digest, error) {
 		for i, dg := range resp.MissingBlobDigests {
 			digests[i] = fmt.Sprintf("%s/%d", dg.Hash, dg.SizeBytes)
 		}
-		return nil, fmt.Errorf("Action result is missing %d digests: %s", len(resp.MissingBlobDigests), strings.Join(digests, ", "))
+		return nil, fmt.Errorf("Action result is missing %d output blobs: %s", len(resp.MissingBlobDigests), strings.Join(digests, ", "))
 	}
 	return outputBlobs, nil
 }
