@@ -227,13 +227,13 @@ func min(a, b int) int {
 // Any missing output blob will get the action result marked as "broken" and
 // none of the blobs will be marked as referenced. On the other hand, missing
 // input blobs are non-fatal for 2 reasons:
-// - since the action has already been run, we no longer need them (at least
-//   in the case of that specific action). The only thing that will be used
-//   by the mettle is the output blobs;
-// - input blobs of an action are output blobs of another, so following the
-//   statement on output blobs above, if any input blob is missing, the action
-//   that was supposed to produce those will be marked as broken (and removed)
-//   anyway.
+//   - since the action has already been run, we no longer need them (at least
+//     in the case of that specific action). The only thing that will be used
+//     by the mettle is the output blobs;
+//   - input blobs of an action are output blobs of another, so following the
+//     statement on output blobs above, if any input blob is missing, the action
+//     that was supposed to produce those will be marked as broken (and removed)
+//     anyway.
 func (c *collector) MarkReferencedBlobs() error {
 	log.Notice("Finding referenced blobs...")
 	ch := newProgressBar("Checking action results", len(c.actionResults))
