@@ -35,7 +35,7 @@ func New(instanceName, url string, tls bool, tokenFile string) (*client.Client, 
 		client.RetryTransient(),
 		&client.TreeSymlinkOpts{Preserved: true},
 		client.CompressedBytestreamThreshold(CompressionThreshold),
-		client.UploadCompressionClassifier(client.DetectArchiveUploads),
+		client.UploadCompressionPredicate(DetectArchiveUploads),
 		client.UsePackName(PackName),
 	)
 	if err != nil {
