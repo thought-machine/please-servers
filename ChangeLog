@@ -1,3 +1,7 @@
+Version 11.0.0
+--------------
+    * Updated to latest REAPI, especially for batch compression protocol
+
 Version 11.0.0-beta.3
 --------------
     * [Purity] Collect all blobs first before marking them (and some debug logs)
