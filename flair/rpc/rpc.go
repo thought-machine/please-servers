@@ -118,11 +118,10 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 				pb.Compressor_IDENTITY,
 				pb.Compressor_ZSTD,
 			},
-			// TODO(peterebden): Disabled for temporary compatibility. Re-add this once Mettle has updated.
-			// SupportedBatchUpdateCompressors: []pb.Compressor_Value{
-			// 	pb.Compressor_IDENTITY,
-			// 	pb.Compressor_ZSTD,
-			// },
+			SupportedBatchUpdateCompressors: []pb.Compressor_Value{
+				pb.Compressor_IDENTITY,
+				pb.Compressor_ZSTD,
+			},
 		},
 		LowApiVersion:  &semver.SemVer{Major: 2, Minor: 0},
 		HighApiVersion: &semver.SemVer{Major: 2, Minor: 1}, // optimistic

@@ -1,9 +1,6 @@
 go_library(
     name = "rexclient",
-    srcs = [
-        "client.go",
-        "packs.go",
-    ],
+    srcs = glob(["*.go"], exclude=["*_test.go"]),
     visibility = ["PUBLIC"],
     deps = [
         "//grpcutil",
