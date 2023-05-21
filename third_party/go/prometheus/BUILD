@@ -24,12 +24,13 @@ go_module(
         ".",
         "...",
     ],
-    module = "github.com/grpc-ecosystem/go-grpc-prometheus",
-    version = "v1.2.0",
+    module = "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus",
+    version = "v1.0.0-rc.0",
     deps = [
         ":prometheus",
         "//third_party/go:grpc",
         "//third_party/go:net",
+        "//third_party/go:grpc-middleware",
     ],
 )
 

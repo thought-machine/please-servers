@@ -50,7 +50,7 @@ func NewServer(opts Opts) (net.Listener, *grpc.Server) {
 				opts.NativeHistogramBucketFactor = 1.1
 			},
 		))
-	prometheus.MustRegister(serverMetrics) //Consider splitting these out to proper Prom registries
+	prometheus.MustRegister(serverMetrics) // Consider splitting these out to proper Prom registries
 
 	s := grpc.NewServer(OptionalTLS(opts.KeyFile, opts.CertFile, opts.TLSMinVersion,
 		grpc.ChainUnaryInterceptor(append([]grpc.UnaryServerInterceptor{
