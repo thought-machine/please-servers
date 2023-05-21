@@ -4,7 +4,7 @@ go_module(
     name = "prometheus",
     install = ["..."],
     module = "github.com/prometheus/client_golang",
-    version = "v1.11.0",
+    version = "v1.15.1",
     deps = [
         ":client_model",
         ":perks",
@@ -13,6 +13,7 @@ go_module(
         "//third_party/go:json-iterator",
         "//third_party/go:xxhash_v2",
         "//third_party/go:net",
+        "//third_party/go:spew",
         "//third_party/go:protobuf",
     ],
 )
@@ -56,7 +57,7 @@ go_module(
     name = "client_model",
     install = ["..."],
     module = "github.com/prometheus/client_model",
-    version = "v0.2.0",
+    version = "v0.4.0",
     deps = [
         "//third_party/go:protobuf",
     ],
@@ -69,7 +70,7 @@ go_module(
         "model",
         "internal/...",
     ],
-    version = "v0.30.0",
+    version = "v0.43.0",
     module = "github.com/prometheus/common",
     deps = [
         ":client_model",
@@ -84,7 +85,7 @@ go_module(
     name = "golang_protobuf_extensions",
     install = ["..."],
     module = "github.com/matttproud/golang_protobuf_extensions",
-    version = "v1.0.1",
+    version = "v1.0.4",
     deps = [
         "//third_party/go:protobuf",
     ],

@@ -339,7 +339,7 @@ go_module(
     name = "golang-protobuf",
     install = ["..."],
     module = "google.golang.org/protobuf",
-    version = "v1.27.1",
+    version = "v1.30.0",
     deps = [
         ":cmp",
     ],
