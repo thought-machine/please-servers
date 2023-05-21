@@ -23,6 +23,18 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip"
 )
 
+var serverMetrics = grpc_prometheus.NewServerMetrics(
+	grpc_prometheus.WithServerHandlingTimeHistogram(
+		grpc_prometheus.WithHistogramBuckets([]float64{0.001, 0.01, 0.1, 0.3, 0.6, 1, 3, 6, 9, 20, 30, 60, 90, 120}),
+		func(opts *prometheus.HistogramOpts) {
+			opts.NativeHistogramBucketFactor = 1.1
+		},
+	))
+
+func init() {
+	prometheus.MustRegister(serverMetrics)
+}
+
 // Opts is the set of common options for gRPC servers.
 type Opts struct {
 	Host          string `long:"host" description:"Host to listen on"`
@@ -43,14 +55,6 @@ func NewServer(opts Opts) (net.Listener, *grpc.Server) {
 		log.Fatalf("Failed to listen on %s:%d: %v", opts.Host, opts.Port, err)
 	}
 	log.Notice("Listening on %s:%d", opts.Host, opts.Port)
-	serverMetrics := grpc_prometheus.NewServerMetrics(
-		grpc_prometheus.WithServerHandlingTimeHistogram(
-			grpc_prometheus.WithHistogramBuckets([]float64{0.001, 0.01, 0.1, 0.3, 0.6, 1, 3, 6, 9, 20, 30, 60, 90, 120}),
-			func(opts *prometheus.HistogramOpts) {
-				opts.NativeHistogramBucketFactor = 1.1
-			},
-		))
-	prometheus.MustRegister(serverMetrics) // Consider splitting these out to proper Prom registries
 
 	s := grpc.NewServer(OptionalTLS(opts.KeyFile, opts.CertFile, opts.TLSMinVersion,
 		grpc.ChainUnaryInterceptor(append([]grpc.UnaryServerInterceptor{
