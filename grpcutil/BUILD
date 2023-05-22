@@ -9,5 +9,6 @@ go_library(
         "//third_party/go:grpc-middleware",
         "//third_party/go:logging",
         "//third_party/go/prometheus:grpc-prometheus",
+        "//third_party/go/prometheus:prometheus",
     ],
 )
