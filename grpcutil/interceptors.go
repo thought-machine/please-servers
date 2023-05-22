@@ -3,13 +3,13 @@ package grpcutil
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"io/ioutil"
 	"net"
 	"strings"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
@@ -22,6 +22,18 @@ import (
 	_ "github.com/mostynb/go-grpc-compression/zstd"
 	_ "google.golang.org/grpc/encoding/gzip"
 )
+
+var serverMetrics = grpc_prometheus.NewServerMetrics(
+	grpc_prometheus.WithServerHandlingTimeHistogram(
+		grpc_prometheus.WithHistogramBuckets([]float64{0.001, 0.01, 0.1, 0.3, 0.6, 1, 3, 6, 9, 20, 30, 60, 90, 120}),
+		func(opts *prometheus.HistogramOpts) {
+			opts.NativeHistogramBucketFactor = 1.1
+		},
+	))
+
+func init() {
+	prometheus.MustRegister(serverMetrics)
+}
 
 // Opts is the set of common options for gRPC servers.
 type Opts struct {
@@ -43,30 +55,28 @@ func NewServer(opts Opts) (net.Listener, *grpc.Server) {
 		log.Fatalf("Failed to listen on %s:%d: %v", opts.Host, opts.Port, err)
 	}
 	log.Notice("Listening on %s:%d", opts.Host, opts.Port)
+
 	s := grpc.NewServer(OptionalTLS(opts.KeyFile, opts.CertFile, opts.TLSMinVersion,
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(append([]grpc.UnaryServerInterceptor{
+		grpc.ChainUnaryInterceptor(append([]grpc.UnaryServerInterceptor{
 			LogUnaryRequests,
-			grpc_prometheus.UnaryServerInterceptor,
+			serverMetrics.UnaryServerInterceptor(),
 			grpc_recovery.UnaryServerInterceptor(),
-		}, unaryAuthInterceptor(opts)...)...)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(append([]grpc.StreamServerInterceptor{
+		}, unaryAuthInterceptor(opts)...)...),
+		grpc.ChainStreamInterceptor(append([]grpc.StreamServerInterceptor{
 			LogStreamRequests,
-			grpc_prometheus.StreamServerInterceptor,
+			serverMetrics.StreamServerInterceptor(),
 			grpc_recovery.StreamServerInterceptor(),
-		}, streamAuthInterceptor(opts)...)...)),
+		}, streamAuthInterceptor(opts)...)...),
 		grpc.MaxRecvMsgSize(419430400), // 400MB
 		grpc.MaxSendMsgSize(419430400),
 	)...)
-	grpc_prometheus.Register(s)
+
+	serverMetrics.InitializeMetrics(s)
 	reflection.Register(s)
 	if !opts.NoHealth {
 		grpc_health_v1.RegisterHealthServer(s, health.NewServer())
 	}
 	return lis, s
-}
-
-func init() {
-	grpc_prometheus.EnableHandlingTimeHistogram()
 }
 
 func unaryAuthInterceptor(opts Opts) []grpc.UnaryServerInterceptor {

@@ -229,14 +229,13 @@ go_module(
 go_module(
     name = "grpc-middleware",
     install = [
-        ".",
-        "recovery",
-        "retry",
-        "util/metautils",
+        "interceptors/recovery",
+        "interceptors",
+        "metadata",
         "util/backoffutils",
     ],
-    module = "github.com/grpc-ecosystem/go-grpc-middleware",
-    version = "fa8fef87dcecac0bda02d36abb3c790ab9e0030b",
+    module = "github.com/grpc-ecosystem/go-grpc-middleware/v2",
+    version = "v2.0.0-rc.5",
     deps = [
         ":grpc",
         ":net",
