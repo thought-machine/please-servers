@@ -666,7 +666,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	w.metadata.ExecutionStartTimestamp = toTimestamp(start)
 	duration, _ := ptypes.Duration(action.Timeout)
 	log.Notice("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
-	cmd := exec.Command(command.Arguments[0], command.Arguments[1:]...)
+	cmd := exec.Command(commandPath(command), command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 	cmd.SysProcAttr = sysProcAttr()
 	cmd.Dir = path.Join(w.dir, command.WorkingDirectory)
@@ -1144,4 +1144,30 @@ func resultsCachePriority(skipCacheLookup bool) int32 {
 		return -1
 	}
 	return 0
+}
+
+// commandPath returns the path that should be used for this command.
+// Per the spec, if it contains a path separator we don't alter it; if not we look it up,
+// honouring the given env var if present.
+func commandPath(command *pb.Command) string {
+	arg := command.Arguments[0]
+	if strings.ContainsRune(arg, filepath.Separator) {
+		return arg
+	}
+	for _, env := range command.EnvironmentVariables {
+		if env.Name == "PATH" {
+			for _, p := range filepath.SplitList(env.Value) {
+				result := filepath.Join(p, arg)
+				if _, err := os.Stat(result); err == nil {
+					return result
+				}
+			}
+		}
+	}
+	path, err := exec.LookPath(arg)
+	if err != nil {
+		log.Error("Failed to look up path: %s", err)
+		return arg // Let exec deal with this later
+	}
+	return path
 }
