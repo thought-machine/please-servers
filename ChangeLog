@@ -1,3 +1,7 @@
+Version 11.0.2
+--------------
+    * Implement path lookup according to REAPI v2.3
+
 Version 11.0.1
 --------------
     * Restored previous permissive behaviour about symlinks pointing outside their directory
