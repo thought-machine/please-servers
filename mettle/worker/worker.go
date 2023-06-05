@@ -39,6 +39,7 @@ import (
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	mettlecli "github.com/thought-machine/please-servers/cli"
 	elan "github.com/thought-machine/please-servers/elan/rpc"
@@ -687,6 +688,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	err := w.runCommand(cmd, duration)
 	log.Notice("Completed execution for %s", w.actionDigest.Hash)
 	execEnd := time.Now()
+	w.metadata.VirtualExecutionDuration = durationpb.New(duration)
 	w.metadata.ExecutionCompletedTimestamp = toTimestamp(execEnd)
 	w.metadata.OutputUploadStartTimestamp = w.metadata.ExecutionCompletedTimestamp
 	execDuration := execEnd.Sub(start).Seconds()

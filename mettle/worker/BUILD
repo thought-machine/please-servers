@@ -15,6 +15,7 @@ go_library(
         "//third_party/go:errgroup",
         "//third_party/go:genproto",
         "//third_party/go:godirwalk",
+        "//third_party/go:golang-protobuf",
         "//third_party/go:grpc",
         "//third_party/go:grpc-middleware",
         "//third_party/go:humanize",
