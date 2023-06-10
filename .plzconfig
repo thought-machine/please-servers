@@ -15,14 +15,10 @@ importpath = github.com/thought-machine/please-servers
 gotool = //third_party/go:toolchain|go
 coverageredesign = true
 legacyimports = false
+pleasegotool = /home/jpoole/go-rules/plz-out/bin/tools/please_go/please_go.bootstrap
 
 [python]
 moduledir = third_party/python
-
-[proto]
-protoctool = //third_party/proto:protoc
-protocgoplugin = //third_party/go:protoc-gen-go
-language = go
 
 [plugin "cc"]
 target = //plugins:cc
@@ -38,8 +34,8 @@ languagedef = ///go_proto//build_defs:go
 
 [plugin "go_proto"]
 target = //plugins:go-proto
-grpcplugin = //third_party/go:protoc-gen-go-grpc
-protoplugin = //third_party/go:protoc-gen-go
+grpcplugin = ///third_party/go/google.golang.org_grpc_cmd_protoc-gen-go-grpc//:protoc-gen-go-grpc
+protoplugin = ///third_party/go/google.golang.org_protobuf//cmd/protoc-gen-go
 protodep = //third_party/go:golang-protobuf
 grpcdep = //third_party/go:grpc
 

@@ -1,14 +1,13 @@
 go_binary(
     name = "elan",
     srcs = ["main.go"],
+    visibility = ["//package:all"],
     deps = [
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
         "//cli",
         "//elan/rpc",
         "//grpcutil",
-        "//third_party/go:cli-init",
-        "//third_party/go/gocloud",
     ],
-    visibility = ["//package:all"],
 )
 
 sh_cmd(

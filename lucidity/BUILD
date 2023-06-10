@@ -1,13 +1,13 @@
 go_binary(
     name = "lucidity",
     srcs = ["main.go"],
+    visibility = ["//package:all"],
     deps = [
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
         "//cli",
         "//grpcutil",
         "//lucidity/rpc",
-        "//third_party/go:cli-init",
     ],
-    visibility = ["//package:all"],
 )
 
 sh_cmd(

@@ -1,12 +1,12 @@
 go_binary(
     name = "zeal",
     srcs = ["main.go"],
+    visibility = ["//package:all"],
     deps = [
         "//cli",
         "//grpcutil",
         "//zeal/rpc",
     ],
-    visibility = ["//package:all"],
 )
 
 sh_cmd(

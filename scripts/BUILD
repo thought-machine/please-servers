@@ -16,5 +16,5 @@ go_binary(
     srcs = ["compress.go"],
     test_only = True,
     visibility = ["PUBLIC"],
-    deps = ["//third_party/go:zstd"],
+    deps = ["///third_party/go/github.com_klauspost_compress//zstd"],
 )
