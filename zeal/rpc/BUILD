@@ -3,8 +3,8 @@ go_library(
     srcs = ["rpc.go"],
     visibility = ["//zeal/..."],
     deps = [
-        "///third_party/go/github.com_bazelbuild_remote-apis//-sdks/go/pkg/client",
-        "///third_party/go/github.com_bazelbuild_remote-apis//-sdks/go/pkg/digest",
+        "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/client",
+        "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/digest",
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/asset/v1",
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/execution/v2",
         "///third_party/go/github.com_golang_protobuf//ptypes",
@@ -15,9 +15,8 @@ go_library(
         "///third_party/go/github.com_peterebden_go-sri//:go-sri",
         "///third_party/go/github.com_prometheus_client_golang//prometheus",
         "///third_party/go/google.golang.org_genproto_googleapis_rpc//status",
-        "///third_party/go/google.golang.org_grpc//codes",
-        "///third_party/go/google.golang.org_grpc//status",
         "//grpcutil",
         "//rexclient",
+        "//third_party/go:grpc",
     ],
 )

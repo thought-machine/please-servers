@@ -454,6 +454,8 @@ go_repo(
 )
 
 go_repo(
+    name = "testify",
+    install = ["..."],
     module = "github.com/stretchr/testify",
     version = "v1.8.4",
 )
@@ -1356,7 +1358,6 @@ go_repo(
 go_repo(
     module = "github.com/bazelbuild/remote-apis",
     version = "v0.0.0-20230609205527-a985e2617501",
-    requirements = ["google.golang.org/genproto/googleapis/rpc"],
 )
 
 go_repo(
@@ -3006,9 +3007,12 @@ go_repo(
 
 go_repo(
     name = "grpc",
-    install = ["."],
+    install = [
+        ".",
+        "codes",
+        "status",
+    ],
     module = "google.golang.org/grpc",
-    # This seems to be missing from their go.mod and we end up resolving to google.golang.org/genproto without this
     version = "v1.55.0",
 )
 
@@ -3350,7 +3354,6 @@ go_repo(
 go_repo(
     module = "cloud.google.com/go/storage",
     version = "v1.30.1",
-    requirements = ["google.golang.org/genproto/googleapis/rpc"],
 )
 
 go_repo(
@@ -3827,5 +3830,9 @@ go_mod_download(
 go_repo(
     download = ":remote-apis-sdks_download",
     module = "github.com/bazelbuild/remote-apis-sdks",
-    requirements = ["google.golang.org/genproto/googleapis/rpc"],
+)
+
+go_repo(
+    module = "github.com/thought-machine/please-servers",
+    version = "v6.3.8+incompatible",
 )
