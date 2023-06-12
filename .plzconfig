@@ -15,7 +15,6 @@ importpath = github.com/thought-machine/please-servers
 gotool = //third_party/go:toolchain|go
 coverageredesign = true
 legacyimports = false
-pleasegotool = /home/jpoole/go-rules/plz-out/bin/tools/please_go/please_go.bootstrap
 ModFile = //:go.mod
 
 [python]
