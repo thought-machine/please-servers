@@ -9,6 +9,7 @@ go_toolchain(
 
 go_system_toolchain(
     name = "system_toolchain",
+    tags = ["osusergo"],
 )
 
 go_repo(
