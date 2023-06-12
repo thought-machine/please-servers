@@ -1,15 +1,16 @@
 go_binary(
     name = "mettle",
     srcs = ["main.go"],
+    visibility = ["//package:all"],
     deps = [
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "//cli",
         "//grpcutil",
         "//mettle/api",
         "//mettle/common",
         "//mettle/worker",
-        "//third_party/go:cli-init",
     ],
-    visibility = ["//package:all"],
 )
 
 sh_cmd(

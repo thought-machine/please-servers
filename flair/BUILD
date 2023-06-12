@@ -1,15 +1,16 @@
 go_binary(
     name = "flair",
     srcs = ["main.go"],
+    visibility = ["//package:all"],
     deps = [
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "//cli",
         "//flair/rpc",
         "//flair/trie",
         "//grpcutil",
-        "//third_party/go:cli-init",
         "//third_party/go:grpc",
     ],
-    visibility = ["//package:all"],
 )
 
 sh_cmd(

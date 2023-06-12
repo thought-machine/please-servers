@@ -8,7 +8,7 @@ defaultstatic = true
 gotool = //third_party/go:system_toolchain|go
 coverageredesign = true
 
-[proto]
+[Plugin "proto"]
 protoctool = protoc
 
 [display]

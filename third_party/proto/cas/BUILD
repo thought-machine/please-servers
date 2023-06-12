@@ -2,9 +2,9 @@
 go_library(
     name = "cas",
     srcs = ["cas.pb.go"],
-    deps = [
-        "//third_party/go:protobuf",
-        "//third_party/go:remote-apis",
-    ],
     visibility = ["PUBLIC"],
+    deps = [
+        "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/execution/v2",
+        "///third_party/go/github.com_golang_protobuf//proto",
+    ],
 )

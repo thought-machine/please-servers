@@ -3,6 +3,8 @@ go_library(
     srcs = ["omem.go"],
     visibility = ["//mettle/..."],
     deps = [
-        "//third_party/go/gocloud",
+        "///third_party/go/gocloud.dev//gcerrors",
+        "///third_party/go/gocloud.dev//pubsub",
+        "///third_party/go/gocloud.dev//pubsub/driver",
     ],
 )

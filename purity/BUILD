@@ -1,14 +1,13 @@
 go_binary(
     name = "purity",
     srcs = ["main.go"],
-    deps = [
-        "//cli",
-        "//grpcutil",
-        "//purity/gc",
-        "//third_party/go:cli-init",
-        "//third_party/go/gocloud",
-    ],
     visibility = ["//package:all"],
+    deps = [
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
+        "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
+        "//cli",
+        "//purity/gc",
+    ],
 )
 
 sh_cmd(
