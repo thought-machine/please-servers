@@ -1,5 +1,5 @@
 [please]
-version = >=17.0.0-beta.7
+version = >=17.0.0
 
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
