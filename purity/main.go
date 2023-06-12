@@ -11,6 +11,11 @@ import (
 
 	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/purity/gc"
+
+	_ "github.com/honeycombio/honeycomb-opentelemetry-go"
+	_ "github.com/honeycombio/otel-config-go/otelconfig"
+
+	_ "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var log = logging.MustGetLogger()
