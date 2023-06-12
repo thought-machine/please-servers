@@ -1,3 +1,7 @@
+Version 11.0.3
+--------------
+    * Change build to use go_repo instead of go_module
+
 Version 11.0.2
 --------------
     * Implement path lookup according to REAPI v2.3
