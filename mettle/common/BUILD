@@ -14,6 +14,7 @@ go_library(
         "///third_party/go/google.golang.org_grpc//codes",
         "///third_party/go/google.golang.org_grpc//status",
         "//mettle/mempubsub",
+        "//third_party/go:grpc",
     ],
 )
 
@@ -22,6 +23,6 @@ go_test(
     srcs = ["common_test.go"],
     deps = [
         ":common",
-        "///third_party/go/github.com_stretchr_testify//assert",
+        "//third_party/go:testify",
     ],
 )

@@ -19,5 +19,6 @@ go_library(
         "///third_party/go/google.golang.org_grpc//reflection",
         "///third_party/go/google.golang.org_grpc//status",
         "///third_party/go/gopkg.in_op_go-logging.v1//:go-logging.v1",
+        "//third_party/go:grpc",
     ],
 )
