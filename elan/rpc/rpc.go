@@ -756,8 +756,8 @@ func (r *bytestreamReader) read(buf []byte) (int, error) {
 				return len(r.buf), io.EOF
 			}
 			return 0, err
-		} else if req.WriteOffset != r.TotalSize {
-			return 0, status.Errorf(codes.InvalidArgument, "incorrect WriteOffset (was %d, should be %d)", req.WriteOffset, r.TotalSize)
+		} else if expected := r.TotalSize + int64(len(r.buf)); req.WriteOffset != expected {
+			return 0, status.Errorf(codes.InvalidArgument, "incorrect WriteOffset (was %d, should be %d)", req.WriteOffset, expected)
 		}
 		r.buf = append(r.buf, req.Data...)
 	}
