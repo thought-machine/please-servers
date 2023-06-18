@@ -3003,6 +3003,7 @@ go_repo(
 
 go_repo(
     module = "github.com/klauspost/compress",
+    # N.B. v1.14.2 breaks things for us, for reasons yet unknown. Don't upgrade until we understand & have fixed it.
     version = "v1.13.6",
 )
 

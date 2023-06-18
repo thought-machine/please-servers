@@ -1,3 +1,7 @@
+Version 11.0.4
+--------------
+    * Downgrading klauspost/compress (see #246 for details)
+
 Version 11.0.3
 --------------
     * Change build to use go_repo instead of go_module
