@@ -29,6 +29,7 @@ defaultdbgcflags = --std=c99 -g3 -pipe -DDEBUG -Wall -Werror -Wno-error=stringop
 target = //plugins:shell
 
 [plugin "proto"]
+protoctool = //third_party/proto:protoc
 target = //plugins:proto
 languagedef = ///go_proto//build_defs:go
 ProtocTool = //third_party/proto:protoc
