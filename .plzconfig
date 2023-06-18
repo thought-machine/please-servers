@@ -4,6 +4,10 @@ version = >=17.0.0
 [build]
 path = /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
+[buildconfig]
+local-host = 127.0.0.1
+browser-url = http://127.0.0.1:7779
+
 [parse]
 preloadsubincludes = ///go//build_defs:go
 preloadsubincludes = ///shell//build_defs:shell

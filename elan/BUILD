@@ -13,5 +13,5 @@ go_binary(
 sh_cmd(
     name = "run_local",
     srcs = [":elan"],
-    cmd = "mkdir -p plz-out/elan && exec $(out_location :elan) --host 127.0.0.1 --port 7777 -s file://\\\\$PWD/plz-out/elan --log_file plz-out/log/elan.log --admin_host 127.0.0.1 --admin_port 9992 --token_file grpcutil/token.txt --known_blob_cache_size 20M",
+    cmd = f"mkdir -p plz-out/elan && exec $(out_location :elan) --host {CONFIG.LOCAL_HOST} --port 7777 -s file://\\\\$PWD/plz-out/elan --log_file plz-out/log/elan.log --admin_host 127.0.0.1 --admin_port 9992 --token_file grpcutil/token.txt --known_blob_cache_size 20M",
 )
