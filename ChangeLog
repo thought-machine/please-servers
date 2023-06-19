@@ -1,6 +1,6 @@
 Version 11.0.4
 --------------
-    * Downgrading klauspost/compress (see #246 for details)
+    * Fixing bug in bytestream upload offset check (#246)
 
 Version 11.0.3
 --------------
