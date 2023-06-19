@@ -6,3 +6,4 @@ NumExecutors = 10
 TokenFile = grpcutil/token.txt
 Secure = false
 DisplayUrl = http://localhost:7779
+Instance = mettle

@@ -1,3 +1,7 @@
+Version 11.0.4
+--------------
+    * Fixing bug in bytestream upload offset check (#246)
+
 Version 11.0.3
 --------------
     * Change build to use go_repo instead of go_module
