@@ -483,7 +483,7 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		log.Error("Badly serialised request: %s")
 		return &pb.ExecuteResponse{
 			Result: &pb.ActionResult{},
-			Status: status(codes.FailedPrecondition, "Badly serialised request: %s", err),
+			Status: status(err, codes.FailedPrecondition, "Badly serialised request: %s", err),
 		}
 	}
 	w.actionDigest = req.ActionDigest
@@ -574,11 +574,11 @@ func (w *worker) fetchRequestBlobs(req *pb.ExecuteRequest) (*pb.Action, *pb.Comm
 	action := &pb.Action{}
 	command := &pb.Command{}
 	if err := w.readBlobToProto(req.ActionDigest, action); err != nil {
-		return nil, nil, status(codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
+		return nil, nil, status(err, codes.FailedPrecondition, "Invalid action digest %s/%d: %s", req.ActionDigest.Hash, req.ActionDigest.SizeBytes, err)
 	} else if err := w.readBlobToProto(action.CommandDigest, command); err != nil {
-		return nil, nil, status(codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
+		return nil, nil, status(err, codes.FailedPrecondition, "Invalid command digest %s/%d: %s", action.CommandDigest.Hash, action.CommandDigest.SizeBytes, err)
 	} else if err := common.CheckOutputPaths(command); err != nil {
-		return nil, nil, status(codes.InvalidArgument, "Invalid command outputs: %s", err)
+		return nil, nil, status(err, codes.InvalidArgument, "Invalid command outputs: %s", err)
 	}
 	return action, command, nil
 }
@@ -600,7 +600,7 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	}()
 	w.update(pb.ExecutionStage_EXECUTING, nil)
 	if err := w.createTempDir(); err != nil {
-		return status(codes.Internal, "Failed to create temp dir: %s", err)
+		return status(err, codes.Internal, "Failed to create temp dir: %s", err)
 	}
 	start := time.Now()
 	w.metadata.InputFetchStartTimestamp = toTimestamp(start)
@@ -608,14 +608,14 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 		if grpcstatus.Code(err) == codes.NotFound {
 			blobNotFoundErrors.WithLabelValues(w.version).Inc()
 		}
-		return inferStatus(codes.Unknown, "Failed to download input root: %s", err)
+		return status(err, codes.Unknown, "Failed to download input root: %s", err)
 	}
 	// We are required to create directories for all the outputs.
 	if !containsEnvVar(command, "_CREATE_OUTPUT_DIRS", "false") {
 		for _, out := range command.OutputPaths {
 			if dir := path.Dir(out); out != "" && out != "." {
 				if err := os.MkdirAll(path.Join(w.dir, dir), os.ModeDir|0755); err != nil {
-					return status(codes.Internal, "Failed to create directory: %s", err)
+					return status(err, codes.Internal, "Failed to create directory: %s", err)
 				}
 			}
 		}
@@ -703,7 +703,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	if uploadErr != nil {
 		log.Error("Failed to upload stdout for %s: %s", w.actionDigest.Hash, uploadErr)
 		return &pb.ExecuteResponse{
-			Status: inferStatus(codes.Internal, "Failed to upload stdout: %s", uploadErr),
+			Status: status(uploadErr, codes.Internal, "Failed to upload stdout: %s", uploadErr),
 			Result: ar,
 		}
 	}
@@ -713,7 +713,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	if uploadErr != nil {
 		log.Error("Failed to upload stderr for %s: %s", w.actionDigest.Hash, uploadErr)
 		return &pb.ExecuteResponse{
-			Status: inferStatus(codes.Internal, "Failed to upload stderr: %s", uploadErr),
+			Status: status(uploadErr, codes.Internal, "Failed to upload stderr: %s", uploadErr),
 			Result: ar,
 		}
 	}
@@ -744,7 +744,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		collectOutputErrors.Inc()
 		log.Error("Failed to collect outputs for %s: %s", w.actionDigest.Hash, err)
 		return &pb.ExecuteResponse{
-			Status: inferStatus(codes.Internal, "Failed to collect outputs: %s", err),
+			Status: status(err, codes.Internal, "Failed to collect outputs: %s", err),
 			Result: ar,
 		}
 	}
@@ -778,7 +778,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	if err != nil {
 		log.Error("Failed to upload action result: %s", err)
 		return &pb.ExecuteResponse{
-			Status: status(codes.Internal, "Failed to upload action result: %s", err),
+			Status: status(err, codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
 		}
 	}
@@ -883,7 +883,7 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 	b, _ := proto.Marshal(&bbcas.UncachedActionResult{
 		ActionDigest: w.actionDigest,
 		ExecuteResponse: &pb.ExecuteResponse{
-			Status: status(codes.Unknown, msg),
+			Status: status(nil, codes.Unknown, msg),
 			Result: ar,
 		},
 	})
@@ -1090,19 +1090,16 @@ func (w *worker) readBlobToProto(digest *pb.Digest, msg proto.Message) error {
 	return proto.Unmarshal(b, msg)
 }
 
-func status(code codes.Code, msg string, args ...interface{}) *rpcstatus.Status {
+func status(err error, code codes.Code, msg string, args ...interface{}) *rpcstatus.Status {
+	if c := grpcstatus.Code(err); c != codes.Unknown && c != codes.OK {
+		code = c
+	} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		code = codes.DeadlineExceeded
+	}
 	return &rpcstatus.Status{
 		Code:    int32(code),
 		Message: fmt.Sprintf(msg, args...),
 	}
-}
-
-// inferStatus tries to infer a status from the given error, otherwise uses the given default.
-func inferStatus(defaultCode codes.Code, msg string, err error) *rpcstatus.Status {
-	if code := grpcstatus.Code(err); code != codes.Unknown {
-		return status(code, msg, err)
-	}
-	return status(defaultCode, msg, err)
 }
 
 // toTimestamp converts the given time to a proto timestamp, ignoring errors
