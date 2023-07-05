@@ -20,7 +20,7 @@ var opts = struct {
 	Headers     map[string]map[string]string `short:"H" long:"header" description:"Headers to set on downloads, as a map of domain -> header name -> header"`
 	Auth        map[string]string            `short:"a" long:"auth" description:"Authorization header to use per domain, as a map of URL prefix -> filename to read from"`
 	Storage     struct {
-		Storage string `short:"s" long:"storage" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+		Storage string `short:"s" long:"storage" env:"STORAGE_URL" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 		TLS     bool   `long:"tls" description:"Use TLS for communication with the storage server"`
 	} `group:"Options controlling communication with the CAS server"`
 	Admin         cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
