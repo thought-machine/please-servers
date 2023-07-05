@@ -22,15 +22,15 @@ import (
 var log = logging.MustGetLogger()
 
 type StorageOpts struct {
-	Storage   string `short:"s" long:"url" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
+	Storage   string `short:"s" long:"url" env:"STORAGE_URL" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 	TLS       bool   `long:"tls" description:"Use TLS for communication with the storage server"`
-	TokenFile string `long:"token_file" description:"File containing a pre-shared token to authenticate to storage server with."`
+	TokenFile string `long:"token_file" env:"TOKEN_FILE" description:"File containing a pre-shared token to authenticate to storage server with."`
 }
 
 type RedisOpts struct {
-	URL          string `long:"url" description:"host:port of Redis server"`
+	URL          string `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
 	Password     string `long:"password" description:"AUTH password"`
-	PasswordFile string `long:"password_file" description:"File containing AUTH password"`
+	PasswordFile string `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
 	TLS          bool   `long:"tls" description:"Use TLS for connecting to Redis"`
 }
 
@@ -53,10 +53,10 @@ var opts = struct {
 		Storage StorageOpts   `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		GRPC    grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues  struct {
-			RequestQueue        string `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-			ResponseQueue       string `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+			RequestQueue        string `short:"q" long:"request_queue" env:"REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue       string `short:"r" long:"response_queue" env:"RESPONSE_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 			ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
-			PreResponseQueue    string `long:"pre_response_queue" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+			PreResponseQueue    string `long:"pre_response_queue" env:"PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 		} `group:"Options controlling the pub/sub queues"`
 		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"api" description:"Start as an API server"`
@@ -64,7 +64,7 @@ var opts = struct {
 		Dir               string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
 		NoClean           bool                    `long:"noclean" description:"Don't clean workdirs after actions complete"`
 		Name              string                  `short:"n" long:"name" description:"Name of this worker"`
-		Browser           string                  `long:"browser" description:"Base URL for browser service (only used to construct informational user messages"`
+		Browser           string                  `long:"browser" env:"BROWSER_URL" description:"Base URL for browser service (only used to construct informational user messages"`
 		Lucidity          string                  `long:"lucidity" description:"URL of Lucidity server to report to"`
 		PromGateway       string                  `long:"prom_gateway" default:"" description:"Gateway URL to push Prometheus updates to."`
 		Sandbox           string                  `long:"sandbox" description:"Location of tool to sandbox build actions with"`
@@ -79,8 +79,8 @@ var opts = struct {
 		Storage           StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		Redis             RedisOpts               `group:"Options controlling connection to Redis" namespace:"redis"`
 		Queues            struct {
-			RequestQueue  string         `short:"q" long:"request_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-			ResponseQueue string         `short:"r" long:"response_queue" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+			RequestQueue  string         `short:"q" long:"request_queue" env:"REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue string         `short:"r" long:"response_queue" required:"true" env:"RESPONSE_QUEUE" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 			AckExtension  flags.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcppubsub queues."`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
