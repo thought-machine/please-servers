@@ -54,10 +54,10 @@ var opts = struct {
 		Storage StorageOpts   `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		GRPC    grpcutil.Opts `group:"Options controlling the gRPC server"`
 		Queues  struct {
-			RequestQueue        string `short:"q" long:"request_queue" env:"REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-			ResponseQueue       string `short:"r" long:"response_queue" env:"RESPONSE_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
-			ResponseQueueSuffix string `long:"response_queue_suffix" env:"RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
-			PreResponseQueue    string `long:"pre_response_queue" env:"PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+			RequestQueue        string `short:"q" long:"request_queue" env:"API_REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue       string `short:"r" long:"response_queue" env:"API_RESPONSE_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+			ResponseQueueSuffix string `long:"response_queue_suffix" env:"API_RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
+			PreResponseQueue    string `long:"pre_response_queue" env:"API_PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 		} `group:"Options controlling the pub/sub queues"`
 		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"api" description:"Start as an API server"`
@@ -80,8 +80,8 @@ var opts = struct {
 		Storage           StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
 		Redis             RedisOpts               `group:"Options controlling connection to Redis" namespace:"redis"`
 		Queues            struct {
-			RequestQueue  string         `short:"q" long:"request_queue" env:"REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
-			ResponseQueue string         `short:"r" long:"response_queue" required:"true" env:"RESPONSE_QUEUE" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+			RequestQueue  string         `short:"q" long:"request_queue" env:"WORKER_REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+			ResponseQueue string         `short:"r" long:"response_queue" required:"true" env:"WORKER_RESPONSE_QUEUE" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
 			AckExtension  flags.Duration `long:"ack_extension" description:"Period to extend the ack deadline by during execution. Only has any effect on gcppubsub queues."`
 		} `group:"Options controlling the pub/sub queues"`
 	} `command:"worker" description:"Start as a worker"`
