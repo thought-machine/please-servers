@@ -1,5 +1,9 @@
 Version 11.0.5
 --------------
+    * correcting env keys for worker and api servers
+
+Version 11.0.5
+--------------
     * Adding env keys to opts structs
 
 Version 11.0.4
