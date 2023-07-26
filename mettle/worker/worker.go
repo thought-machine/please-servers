@@ -60,7 +60,7 @@ var totalBuilds = prometheus.NewCounter(prometheus.CounterOpts{
 var currentBuilds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: "mettle",
 	Name:      "builds_current",
-}, []string{"namespace"})
+}, []string{"instance"})
 var executeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "build_durations_secs",
