@@ -57,10 +57,10 @@ var totalBuilds = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "builds_total",
 })
-var currentBuilds = prometheus.NewGauge(prometheus.GaugeOpts{
+var currentBuilds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: "mettle",
 	Name:      "builds_current",
-})
+}, []string{"namespace"})
 var executeDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "build_durations_secs",
@@ -471,8 +471,8 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		go w.extendAckDeadline(ctx, msg)
 	}
 	totalBuilds.Inc()
-	currentBuilds.Inc()
-	defer currentBuilds.Dec()
+	currentBuilds.WithLabelValues(w.instanceName).Inc()
+	defer currentBuilds.WithLabelValues(w.instanceName).Dec()
 	w.metadata = &pb.ExecutedActionMetadata{
 		Worker:               w.name,
 		WorkerStartTimestamp: ptypes.TimestampNow(),
