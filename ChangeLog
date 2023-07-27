@@ -1,3 +1,7 @@
+Version 11.0.8
+--------------
+    * renaming 'instance' label to something less generic
+
 Version 11.0.7
 --------------
     * adding label to currentBuilds metric
