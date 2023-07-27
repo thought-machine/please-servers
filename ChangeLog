@@ -1,3 +1,7 @@
+Version 11.0.7
+--------------
+    * adding label to currentBuilds metric
+
 Version 11.0.6
 --------------
     * correcting env keys for worker and api servers
