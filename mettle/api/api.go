@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -101,7 +102,9 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	if err != nil {
 		return nil, nil, err
 	}
-
+	if numPollers < 1 {
+		return nil, nil, fmt.Errorf("too few pollers specified: %d", numPollers)
+	}
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(requestQueue),
@@ -397,8 +400,7 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 // Receive runs forever, receiving responses from the queue.
 func (s *server) Receive() {
 	wg := sync.WaitGroup{}
-	// yes, <= because we're guaranteeing that there's at least one worker if pollers is 0
-	for i := 0; i <= s.numPollers; i++ {
+	for i := 0; i < s.numPollers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
