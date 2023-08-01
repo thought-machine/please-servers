@@ -64,6 +64,12 @@ var totalSuccessfulActions = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "successful_actions_total",
 })
 
+var totalFailedPubSubMessages = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "failed_pub_sub_total",
+	Help:      "Number of times the Pub/Sub pool has failed",
+})
+
 var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "time_to_complete_action_secs",
@@ -76,6 +82,7 @@ var metrics = []prometheus.Collector{
 	totalFailedActions,
 	totalSuccessfulActions,
 	timeToComplete,
+	totalFailedPubSubMessages,
 }
 
 func init() {
@@ -408,6 +415,8 @@ func (s *server) Receive() {
 				msg, err := s.responses.Receive(context.Background())
 				if err != nil {
 					log.Errorf("Failed to receive message: %s", err)
+					// TODO(xander): Add an unhealthiness channel here so partial degradation can be reported within Mettle
+					totalFailedPubSubMessages.Inc()
 					return
 				}
 				s.process(msg)
