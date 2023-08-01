@@ -417,7 +417,7 @@ func (s *server) Receive() {
 	log.Fatalf("All pollers failed, exiting")
 }
 
-// process processes a single message off the responses queue.
+// process processes a single message off the responses queue. Can be called concurrently by multiple go routines
 func (s *server) process(msg *pubsub.Message) {
 	op := &longrunning.Operation{}
 	metadata := &pb.ExecuteOperationMetadata{}
