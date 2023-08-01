@@ -84,15 +84,15 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS, numPollers)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -101,6 +101,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	if err != nil {
 		return nil, nil, err
 	}
+
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(requestQueue),
@@ -109,6 +110,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
+		numPollers:   numPollers,
 	}
 	log.Notice("Allowed platform values:")
 	for k, v := range allowedPlatform {
@@ -144,6 +146,7 @@ type server struct {
 	jobs         map[string]*job
 	platform     map[string][]string
 	mutex        sync.Mutex
+	numPollers   int
 }
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
@@ -393,14 +396,25 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 
 // Receive runs forever, receiving responses from the queue.
 func (s *server) Receive() {
-	for {
-		msg, err := s.responses.Receive(context.Background())
-		if err != nil {
-			log.Fatalf("Failed to receive message: %s", err)
-		}
-		s.process(msg)
-		msg.Ack()
+	wg := sync.WaitGroup{}
+	// yes, <= because we're guaranteeing that there's at least one worker if pollers is 0
+	for i := 0; i <= s.numPollers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				msg, err := s.responses.Receive(context.Background())
+				if err != nil {
+					log.Errorf("Failed to receive message: %s", err)
+					return
+				}
+				s.process(msg)
+				msg.Ack()
+			}
+		}()
 	}
+	wg.Wait()
+	log.Fatalf("All pollers failed, exiting")
 }
 
 // process processes a single message off the responses queue.
