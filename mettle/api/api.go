@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -63,6 +64,12 @@ var totalSuccessfulActions = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "successful_actions_total",
 })
 
+var totalFailedPubSubMessages = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "failed_pub_sub_total",
+	Help:      "Number of times the Pub/Sub pool has failed",
+})
+
 var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "time_to_complete_action_secs",
@@ -75,6 +82,7 @@ var metrics = []prometheus.Collector{
 	totalFailedActions,
 	totalSuccessfulActions,
 	timeToComplete,
+	totalFailedPubSubMessages,
 }
 
 func init() {
@@ -84,15 +92,15 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
+func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int) {
+	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS, numPollers)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -100,6 +108,9 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	client, err := rexclient.New(name, storageURL, storageTLS, "")
 	if err != nil {
 		return nil, nil, err
+	}
+	if numPollers < 1 {
+		return nil, nil, fmt.Errorf("too few pollers specified: %d", numPollers)
 	}
 	srv := &server{
 		name:         name,
@@ -109,6 +120,7 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
+		numPollers:   numPollers,
 	}
 	log.Notice("Allowed platform values:")
 	for k, v := range allowedPlatform {
@@ -144,6 +156,7 @@ type server struct {
 	jobs         map[string]*job
 	platform     map[string][]string
 	mutex        sync.Mutex
+	numPollers   int
 }
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
@@ -393,17 +406,29 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 
 // Receive runs forever, receiving responses from the queue.
 func (s *server) Receive() {
-	for {
-		msg, err := s.responses.Receive(context.Background())
-		if err != nil {
-			log.Fatalf("Failed to receive message: %s", err)
-		}
-		s.process(msg)
-		msg.Ack()
+	wg := sync.WaitGroup{}
+	for i := 0; i < s.numPollers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				msg, err := s.responses.Receive(context.Background())
+				if err != nil {
+					log.Errorf("Failed to receive message: %s", err)
+					// TODO(xander): Add an unhealthiness channel here so partial degradation can be reported within Mettle
+					totalFailedPubSubMessages.Inc()
+					return
+				}
+				s.process(msg)
+				msg.Ack()
+			}
+		}()
 	}
+	wg.Wait()
+	log.Fatalf("All pollers failed, exiting")
 }
 
-// process processes a single message off the responses queue.
+// process processes a single message off the responses queue. Can be called concurrently by multiple go routines
 func (s *server) process(msg *pubsub.Message) {
 	op := &longrunning.Operation{}
 	metadata := &pb.ExecuteOperationMetadata{}
