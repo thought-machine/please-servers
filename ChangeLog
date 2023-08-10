@@ -1,3 +1,7 @@
+Version 11.1.1
+--------------
+    * Pass CA cert file location to Redis instance
+
 Version 11.1.0
 --------------
     * Add configurable number of pub/sub pollers, default to 10
