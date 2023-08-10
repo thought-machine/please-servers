@@ -314,7 +314,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	if redis != "" {
 		w.client, err = newRedisClient(client, redis, readRedis, redisPassword, redisCAFile, redisTLS)
 		if err != nil {
-			log.Warningf("Redis client could not be initialised: %s")
+			log.Warningf("Redis client could not be initialised: %s", err)
 		}
 	}
 	if ackExtension > 0 {
