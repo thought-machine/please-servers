@@ -45,7 +45,7 @@ func getTLSConfig(caFile string) (*tls.Config, error) {
 // All usage of Redis is best-effort only.
 // If readURL is set, all reads will happen on this URL. If not, everything
 // will go to url.
-func newRedisClient(client elan.Client, url, readURL, password, caFile string, useTLS bool) (elan.Client, error) {
+func newRedisClient(client elan.Client, url, readURL, password, caFile string, useTLS bool) elan.Client {
 	primaryOpts := &redis.Options{
 		Addr:     url,
 		Password: password,
@@ -57,7 +57,7 @@ func newRedisClient(client elan.Client, url, readURL, password, caFile string, u
 	if useTLS {
 		tlsConfig, err := getTLSConfig(caFile)
 		if err != nil {
-			return &redisClient{}, err
+			log.Fatalf("Failed to read CA file at %s or load TLS config for Redis: %s", caFile, err)
 		}
 		primaryOpts.TLSConfig = tlsConfig
 		readOpts.TLSConfig = tlsConfig
@@ -73,7 +73,7 @@ func newRedisClient(client elan.Client, url, readURL, password, caFile string, u
 		readRedis: readClient,
 		timeout:   10 * time.Second,
 		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
-	}, nil
+	}
 }
 
 type redisClient struct {
