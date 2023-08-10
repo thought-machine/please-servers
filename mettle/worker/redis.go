@@ -33,6 +33,7 @@ func getTLSConfig(caFile string) *tls.Config {
 	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		log.Warning("Failed to collect CA cert from file %s: '%s'. Redis connection will not work", caFile, err)
+		return &tls.Config{}
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
