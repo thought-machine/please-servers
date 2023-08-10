@@ -29,24 +29,23 @@ var redisBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "redis_bytes_read_total",
 })
 
-func getTLSConfig(caFile string) *tls.Config {
+func getTLSConfig(caFile string) (*tls.Config, error) {
 	caCert, err := os.ReadFile(caFile)
 	if err != nil {
-		log.Warning("Failed to collect CA cert from file %s: '%s'. Redis connection will not work", caFile, err)
-		return &tls.Config{}
+		return &tls.Config{}, err
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 	return &tls.Config{
 		RootCAs: caCertPool,
-	}
+	}, nil
 }
 
 // newRedisClient augments an existing elan.Client with a Redis connection.
 // All usage of Redis is best-effort only.
 // If readURL is set, all reads will happen on this URL. If not, everything
 // will go to url.
-func newRedisClient(client elan.Client, url, readURL, password, caFile string, useTLS bool) elan.Client {
+func newRedisClient(client elan.Client, url, readURL, password, caFile string, useTLS bool) (elan.Client, error) {
 	primaryOpts := &redis.Options{
 		Addr:     url,
 		Password: password,
@@ -56,8 +55,12 @@ func newRedisClient(client elan.Client, url, readURL, password, caFile string, u
 		Password: password,
 	}
 	if useTLS {
-		primaryOpts.TLSConfig = getTLSConfig(caFile)
-		readOpts.TLSConfig = getTLSConfig(caFile)
+		tlsConfig, err := getTLSConfig(caFile)
+		if err != nil {
+			return &redisClient{}, err
+		}
+		primaryOpts.TLSConfig = tlsConfig
+		readOpts.TLSConfig = tlsConfig
 	}
 	primaryClient := redis.NewClient(primaryOpts)
 	readClient := primaryClient
@@ -70,7 +73,7 @@ func newRedisClient(client elan.Client, url, readURL, password, caFile string, u
 		readRedis: readClient,
 		timeout:   10 * time.Second,
 		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
-	}
+	}, nil
 }
 
 type redisClient struct {

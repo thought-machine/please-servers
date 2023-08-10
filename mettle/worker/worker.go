@@ -312,7 +312,10 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		metricTicker:    time.NewTicker(5 * time.Minute),
 	}
 	if redis != "" {
-		w.client = newRedisClient(client, redis, readRedis, redisPassword, redisCAFile, redisTLS)
+		w.client, err = newRedisClient(client, redis, readRedis, redisPassword, redisCAFile, redisTLS)
+		if err != nil {
+			log.Warningf("Redis client could not be initialised: %s")
+		}
 	}
 	if ackExtension > 0 {
 		if !strings.HasPrefix(requestQueue, "gcppubsub://") {
