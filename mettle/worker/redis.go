@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"os"
 	"time"
 
@@ -28,11 +29,23 @@ var redisBytesRead = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "redis_bytes_read_total",
 })
 
+func getTLSConfig(caFile string) (*tls.Config, error) {
+	caCert, err := os.ReadFile(caFile)
+	if err != nil {
+		return &tls.Config{}, err
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+	return &tls.Config{
+		RootCAs: caCertPool,
+	}, nil
+}
+
 // newRedisClient augments an existing elan.Client with a Redis connection.
 // All usage of Redis is best-effort only.
 // If readURL is set, all reads will happen on this URL. If not, everything
 // will go to url.
-func newRedisClient(client elan.Client, url, readURL, password string, useTLS bool) elan.Client {
+func newRedisClient(client elan.Client, url, readURL, password, caFile string, useTLS bool) elan.Client {
 	primaryOpts := &redis.Options{
 		Addr:     url,
 		Password: password,
@@ -42,8 +55,12 @@ func newRedisClient(client elan.Client, url, readURL, password string, useTLS bo
 		Password: password,
 	}
 	if useTLS {
-		primaryOpts.TLSConfig = &tls.Config{}
-		readOpts.TLSConfig = &tls.Config{}
+		tlsConfig, err := getTLSConfig(caFile)
+		if err != nil {
+			log.Fatalf("Failed to read CA file at %s or load TLS config for Redis: %s", caFile, err)
+		}
+		primaryOpts.TLSConfig = tlsConfig
+		readOpts.TLSConfig = tlsConfig
 	}
 	primaryClient := redis.NewClient(primaryOpts)
 	readClient := primaryClient
