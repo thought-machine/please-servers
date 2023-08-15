@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -28,7 +29,11 @@ func (e *elanClient) Healthcheck() error {
 func (e *elanClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
-	return e.s.readAllBlob(ctx, "cas", dg)
+	blob, err := e.s.readAllBlob(ctx, "cas", dg)
+	if err != nil {
+		return blob, fmt.Errorf("Error reading blob: %w", err)
+	}
+	return blob, nil
 }
 
 func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
@@ -47,7 +52,11 @@ func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
 	if e.s.blobExists(ctx, key) {
 		return dg, nil
 	}
-	return dg, e.s.bucket.WriteAll(ctx, key, b)
+	err := e.s.bucket.WriteAll(ctx, key, b)
+	if err != nil {
+		return dg, fmt.Errorf("Error writing blob: %w", err)
+	}
+	return dg, nil
 }
 
 func (e *elanClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*pb.ActionResult, error) {
