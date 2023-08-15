@@ -2,10 +2,10 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
-	"fmt"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
