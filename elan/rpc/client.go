@@ -20,7 +20,7 @@ func New(url string, tls bool, tokenFile string) (Client, error) {
 	if strings.Contains(url, "://") {
 		return &elanClient{
 			s:       createServer(url, 8, 10240, 10*1024*1024),
-			timeout: 1 * time.Minute,
+			timeout: 3 * time.Minute,
 		}, nil
 	}
 	client, err := rexclient.New("mettle", url, tls, tokenFile)
