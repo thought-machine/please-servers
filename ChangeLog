@@ -1,3 +1,7 @@
+Version 11.2.1
+--------------
+    * Temporarily increase Elan ctx timeout
+
 Version 11.2.0
 --------------
     * Pass CA cert file location to Redis instance
