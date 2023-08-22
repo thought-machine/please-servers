@@ -355,6 +355,11 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	for name, cost := range costs {
 		w.costs[name] = &bbru.MonetaryResourceUsage_Expense{Currency: cost.Denomination, Cost: cost.Amount}
 	}
+
+	// Vector metrics need initialising explicitly with labels. See https://github.com/prometheus/client_golang/blob/main/prometheus/examples_test.go#L51-L73
+	currentBuilds.WithLabelValues(w.instanceName).Add(0)
+	blobNotFoundErrors.WithLabelValues(w.version).Add(0)
+
 	log.Notice("%s initialised with settings: CAS: %s cache dir: %s max cache size: %d sandbox: %s alt sandbox: %s", name, storage, cacheDir, maxCacheSize, w.sandbox, w.altSandbox)
 	return w, nil
 }
