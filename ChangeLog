@@ -1,3 +1,7 @@
+Version 11.2.2
+--------------
+    * Correctly initialise Prometheus Vector metrics
+
 Version 11.2.1
 --------------
     * Temporarily increase Elan ctx timeout
