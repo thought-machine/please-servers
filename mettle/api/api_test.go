@@ -245,7 +245,7 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: 0,
-	}, "", requests, responses, responses, "", true, map[string][]string{}, casaddr, false, 1)
+	}, "", requests, responses, responses, "", true, map[string][]string{}, casaddr, false, 1, 1)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
@@ -328,7 +328,7 @@ type executor struct {
 
 func newExecutor(requests, responses string) *executor {
 	return &executor{
-		requests:  common.MustOpenSubscription(requests),
+		requests:  common.MustOpenSubscription(requests, 1),
 		responses: common.MustOpenTopic(responses),
 	}
 }
