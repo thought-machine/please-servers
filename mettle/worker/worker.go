@@ -289,7 +289,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	}
 
 	w := &worker{
-		requests:        common.MustOpenSubscription(requestQueue),
+		requests:        common.MustOpenSubscription(requestQueue, 1),
 		responses:       common.MustOpenTopic(responseQueue),
 		ackExtension:    ackExtension,
 		client:          client,

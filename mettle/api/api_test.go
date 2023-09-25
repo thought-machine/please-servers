@@ -328,7 +328,7 @@ type executor struct {
 
 func newExecutor(requests, responses string) *executor {
 	return &executor{
-		requests:  common.MustOpenSubscription(requests),
+		requests:  common.MustOpenSubscription(requests, 1),
 		responses: common.MustOpenTopic(responses),
 	}
 }

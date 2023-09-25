@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -37,9 +38,13 @@ var subMutex sync.Mutex
 const workerKey = "build.please.mettle.worker"
 
 // MustOpenSubscription opens a subscription, which must have been created ahead of time.
-// It dies on any errors.
-func MustOpenSubscription(url string) *pubsub.Subscription {
-	url = limitBatchSize(url, "1")
+// It dies on any errors. `batchSize` controls how many messages can receive at a time.
+// It can not be equal to zero; this function will panic if it is.
+func MustOpenSubscription(url string, batchSize uint) *pubsub.Subscription {
+	if batchSize == 0 {
+		log.Fatal("batch size for subscription can not be equal to zero")
+	}
+	url = limitBatchSize(url, strconv.Itoa(int(batchSize)))
 	subMutex.Lock()
 	defer subMutex.Unlock()
 	if sub, present := subscriptions[url]; present {
