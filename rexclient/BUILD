@@ -23,6 +23,5 @@ go_test(
         ":rexclient",
         "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/digest",
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/execution/v2",
-        "///third_party/go/github.com_stretchr_testify//assert",
     ],
 )

@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"golang.org/x/time/rate"
 	"os"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
