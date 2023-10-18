@@ -24,7 +24,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/mettle/mempubsub" // Register our custom mempubsub scheme
-	_ "gocloud.dev/pubsub/gcppubsub"                             // And gocloud's gcppubsub provider
+	"gocloud.dev/pubsub/gcppubsub"
+	_ "gocloud.dev/pubsub/gcppubsub" // And gocloud's gcppubsub provider
 )
 
 var log = logging.MustGetLogger()
@@ -78,6 +79,14 @@ func limitBatchSize(in, size string) string {
 
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 func MustOpenTopic(url string) *pubsub.Topic {
+	if strings.Suffix("//gcppubsub") {
+		opener := gcppubsub.URLOpener{}
+		t, err := opener.OpenTopicURL(context.Background(), url)
+		if err != nil {
+			log.Fatal("Failed to open topic %s: %s", url, err)
+		}
+		return t
+	}
 	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open topic %s: %s", url, err)
