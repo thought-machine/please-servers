@@ -14,6 +14,7 @@ go_library(
         "///third_party/go/google.golang.org_genproto//googleapis/longrunning",
         "///third_party/go/google.golang.org_genproto//googleapis/pubsub/v1",
         "//mettle/mempubsub",
+        "//third_party/go:grpc",
         "//mettle/configurablepubsub",
     ],
 )

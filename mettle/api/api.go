@@ -136,6 +136,7 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL 
 }
 
 func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
+	responseSubscriptionName := queueOpts.ResponseQueue
 	if name == "" {
 		name = "mettle API server"
 	} else {
