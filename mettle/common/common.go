@@ -17,6 +17,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/peterebden/go-cli-init/v4/logging"
+	"gocloud.dev/gcp"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
@@ -79,13 +80,8 @@ func limitBatchSize(in, size string) string {
 
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 func MustOpenTopic(url string) *pubsub.Topic {
-	if strings.Suffix("//gcppubsub") {
-		opener := gcppubsub.URLOpener{}
-		t, err := opener.OpenTopicURL(context.Background(), url)
-		if err != nil {
-			log.Fatal("Failed to open topic %s: %s", url, err)
-		}
-		return t
+	if strings.HasPrefix(url, "gcppubsub://") {
+		return mustOpenGCPTopic(url)
 	}
 	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
@@ -93,6 +89,27 @@ func MustOpenTopic(url string) *pubsub.Topic {
 	}
 	log.Debug("Opened topic %s", url)
 	return t
+}
+
+func mustOpenGCPTopic(url string) *pubsub.Topic {
+	ctx := context.Background()
+	creds, err := gcp.DefaultCredentials(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	conn, _, err := gcppubsub.Dial(ctx, creds.TokenSource)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pubClient, err := gcppubsub.PublisherClient(ctx, conn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	topic, err := gcppubsub.OpenTopicByPath(pubClient, strings.TrimPrefix(url, "gcppubsub://"), nil)
+	if err != nil {
+		log.Fatal("Failed to open topic %s: %s", url, err)
+	}
+	return topic
 }
 
 func handleSignals(cancel context.CancelFunc, s Shutdownable) {

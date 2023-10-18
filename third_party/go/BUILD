@@ -1392,6 +1392,16 @@ go_repo(
 )
 
 go_repo(
+    module = "cloud.google.com/go/pubsub/gcppubsub",
+    version = "v0.34.0",
+)
+
+go_repo(
+    module = "gocloud.dev/gcp",
+    version = "v0.34.0",
+)
+
+go_repo(
     module = "cloud.google.com/go/compute/metadata",
     version = "v0.2.3",
 )
