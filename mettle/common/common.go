@@ -25,8 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/mettle/mempubsub" // Register our custom mempubsub scheme
-	"gocloud.dev/pubsub/gcppubsub"
-	_ "gocloud.dev/pubsub/gcppubsub" // And gocloud's gcppubsub provider
+	"gocloud.dev/pubsub/gcppubsub"                               // And gocloud's gcppubsub provider
 )
 
 var log = logging.MustGetLogger()
@@ -105,6 +104,7 @@ func mustOpenGCPTopic(url string) *pubsub.Topic {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// TODO(hpitkeathly) add configerable batcher options here
 	topic, err := gcppubsub.OpenTopicByPath(pubClient, strings.TrimPrefix(url, "gcppubsub://"), nil)
 	if err != nil {
 		log.Fatal("Failed to open topic %s: %s", url, err)
