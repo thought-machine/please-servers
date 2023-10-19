@@ -110,7 +110,7 @@ func mustOpenGCPTopic(in string) *pubsub.Topic {
 	opener.Conn = conn
 	topic, err := opener.OpenTopicURL(ctx, u)
 	if err != nil {
-		log.Fatal("Failed to open topic %s: %s", in, err)
+		log.Fatal(err)
 	}
 	return topic
 }
