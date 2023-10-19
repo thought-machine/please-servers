@@ -90,7 +90,12 @@ func MustOpenTopic(url string) *pubsub.Topic {
 	return t
 }
 
-func mustOpenGCPTopic(url string) *pubsub.Topic {
+func mustOpenGCPTopic(in string) *pubsub.Topic {
+	u, err := url.Parse(in)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	ctx := context.Background()
 	creds, err := gcp.DefaultCredentials(ctx)
 	if err != nil {
@@ -100,14 +105,12 @@ func mustOpenGCPTopic(url string) *pubsub.Topic {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pubClient, err := gcppubsub.PublisherClient(ctx, conn)
-	if err != nil {
-		log.Fatal(err)
-	}
 	// TODO(hpitkeathly) add configerable batcher options here
-	topic, err := gcppubsub.OpenTopicByPath(pubClient, strings.TrimPrefix(url, "gcppubsub://"), nil)
+	opener := gcppubsub.URLOpener{}
+	opener.Conn = conn
+	topic, err := opener.OpenTopicURL(ctx, u)
 	if err != nil {
-		log.Fatal("Failed to open topic %s: %s", url, err)
+		log.Fatal("Failed to open topic %s: %s", in, err)
 	}
 	return topic
 }
