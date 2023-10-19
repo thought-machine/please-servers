@@ -70,6 +70,11 @@ var totalFailedPubSubMessages = prometheus.NewCounter(prometheus.CounterOpts{
 	Help:      "Number of times the Pub/Sub pool has failed",
 })
 
+var noExecutionInProgress = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "no_execution_in_progress",
+})
+
 var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "time_to_complete_action_secs",
@@ -83,6 +88,7 @@ var metrics = []prometheus.Collector{
 	totalSuccessfulActions,
 	timeToComplete,
 	totalFailedPubSubMessages,
+	noExecutionInProgress,
 }
 
 func init() {
@@ -313,7 +319,8 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 	digest := &pb.Digest{Hash: req.Name}
 	ch, _ := s.eventStream(digest, false)
 	if ch == nil {
-		log.Warning("Request for execution %s which is not in progress", req.Name)
+		log.Error("Request for execution %s which is not in progress", req.Name)
+		noExecutionInProgress.Inc()
 		return status.Errorf(codes.NotFound, "No execution in progress for %s", req.Name)
 	}
 	return s.streamEvents(digest, ch, stream)
