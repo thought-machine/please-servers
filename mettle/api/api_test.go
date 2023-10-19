@@ -239,13 +239,20 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	casaddr := setupCASServer()
 	requests := fmt.Sprintf("mem://requests%d", queueID)
 	responses := fmt.Sprintf("mem://responses%d", queueID)
+	queues := PubSubOpts{
+		RequestQueue:          requests,
+		ResponseQueue:         responses,
+		PreResponseQueue:      responses,
+		NumPollers:            1,
+		SubscriptionBatchSize: 1,
+	}
 	queueID++
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
 	common.MustOpenTopic(responses) // to open a subscription to either.
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: 0,
-	}, "", requests, responses, responses, "", true, map[string][]string{}, casaddr, false, 1, 1)
+	}, "", queues, "", true, map[string][]string{}, casaddr, false)
 	require.NoError(t, err)
 	go s.Serve(lis)
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
