@@ -75,6 +75,16 @@ var noExecutionInProgress = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "no_execution_in_progress",
 })
 
+var requestPublishFailure = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "request_publish_failures",
+})
+
+var responsePublishFailure = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "response_publish_failures",
+})
+
 var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "time_to_complete_action_secs",
@@ -89,6 +99,8 @@ var metrics = []prometheus.Collector{
 	timeToComplete,
 	totalFailedPubSubMessages,
 	noExecutionInProgress,
+	requestPublishFailure,
+	responsePublishFailure,
 }
 
 func init() {
@@ -282,6 +294,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, s.name); err != nil {
+		responsePublishFailure.Inc()
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
 	b, _ = proto.Marshal(req)
@@ -291,6 +304,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		Body:     b,
 		Metadata: platform,
 	}); err != nil {
+		requestPublishFailure.Inc()
 		log.Error("Failed to submit work to stream: %s", err)
 		return err
 	}
