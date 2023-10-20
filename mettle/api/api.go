@@ -1,4 +1,4 @@
-// Package api implements the remote execution API server.
+// Package api implements the remote execution API servere
 package api
 
 import (
@@ -110,15 +110,15 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int, responseBatchSize uint) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS, numPollers, responseBatchSize)
+func ServeForever(opts grpcutil.Opts, name string, queueOpts common.APIPubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
+	s, lis, err := serve(opts, name, queueOpts, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int, responseBatchSize uint) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name string, queueOpts common.APIPubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -127,18 +127,18 @@ func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQue
 	if err != nil {
 		return nil, nil, err
 	}
-	if numPollers < 1 {
-		return nil, nil, fmt.Errorf("too few pollers specified: %d", numPollers)
+	if queueOpts.NumPollers < 1 {
+		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
 	}
 	srv := &server{
 		name:         name,
-		requests:     common.MustOpenTopic(requestQueue),
-		responses:    common.MustOpenSubscription(responseQueue, responseBatchSize),
-		preResponses: common.MustOpenTopic(preResponseQueue),
+		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
+		responses:    common.MustOpenSubscription(queueOpts.ResponseQueue, queueOpts.SubscriptionBatchSize),
+		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
-		numPollers:   numPollers,
+		numPollers:   queueOpts.NumPollers,
 	}
 	log.Notice("Allowed platform values:")
 	for k, v := range allowedPlatform {

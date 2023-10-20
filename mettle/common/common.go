@@ -28,6 +28,17 @@ import (
 	"gocloud.dev/pubsub/gcppubsub"                               // And gocloud's gcppubsub provider
 )
 
+type APIPubSubOpts struct {
+	RequestQueue          string `short:"q" long:"request_queue" env:"API_REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+	ResponseQueue         string `short:"r" long:"response_queue" env:"API_RESPONSE_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+	ResponseQueueSuffix   string `long:"response_queue_suffix" env:"API_RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
+	PreResponseQueue      string `long:"pre_response_queue" env:"API_PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+	NumPollers            int    `long:"num_pollers" env:"API_NUM_POLLERS" default:"10"`
+	NumPublishers         int    `long:"num_publishers" env:"API_NUM_PUBLISHERS" default:"2"`
+	SubscriptionBatchSize uint   `long:"subscription_batch_size" env:"API_SUBSCRIPTION" default:"100"`
+	TopicBatchSize        uint   `long:"topic_batch_size" env:"API_TOPIC_BATCH_SIZE" default:"1000"`
+}
+
 var log = logging.MustGetLogger()
 
 // For hacking around the fact that mempubsub doesn't allow reopening the same subscription (each call creates a new one)
