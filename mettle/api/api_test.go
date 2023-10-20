@@ -242,6 +242,7 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	queues := common.APIPubSubOpts{
 		RequestQueue:          requests,
 		ResponseQueue:         responses,
+		PreResponseQueue:      responses,
 		NumPollers:            1,
 		SubscriptionBatchSize: 1,
 	}
