@@ -166,6 +166,7 @@ func main() {
 		queues := common.APIPubSubOpts{
 			RequestQueue:  requests,
 			ResponseQueue: responses,
+			NumPollers:    1,
 		}
 
 		// Must ensure the topics are created ahead of time.

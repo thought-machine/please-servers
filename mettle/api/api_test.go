@@ -240,8 +240,10 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	requests := fmt.Sprintf("mem://requests%d", queueID)
 	responses := fmt.Sprintf("mem://responses%d", queueID)
 	queues := common.APIPubSubOpts{
-		RequestQueue:  requests,
-		ResponseQueue: responses,
+		RequestQueue:          requests,
+		ResponseQueue:         responses,
+		NumPollers:            1,
+		SubscriptionBatchSize: 1,
 	}
 	queueID++
 	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
