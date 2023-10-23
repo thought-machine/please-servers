@@ -24,8 +24,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	// Register our custom pubsub schemes
+	_ "github.com/thought-machine/please-servers/mettle/configurablepubsub" // blank import to register schema
 	"github.com/thought-machine/please-servers/mettle/mempubsub"
-	_ "github.com/thought-machine/please-servers/mettle/mempubsub"
 )
 
 var log = logging.MustGetLogger()

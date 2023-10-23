@@ -1,4 +1,4 @@
-// Package api implements the remote execution API servere
+// Package api implements the remote execution API server.
 package api
 
 import (

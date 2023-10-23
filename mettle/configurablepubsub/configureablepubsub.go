@@ -1,3 +1,4 @@
+// configurablepubsub is a wrapper around gpcpubsub package that allows us to configure num handlers
 package configurablepubsub
 
 import (
