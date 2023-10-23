@@ -170,8 +170,8 @@ func main() {
 		}
 
 		// Must ensure the topics are created ahead of time.
-		common.MustOpenTopic(requests, 1, 1)
-		common.MustOpenTopic(responses, 1, 1)
+		common.MustOpenTopic(requests)
+		common.MustOpenTopic(responses)
 		if opts.Dual.NumWorkers == 0 {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}

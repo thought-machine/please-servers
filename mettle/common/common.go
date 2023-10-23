@@ -79,36 +79,13 @@ func limitBatchSize(in, size string) string {
 
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 // Batch size and number of publishers are configurable for GCP queues only.
-func MustOpenTopic(url string, batchSize, numPublishers int) *pubsub.Topic {
-	u := addTopicOpts(url, batchSize, numPublishers)
-	t, err := pubsub.OpenTopic(context.Background(), u)
+func MustOpenTopic(url string) *pubsub.Topic {
+	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
-		log.Fatalf("Failed to open topic %s: %s", u, err)
+		log.Fatalf("Failed to open topic %s: %s", url, err)
 	}
 	log.Debug("Opened topic %s", url)
 	return t
-}
-
-func addTopicOpts(in string, batchSize, numPublishers int) string {
-	u, err := url.Parse(in)
-	if err != nil {
-		// It's not clear exactly how we can even get here; url.Parse seems to pretty much never
-		// return an error. Anyway, panicking at this point shouldn't be an issue.
-		panic(err)
-	}
-	v := u.Query()
-	if batchSize > 1 {
-		v.Add("max_send_batch_size", strconv.Itoa(batchSize))
-	}
-	if numPublishers > 1 {
-		if strings.HasPrefix(in, "configurable") {
-			v.Add("num_handlers", strconv.Itoa(numPublishers))
-		} else {
-			log.Fatal("Can only set numPublishers on configurablepubsub queues")
-		}
-	}
-	u.RawQuery = v.Encode()
-	return u.String()
 }
 
 func handleSignals(cancel context.CancelFunc, s Shutdownable) {

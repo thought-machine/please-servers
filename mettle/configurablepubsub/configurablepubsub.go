@@ -15,7 +15,7 @@ import (
 	"gocloud.dev/pubsub/gcppubsub"
 )
 
-const Scheme = "configurable-gcppubsub"
+const Scheme = "tm-gcppubsub"
 
 var topicPathRE = regexp.MustCompile("^projects/.+/topics/.+$")
 
@@ -60,6 +60,7 @@ func (uo *urlOpener) OpenTopicURL(ctx context.Context, u *url.URL) (*pubsub.Topi
 	if err != nil {
 		return nil, err
 	}
+
 	conn, _, err := gcppubsub.Dial(ctx, creds.TokenSource)
 	if err != nil {
 		return nil, err

@@ -116,9 +116,7 @@ type PubSubOpts struct {
 	ResponseQueueSuffix   string `long:"response_queue_suffix" env:"API_RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
 	PreResponseQueue      string `long:"pre_response_queue" env:"API_PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 	NumPollers            int    `long:"num_pollers" env:"API_NUM_POLLERS" default:"10"`
-	NumPublishers         int    `long:"num_publishers" env:"API_NUM_PUBLISHERS" default:"2"`
 	SubscriptionBatchSize uint   `long:"subscription_batch_size" env:"API_SUBSCRIPTION" default:"100"`
-	TopicBatchSize        int    `long:"topic_batch_size" env:"API_TOPIC_BATCH_SIZE" default:"1000"`
 }
 
 // ServeForever serves on the given port until terminated.
@@ -148,9 +146,9 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	}
 	srv := &server{
 		name:         name,
-		requests:     common.MustOpenTopic(queueOpts.RequestQueue, queueOpts.TopicBatchSize, queueOpts.NumPublishers),
+		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
 		responses:    common.MustOpenSubscription(responseSubscriptionName, queueOpts.SubscriptionBatchSize),
-		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue, queueOpts.TopicBatchSize, queueOpts.NumPublishers),
+		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
