@@ -52,10 +52,10 @@ var opts = struct {
 			URL string `long:"url" description:"URL for communicating with other API servers"`
 			TLS bool   `long:"tls" description:"Use TLS for communication between api servers"`
 		} `group:"Options controlling communication with other API servers for bootstrapping zero-downtime deployments." namespace:"api"`
-		Storage         StorageOpts          `group:"Options controlling communication with the CAS server" namespace:"storage"`
-		GRPC            grpcutil.Opts        `group:"Options controlling the gRPC server"`
-		Queues          common.APIPubSubOpts `group:"Options controlling the pub/sub queues"`
-		AllowedPlatform map[string][]string  `long:"allowed_platform" description:"Allowed values for platform properties"`
+		Storage         StorageOpts         `group:"Options controlling communication with the CAS server" namespace:"storage"`
+		GRPC            grpcutil.Opts       `group:"Options controlling the gRPC server"`
+		Queues          api.PubSubOpts      `group:"Options controlling the pub/sub queues"`
+		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"api" description:"Start as an API server"`
 	Worker struct {
 		Dir               string                  `short:"d" long:"dir" default:"." description:"Directory to run actions in"`
@@ -163,15 +163,15 @@ func main() {
 	if cmd == "dual" {
 		const requests = "mem://requests"
 		const responses = "mem://responses"
-		queues := common.APIPubSubOpts{
+		queues := api.PubSubOpts{
 			RequestQueue:  requests,
 			ResponseQueue: responses,
 			NumPollers:    1,
 		}
 
 		// Must ensure the topics are created ahead of time.
-		common.MustOpenTopic(requests)
-		common.MustOpenTopic(responses)
+		common.MustOpenTopic(requests, 1, 1)
+		common.MustOpenTopic(responses, 1, 1)
 		if opts.Dual.NumWorkers == 0 {
 			opts.Dual.NumWorkers = runtime.NumCPU()
 		}

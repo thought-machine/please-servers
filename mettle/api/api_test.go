@@ -239,7 +239,7 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 	casaddr := setupCASServer()
 	requests := fmt.Sprintf("mem://requests%d", queueID)
 	responses := fmt.Sprintf("mem://responses%d", queueID)
-	queues := common.APIPubSubOpts{
+	queues := PubSubOpts{
 		RequestQueue:          requests,
 		ResponseQueue:         responses,
 		PreResponseQueue:      responses,
@@ -247,8 +247,8 @@ func setupServers(t *testing.T) (pb.ExecutionClient, *executor, *grpc.Server) {
 		SubscriptionBatchSize: 1,
 	}
 	queueID++
-	common.MustOpenTopic(requests)  // Ensure these are created before anything tries
-	common.MustOpenTopic(responses) // to open a subscription to either.
+	common.MustOpenTopic(requests, 1, 1)  // Ensure these are created before anything tries
+	common.MustOpenTopic(responses, 1, 1) // to open a subscription to either.
 	s, lis, err := serve(grpcutil.Opts{
 		Host: "127.0.0.1",
 		Port: 0,
@@ -336,7 +336,7 @@ type executor struct {
 func newExecutor(requests, responses string) *executor {
 	return &executor{
 		requests:  common.MustOpenSubscription(requests, 1),
-		responses: common.MustOpenTopic(responses),
+		responses: common.MustOpenTopic(responses, 1, 1),
 	}
 }
 

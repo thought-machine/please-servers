@@ -9,6 +9,7 @@ go_library(
         "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "///third_party/go/gocloud.dev//pubsub",
         "///third_party/go/gocloud.dev//pubsub/gcppubsub",
+        "///third_party/go/gocloud.dev//pubsub/batcher",
         "///third_party/go/gocloud.dev//gcp",
         "///third_party/go/google.golang.org_genproto//googleapis/longrunning",
         "///third_party/go/google.golang.org_genproto//googleapis/pubsub/v1",

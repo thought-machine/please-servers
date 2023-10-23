@@ -154,7 +154,7 @@ func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 // RunOne runs one single request, returning any error received.
 func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tokenFile, redis, readRedis, redisPassword, redisCAFile string, redisTLS bool, cachePrefix, cacheParts []string, clean, secureStorage bool, digest *pb.Digest) error {
 	// Must create this to submit on first
-	topic := common.MustOpenTopic("mem://requests")
+	topic := common.MustOpenTopic("mem://requests", 1, 1)
 	w, err := initialiseWorker(instanceName, "mem://requests", "mem://responses", name, storage, dir, cacheDir, "", sandbox, altSandbox, "", "", tokenFile, redis, readRedis, redisPassword, redisCAFile, redisTLS, cachePrefix, cacheParts, clean, secureStorage, 0, math.MaxInt64, 100.0, "", nil, 0)
 	if err != nil {
 		return err
@@ -290,7 +290,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 
 	w := &worker{
 		requests:        common.MustOpenSubscription(requestQueue, 1),
-		responses:       common.MustOpenTopic(responseQueue),
+		responses:       common.MustOpenTopic(responseQueue, 1, 1),
 		ackExtension:    ackExtension,
 		client:          client,
 		rclient:         rexclient.Uninitialised(),

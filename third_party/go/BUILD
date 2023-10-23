@@ -1392,6 +1392,11 @@ go_repo(
 )
 
 go_repo(
+    module = "gocloud.dev/pubsub/batcher",
+    version = "v0.34.0",
+)
+
+go_repo(
     module = "gocloud.dev/gcp",
     version = "v0.34.0",
 )

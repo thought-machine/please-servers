@@ -109,8 +109,20 @@ func init() {
 	}
 }
 
+// PubSubOpts holds information to configure queue options in the api server
+type PubSubOpts struct {
+	RequestQueue          string `short:"q" long:"request_queue" env:"API_REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+	ResponseQueue         string `short:"r" long:"response_queue" env:"API_RESPONSE_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+	ResponseQueueSuffix   string `long:"response_queue_suffix" env:"API_RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
+	PreResponseQueue      string `long:"pre_response_queue" env:"API_PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+	NumPollers            int    `long:"num_pollers" env:"API_NUM_POLLERS" default:"10"`
+	NumPublishers         int    `long:"num_publishers" env:"API_NUM_PUBLISHERS" default:"2"`
+	SubscriptionBatchSize uint   `long:"subscription_batch_size" env:"API_SUBSCRIPTION" default:"100"`
+	TopicBatchSize        int    `long:"topic_batch_size" env:"API_TOPIC_BATCH_SIZE" default:"1000"`
+}
+
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name string, queueOpts common.APIPubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
+func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
 	s, lis, err := serve(opts, name, queueOpts, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
 	if err != nil {
 		log.Fatalf("%s", err)
@@ -118,7 +130,7 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts common.APIPubSubOpt
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name string, queueOpts common.APIPubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
@@ -132,9 +144,9 @@ func serve(opts grpcutil.Opts, name string, queueOpts common.APIPubSubOpts, apiU
 	}
 	srv := &server{
 		name:         name,
-		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
-		responses:    common.MustOpenSubscription(queueOpts.ResponseQueue, queueOpts.SubscriptionBatchSize),
-		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
+		requests:     common.MustOpenTopic(queueOpts.RequestQueue, queueOpts.TopicBatchSize, queueOpts.NumPublishers),
+		responses:    common.MustOpenSubscription(queueOpts.ResponseQueue+name, queueOpts.SubscriptionBatchSize),
+		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue, queueOpts.TopicBatchSize, queueOpts.NumPublishers),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
