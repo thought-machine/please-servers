@@ -17,7 +17,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/peterebden/go-cli-init/v4/logging"
-	"gocloud.dev/gcp"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
 	pspb "google.golang.org/genproto/googleapis/pubsub/v1"
@@ -25,8 +24,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/thought-machine/please-servers/mettle/mempubsub" // Register our custom mempubsub scheme
-	"gocloud.dev/pubsub/batcher"
-	"gocloud.dev/pubsub/gcppubsub" // And gocloud's gcppubsub provider
+	// And gocloud's gcppubsub provider
 )
 
 var log = logging.MustGetLogger()
@@ -81,49 +79,12 @@ func limitBatchSize(in, size string) string {
 // MustOpenTopic opens a topic, which must have been created ahead of time.
 // Batch size and number of publishers are configurable for GCP queues only.
 func MustOpenTopic(url string, batchSize, numPublishers int) *pubsub.Topic {
-	if strings.HasPrefix(url, "gcppubsub://") {
-		return mustOpenGCPTopic(url, batchSize, numPublishers)
-	}
 	t, err := pubsub.OpenTopic(context.Background(), url)
 	if err != nil {
 		log.Fatalf("Failed to open topic %s: %s", url, err)
 	}
 	log.Debug("Opened topic %s", url)
 	return t
-}
-
-func mustOpenGCPTopic(in string, batchSize, numPublishers int) *pubsub.Topic {
-	u, err := url.Parse(in)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ctx := context.Background()
-	creds, err := gcp.DefaultCredentials(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	conn, _, err := gcppubsub.Dial(ctx, creds.TokenSource)
-	if err != nil {
-		log.Fatal(err)
-	}
-	options := gcppubsub.TopicOptions{
-		BatcherOptions: batcher.Options{
-			MaxHandlers:  numPublishers,
-			MaxBatchSize: batchSize,
-		},
-	}
-
-	opener := gcppubsub.URLOpener{
-		Conn:         conn,
-		TopicOptions: options,
-	}
-
-	topic, err := opener.OpenTopicURL(ctx, u)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return topic
 }
 
 func handleSignals(cancel context.CancelFunc, s Shutdownable) {
