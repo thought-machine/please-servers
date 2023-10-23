@@ -16,6 +16,8 @@ go_library(
         "///third_party/go/google.golang.org_grpc//codes",
         "///third_party/go/google.golang.org_grpc//status",
         "//mettle/mempubsub",
+        "//mettle/configurablepubsub",
+
     ],
 )
 

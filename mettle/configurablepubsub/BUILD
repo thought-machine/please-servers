@@ -1,6 +1,6 @@
 go_library(
-    name = "configureablepubsub",
-    srcs = ["configureablepubsub.go"],
+    name = "configurablepubsub",
+    srcs = ["configurablepubsub.go"],
     visibility = ["//mettle/..."],
     deps = [
         "///third_party/go/gocloud.dev//pubsub",
