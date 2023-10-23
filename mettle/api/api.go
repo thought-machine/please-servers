@@ -131,9 +131,13 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL 
 }
 
 func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
+	responseSubscriptionName := queueOpts.ResponseQueue
 	if name == "" {
 		name = "mettle API server"
+	} else {
+		responseSubscriptionName = responseSubscriptionName + name
 	}
+
 	log.Notice("Contacting CAS server on %s...", storageURL)
 	client, err := rexclient.New(name, storageURL, storageTLS, "")
 	if err != nil {
@@ -145,7 +149,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(queueOpts.RequestQueue, queueOpts.TopicBatchSize, queueOpts.NumPublishers),
-		responses:    common.MustOpenSubscription(queueOpts.ResponseQueue+name, queueOpts.SubscriptionBatchSize),
+		responses:    common.MustOpenSubscription(responseSubscriptionName, queueOpts.SubscriptionBatchSize),
 		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue, queueOpts.TopicBatchSize, queueOpts.NumPublishers),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
