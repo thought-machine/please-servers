@@ -129,11 +129,8 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL 
 }
 
 func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
-	responseSubscription := queueOpts.ResponseQueue
 	if name == "" {
 		name = "mettle API server"
-	} else {
-		responseSubscription += name
 	}
 
 	log.Notice("Contacting CAS server on %s...", storageURL)
@@ -144,11 +141,12 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	if queueOpts.NumPollers < 1 {
 		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
 	}
+	preResponseURL := queueOpts.ResponseQueueSuffix + queueOpts.PreResponseQueue
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
-		responses:    common.MustOpenSubscription(responseSubscription, queueOpts.SubscriptionBatchSize),
-		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
+		responses:    common.MustOpenSubscription(preResponseURL, queueOpts.SubscriptionBatchSize),
+		preResponses: common.MustOpenTopic(queueOpts.ResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
