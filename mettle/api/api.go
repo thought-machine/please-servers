@@ -1,4 +1,4 @@
-// Package api implements the remote execution API servere
+// Package api implements the remote execution API server
 package api
 
 import (
@@ -129,11 +129,11 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL 
 }
 
 func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
-	responseSubscriptionName := queueOpts.ResponseQueue
+	responseSubscription := queueOpts.ResponseQueue
 	if name == "" {
 		name = "mettle API server"
 	} else {
-		responseSubscriptionName = responseSubscriptionName + name
+		responseSubscription = responseSubscription + name
 	}
 
 	log.Notice("Contacting CAS server on %s...", storageURL)
@@ -147,7 +147,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
-		responses:    common.MustOpenSubscription(responseSubscriptionName, queueOpts.SubscriptionBatchSize),
+		responses:    common.MustOpenSubscription(responseSubscription, queueOpts.SubscriptionBatchSize),
 		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
