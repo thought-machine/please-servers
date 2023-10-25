@@ -1,4 +1,4 @@
-// Package api implements the remote execution API server
+// Package api implements the remote execution API server.
 package api
 
 import (
@@ -133,7 +133,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	if name == "" {
 		name = "mettle API server"
 	} else {
-		responseSubscription = responseSubscription + name
+		responseSubscription += name
 	}
 
 	log.Notice("Contacting CAS server on %s...", storageURL)
