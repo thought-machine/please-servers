@@ -1,3 +1,7 @@
+Version 11.4.1
+--------------
+    * Fix bug in api server 
+
 Version 11.4.0
 --------------
     * Add api server pubsub opts 
