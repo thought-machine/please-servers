@@ -1633,7 +1633,7 @@ go_repo(
 
 go_repo(
     module = "gocloud.dev",
-    version = "v0.29.0",
+    version = "v0.34.0",
 )
 
 go_repo(
