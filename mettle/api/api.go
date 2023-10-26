@@ -150,7 +150,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	if queueOpts.NumPollers < 1 {
 		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
 	}
-	preResponseURL := queueOpts.ResponseQueueSuffix + queueOpts.PreResponseQueue
+	preResponseURL := queueOpts.PreResponseQueue + queueOpts.ResponseQueueSuffix
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
