@@ -1,8 +1,9 @@
-Version 11.3.0
+Version 11.4.0
 --------------
     * Add api server pubsub opts 
 	* Add metrics for failed publish requests
 	* Add no execution in progress metric
+	* Add preresponse publish duration metric
 
 Version 11.3.0
 --------------
