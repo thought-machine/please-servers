@@ -1,3 +1,7 @@
+Version 11.5.0
+--------------
+    * Update gocloud to v0.34.0 to support setting max batchsize on topics 
+
 Version 11.4.2
 --------------
     * Fix bug in api server 
