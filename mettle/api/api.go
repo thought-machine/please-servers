@@ -91,6 +91,12 @@ var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Buckets:   []float64{1, 5, 10, 30, 60, 120, 300, 600, 900, 1200},
 })
 
+var preResponsePublishDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "mettle",
+	Name:      "publish_durations",
+	Buckets:   prometheus.DefBuckets,
+})
+
 var metrics = []prometheus.Collector{
 	totalRequests,
 	currentRequests,
@@ -101,6 +107,7 @@ var metrics = []prometheus.Collector{
 	noExecutionInProgress,
 	requestPublishFailure,
 	responsePublishFailure,
+	preResponsePublishDurations,
 }
 
 func init() {
@@ -129,7 +136,6 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL 
 }
 
 func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
-	responseSubscriptionName := queueOpts.ResponseQueue
 	if name == "" {
 		name = "mettle API server"
 	} else {
@@ -144,11 +150,12 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	if queueOpts.NumPollers < 1 {
 		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
 	}
+	preResponseURL := queueOpts.ResponseQueueSuffix + queueOpts.PreResponseQueue
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
-		responses:    common.MustOpenSubscription(responseSubscriptionName, queueOpts.SubscriptionBatchSize),
-		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
+		responses:    common.MustOpenSubscription(preResponseURL, queueOpts.SubscriptionBatchSize),
+		preResponses: common.MustOpenTopic(queueOpts.ResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
@@ -307,10 +314,12 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	b := common.MarshalOperation(pb.ExecutionStage_QUEUED, req.ActionDigest, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	preResponseStartTime := time.Now()
 	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, s.name); err != nil {
 		responsePublishFailure.Inc()
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
+	preResponsePublishDurations.Observe(time.Since(preResponseStartTime).Seconds())
 	b, _ = proto.Marshal(req)
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
