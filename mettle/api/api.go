@@ -150,12 +150,13 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	if queueOpts.NumPollers < 1 {
 		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
 	}
-	preResponseURL := queueOpts.PreResponseQueue + queueOpts.ResponseQueueSuffix
+	// The subscription url is made up of the response queue url and the response queue suffix
+	subscriptionURL := queueOpts.ResponseQueue + queueOpts.ResponseQueueSuffix
 	srv := &server{
 		name:         name,
 		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
-		responses:    common.MustOpenSubscription(preResponseURL, queueOpts.SubscriptionBatchSize),
-		preResponses: common.MustOpenTopic(queueOpts.ResponseQueue),
+		responses:    common.MustOpenSubscription(subscriptionURL, queueOpts.SubscriptionBatchSize),
+		preResponses: common.MustOpenTopic(queueOpts.PreResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
