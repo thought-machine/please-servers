@@ -91,6 +91,12 @@ var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Buckets:   []float64{1, 5, 10, 30, 60, 120, 300, 600, 900, 1200},
 })
 
+var preResponsePublishDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "mettle",
+	Name:      "publish_durations",
+	Buckets:   prometheus.DefBuckets,
+})
+
 var metrics = []prometheus.Collector{
 	totalRequests,
 	currentRequests,
@@ -101,6 +107,7 @@ var metrics = []prometheus.Collector{
 	noExecutionInProgress,
 	requestPublishFailure,
 	responsePublishFailure,
+	preResponsePublishDurations,
 }
 
 func init() {
@@ -305,10 +312,12 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	b := common.MarshalOperation(pb.ExecutionStage_QUEUED, req.ActionDigest, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	preResponseStartTime := time.Now()
 	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, s.name); err != nil {
 		responsePublishFailure.Inc()
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
+	preResponsePublishDurations.Observe(time.Since(preResponseStartTime).Seconds())
 	b, _ = proto.Marshal(req)
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
