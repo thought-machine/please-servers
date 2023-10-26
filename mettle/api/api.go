@@ -70,10 +70,31 @@ var totalFailedPubSubMessages = prometheus.NewCounter(prometheus.CounterOpts{
 	Help:      "Number of times the Pub/Sub pool has failed",
 })
 
+var noExecutionInProgress = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "no_execution_in_progress",
+})
+
+var requestPublishFailure = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "request_publish_failures",
+})
+
+var responsePublishFailure = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "response_publish_failures",
+})
+
 var timeToComplete = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "mettle",
 	Name:      "time_to_complete_action_secs",
 	Buckets:   []float64{1, 5, 10, 30, 60, 120, 300, 600, 900, 1200},
+})
+
+var preResponsePublishDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "mettle",
+	Name:      "publish_durations",
+	Buckets:   prometheus.DefBuckets,
 })
 
 var metrics = []prometheus.Collector{
@@ -83,6 +104,10 @@ var metrics = []prometheus.Collector{
 	totalSuccessfulActions,
 	timeToComplete,
 	totalFailedPubSubMessages,
+	noExecutionInProgress,
+	requestPublishFailure,
+	responsePublishFailure,
+	preResponsePublishDurations,
 }
 
 func init() {
@@ -91,36 +116,48 @@ func init() {
 	}
 }
 
+// PubSubOpts holds information to configure queue options in the api server
+type PubSubOpts struct {
+	RequestQueue          string `short:"q" long:"request_queue" env:"API_REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
+	ResponseQueue         string `short:"r" long:"response_queue" env:"API_RESPONSE_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
+	ResponseQueueSuffix   string `long:"response_queue_suffix" env:"API_RESPONSE_QUEUE_SUFFIX" description:"Suffix to apply to the response queue name"`
+	PreResponseQueue      string `long:"pre_response_queue" env:"API_PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
+	NumPollers            int    `long:"num_pollers" env:"API_NUM_POLLERS" default:"10"`
+	SubscriptionBatchSize uint   `long:"subscription_batch_size" env:"API_SUBSCRIPTION" default:"100"`
+}
+
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int, responseBatchSize uint) {
-	s, lis, err := serve(opts, name, requestQueue, responseQueue, preResponseQueue, apiURL, connTLS, allowedPlatform, storageURL, storageTLS, numPollers, responseBatchSize)
+func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
+	s, lis, err := serve(opts, name, queueOpts, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
 
-func serve(opts grpcutil.Opts, name, requestQueue, responseQueue, preResponseQueue, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool, numPollers int, responseBatchSize uint) (*grpc.Server, net.Listener, error) {
+func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) (*grpc.Server, net.Listener, error) {
 	if name == "" {
 		name = "mettle API server"
 	}
+
 	log.Notice("Contacting CAS server on %s...", storageURL)
 	client, err := rexclient.New(name, storageURL, storageTLS, "")
 	if err != nil {
 		return nil, nil, err
 	}
-	if numPollers < 1 {
-		return nil, nil, fmt.Errorf("too few pollers specified: %d", numPollers)
+	if queueOpts.NumPollers < 1 {
+		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
 	}
+	preResponseURL := queueOpts.ResponseQueueSuffix + queueOpts.PreResponseQueue
 	srv := &server{
 		name:         name,
-		requests:     common.MustOpenTopic(requestQueue),
-		responses:    common.MustOpenSubscription(responseQueue, responseBatchSize),
-		preResponses: common.MustOpenTopic(preResponseQueue),
+		requests:     common.MustOpenTopic(queueOpts.RequestQueue),
+		responses:    common.MustOpenSubscription(preResponseURL, queueOpts.SubscriptionBatchSize),
+		preResponses: common.MustOpenTopic(queueOpts.ResponseQueue),
 		jobs:         map[string]*job{},
 		platform:     allowedPlatform,
 		client:       client,
-		numPollers:   numPollers,
+		numPollers:   queueOpts.NumPollers,
 	}
 	log.Notice("Allowed platform values:")
 	for k, v := range allowedPlatform {
@@ -275,9 +312,12 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	b := common.MarshalOperation(pb.ExecutionStage_QUEUED, req.ActionDigest, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	preResponseStartTime := time.Now()
 	if err := common.PublishWithOrderingKey(ctx, s.preResponses, b, req.ActionDigest.Hash, s.name); err != nil {
+		responsePublishFailure.Inc()
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
+	preResponsePublishDurations.Observe(time.Since(preResponseStartTime).Seconds())
 	b, _ = proto.Marshal(req)
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -285,6 +325,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		Body:     b,
 		Metadata: platform,
 	}); err != nil {
+		requestPublishFailure.Inc()
 		log.Error("Failed to submit work to stream: %s", err)
 		return err
 	}
@@ -313,7 +354,8 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 	digest := &pb.Digest{Hash: req.Name}
 	ch, _ := s.eventStream(digest, false)
 	if ch == nil {
-		log.Warning("Request for execution %s which is not in progress", req.Name)
+		log.Error("Request for execution %s which is not in progress", req.Name)
+		noExecutionInProgress.Inc()
 		return status.Errorf(codes.NotFound, "No execution in progress for %s", req.Name)
 	}
 	return s.streamEvents(digest, ch, stream)
