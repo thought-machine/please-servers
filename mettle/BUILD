@@ -22,4 +22,3 @@ sh_cmd(
         "//sandbox:alt_sandbox",
     ],
 )
-

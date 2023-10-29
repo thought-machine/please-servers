@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"golang.org/x/time/rate"
 	"os"
 	"time"
 
@@ -71,8 +72,9 @@ func newRedisClient(client elan.Client, url, readURL, password, caFile string, u
 		elan:      client,
 		redis:     primaryClient,
 		readRedis: readClient,
-		timeout:   10 * time.Second,
+		timeout:   1 * time.Second,
 		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
+		limiter:   rate.NewLimiter(rate.Every(time.Second*10), 10),
 	}
 }
 
@@ -82,6 +84,7 @@ type redisClient struct {
 	readRedis *redis.Client
 	timeout   time.Duration
 	maxSize   int64
+	limiter   *rate.Limiter
 }
 
 func (r *redisClient) Healthcheck() error {
@@ -91,12 +94,18 @@ func (r *redisClient) Healthcheck() error {
 func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	cmd := r.readRedis.Get(ctx, dg.Hash)
-	if err := cmd.Err(); err == nil {
-		blob, _ := cmd.Bytes()
-		return blob, nil
-	} else if err != redis.Nil {
-		log.Warning("Failed to read blob from Redis: %s", err)
+
+	if r.limiter.Allow() {
+		cmd := r.readRedis.Get(ctx, dg.Hash)
+		if err := cmd.Err(); err == nil {
+			blob, _ := cmd.Bytes()
+			return blob, nil
+		} else if err != redis.Nil {
+			log.Warningf("Failed to read blob from Redis: %s", err)
+			r.limiter.Reserve()
+		}
+	} else {
+		log.Warningf("limiter error rate exceeded, skipping Redis lookup")
 	}
 	// If we get here, the blob didn't exist. Download it then write back to Redis.
 	blob, err := r.elan.ReadBlob(dg)
@@ -104,11 +113,13 @@ func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 		return nil, err
 	}
 	if dg.SizeBytes < r.maxSize {
-		ctx, cancel = context.WithTimeout(context.Background(), r.timeout)
-		defer cancel()
-		if cmd := r.redis.Set(ctx, dg.Hash, blob, 0); cmd.Val() != "OK" {
-			log.Warning("Failed to set blob in Redis: %s", cmd.Err())
-		}
+		go func(hash string) {
+			ctx, cancel = context.WithTimeout(context.Background(), r.timeout)
+			defer cancel()
+			if cmd := r.redis.Set(ctx, hash, blob, 0); cmd.Val() != "OK" {
+				log.Warning("Failed to set blob in Redis: %s", cmd.Err())
+			}
+		}(dg.Hash)
 	}
 	return blob, nil
 }
@@ -215,11 +226,16 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 	if len(keys) == 0 {
 		return nil
 	}
+	if !r.limiter.Allow() {
+		// Bail out immediately if Redis has exceeded error limit
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	resp, err := r.readRedis.MGet(ctx, keys...).Result()
 	if err != nil {
 		log.Warning("Failed to check blobs in Redis: %s", err)
+		r.limiter.Reserve()
 		return nil
 	} else if len(resp) != len(keys) {
 		log.Warning("Length mismatch in Redis response; got %d, expected %d", len(resp), len(keys))

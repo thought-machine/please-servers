@@ -22,7 +22,7 @@ go_test(
     resources = glob(["static/*.*"]),
     deps = [
         ":rpc",
-        "///third_party/go/github.com_stretchr_testify//assert",
         "//proto/lucidity",
+        "//third_party/go:testify",
     ],
 )

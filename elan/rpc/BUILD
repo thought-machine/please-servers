@@ -21,7 +21,6 @@ go_library(
         "///third_party/go/github.com_klauspost_compress//zstd",
         "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "///third_party/go/github.com_prometheus_client_golang//prometheus",
-        "//proto/purity",
         "///third_party/go/gocloud.dev//blob",
         "///third_party/go/gocloud.dev//blob/fileblob",
         "///third_party/go/gocloud.dev//blob/gcsblob",
@@ -32,10 +31,9 @@ go_library(
         "///third_party/go/google.golang.org_api//googleapi",
         "///third_party/go/google.golang.org_genproto_googleapis_bytestream//:bytestream",
         "///third_party/go/google.golang.org_genproto_googleapis_rpc//status",
-        "///third_party/go/google.golang.org_grpc//codes",
         "///third_party/go/google.golang.org_grpc//health/grpc_health_v1",
-        "///third_party/go/google.golang.org_grpc//status",
         "//grpcutil",
+        "//proto/purity",
         "//rexclient",
         "//third_party/go:grpc",
     ],
@@ -48,10 +46,9 @@ go_test(
     deps = [
         ":rpc",
         "///third_party/go/github.com_klauspost_compress//zstd",
-        "///third_party/go/github.com_stretchr_testify//assert",
-        "///third_party/go/github.com_stretchr_testify//require",
         "///third_party/go/google.golang.org_genproto_googleapis_bytestream//:bytestream",
         "//grpcutil",
+        "//third_party/go:testify",
     ],
 )
 
