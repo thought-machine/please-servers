@@ -113,13 +113,13 @@ func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 		return nil, err
 	}
 	if dg.SizeBytes < r.maxSize {
-		go func() {
+		go func(hash string) {
 			ctx, cancel = context.WithTimeout(context.Background(), r.timeout)
 			defer cancel()
-			if cmd := r.redis.Set(ctx, dg.Hash, blob, 0); cmd.Val() != "OK" {
+			if cmd := r.redis.Set(ctx, hash, blob, 0); cmd.Val() != "OK" {
 				log.Warning("Failed to set blob in Redis: %s", cmd.Err())
 			}
-		}()
+		}(dg.Hash)
 	}
 	return blob, nil
 }
