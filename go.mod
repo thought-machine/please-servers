@@ -71,6 +71,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/xattr v0.4.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/google/s2a-go v0.1.4 // indirect
+	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/thought-machine/go-flags v1.5.0 // indirect
