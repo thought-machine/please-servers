@@ -228,11 +228,16 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 	if len(keys) == 0 {
 		return nil
 	}
+	if !r.limiter.Allow() {
+		// Bail out immediately if Redis has exceeded error limit
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 	resp, err := r.readRedis.MGet(ctx, keys...).Result()
 	if err != nil {
 		log.Warning("Failed to check blobs in Redis: %s", err)
+		r.limiter.Reserve()
 		return nil
 	} else if len(resp) != len(keys) {
 		log.Warning("Length mismatch in Redis response; got %d, expected %d", len(resp), len(keys))
