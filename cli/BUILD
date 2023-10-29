@@ -16,6 +16,6 @@ go_test(
     srcs = ["cli_test.go"],
     deps = [
         ":cli",
-        "///third_party/go/github.com_stretchr_testify//assert",
+        "//third_party/go:testify",
     ],
 )
