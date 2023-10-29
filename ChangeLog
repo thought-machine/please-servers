@@ -1,3 +1,7 @@
+Version 11.6.0
+--------------
+    * Add rate-limiter to Redis client so we don't fail slowly
+
 Version 11.5.0
 --------------
     * Update gocloud to v0.34.0 to support setting max batchsize on topics 
