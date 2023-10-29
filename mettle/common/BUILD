@@ -13,11 +13,8 @@ go_library(
         "///third_party/go/gocloud.dev//gcp",
         "///third_party/go/google.golang.org_genproto//googleapis/longrunning",
         "///third_party/go/google.golang.org_genproto//googleapis/pubsub/v1",
-        "///third_party/go/google.golang.org_grpc//codes",
-        "///third_party/go/google.golang.org_grpc//status",
         "//mettle/mempubsub",
         "//mettle/configurablepubsub",
-
     ],
 )
 
@@ -26,6 +23,6 @@ go_test(
     srcs = ["common_test.go"],
     deps = [
         ":common",
-        "///third_party/go/github.com_stretchr_testify//assert",
+        "//third_party/go:testify",
     ],
 )
