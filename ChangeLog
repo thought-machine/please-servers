@@ -1,7 +1,7 @@
 Version 11.6.1
 --------------
-    * Fix potential data race when initialising internal job cache in mettle
-      API.
+    * Start receiving from queue only once we got all inflight executions.
+      This should fix a potential data race on init.
 
 Version 11.6.0
 --------------
