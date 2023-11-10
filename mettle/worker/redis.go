@@ -95,7 +95,7 @@ func (r *redisClient) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	if r.limiter.Allow() {
+	if r.limiter.Tokens() >= 1.0 {
 		cmd := r.readRedis.Get(ctx, dg.Hash)
 		if err := cmd.Err(); err == nil {
 			blob, _ := cmd.Bytes()
@@ -226,7 +226,7 @@ func (r *redisClient) readBlobs(keys []string, metrics bool) [][]byte {
 	if len(keys) == 0 {
 		return nil
 	}
-	if !r.limiter.Allow() {
+	if r.limiter.Tokens() < 1.0 {
 		// Bail out immediately if Redis has exceeded error limit
 		return nil
 	}
