@@ -1,3 +1,9 @@
+Version 11.6.1
+--------------
+    * Randomly offset retentionTime and expiryTime for each job so the
+      goroutines don't all wake up at the same time. This is a bit of a hack,
+      a proper fix will be raised soon.
+
 Version 11.6.0
 --------------
     * Add rate-limiter to Redis client so we don't fail slowly
