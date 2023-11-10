@@ -1,3 +1,8 @@
+Version 11.6.1
+--------------
+    * Fix potential data race when initialising internal job cache in mettle
+      API.
+
 Version 11.6.0
 --------------
     * Add rate-limiter to Redis client so we don't fail slowly
