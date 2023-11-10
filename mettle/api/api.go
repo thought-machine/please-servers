@@ -165,19 +165,17 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		log.Notice("    %s: %s", k, strings.Join(v, ", "))
 	}
 
-	go srv.Receive()
 	if jobs, err := getExecutions(opts, apiURL, connTLS); err != nil {
 		log.Warningf("Failed to get inflight executions: %s", err)
 	} else if len(jobs) > 0 {
-		srv.mutex.Lock()
-		for k, v := range jobs {
-			jobs[k] = v
-			go srv.expireJob(k)
-		}
+		srv.jobs = jobs
 		currentRequests.Set(float64(len(srv.jobs)))
 		log.Notice("Updated server with %d inflight executions", len(srv.jobs))
-		srv.mutex.Unlock()
+		for id := range jobs {
+			go srv.expireJob(id)
+		}
 	}
+	go srv.Receive()
 
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
