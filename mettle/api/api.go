@@ -561,7 +561,7 @@ func (s *server) process(msg *pubsub.Message) {
 
 // deleteJob waits for a period then removes the given job from memory.
 func (s *server) deleteJob(hash string, j *job) {
-	time.Sleep(retentionTime + rand.Int63(retentionTime))
+	time.Sleep(retentionTime + rand.Int63n(retentionTime))
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	// Check the action hasn't been replaced since deleteJob was called
@@ -574,11 +574,11 @@ func (s *server) deleteJob(hash string, j *job) {
 
 // expireJob expires an action that hasn't progressed.
 func (s *server) expireJob(hash string) {
-	time.Sleep(expiryTime + rand.Int63(expiryTime))
+	time.Sleep(expiryTime + rand.Int63n(expiryTime))
 	if s.maybeExpireJob(hash, false) {
 		return
 	}
-	time.Sleep(expiryTime + rand.Int63(expiryTime))
+	time.Sleep(expiryTime + rand.Int63n(expiryTime))
 	s.maybeExpireJob(hash, true)
 }
 
