@@ -164,9 +164,11 @@ func main() {
 		const requests = "mem://requests"
 		const responses = "mem://responses"
 		queues := api.PubSubOpts{
-			RequestQueue:  requests,
-			ResponseQueue: responses,
-			NumPollers:    1,
+			RequestQueue:          requests,
+			ResponseQueue:         responses,
+			PreResponseQueue:      responses,
+			NumPollers:            1,
+			SubscriptionBatchSize: 100,
 		}
 
 		// Must ensure the topics are created ahead of time.
