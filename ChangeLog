@@ -1,3 +1,8 @@
+Version 11.6.3
+--------------
+    * Start receiving from queue only once we got all inflight executions.
+      This should fix a potential data race on init.
+
 Version 11.6.2
 --------------
     * Error token bucket was mistakenly consuming with `Allow()`. Refactored to make token bucket behaviour correct.
