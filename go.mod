@@ -27,7 +27,7 @@ require (
 	github.com/thought-machine/http-admin v1.1.0
 	go.uber.org/automaxprocs v1.4.0
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.1.0
+	golang.org/x/crypto v0.17.0
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
 	golang.org/x/sync v0.1.0
 	golang.org/x/time v0.3.0
@@ -71,8 +71,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/xattr v0.4.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/google/s2a-go v0.1.4 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/thought-machine/go-flags v1.5.0 // indirect
@@ -80,11 +78,11 @@ require (
 	go.opentelemetry.io/otel v0.20.0 // indirect
 	go.opentelemetry.io/otel/metric v0.20.0 // indirect
 	go.opentelemetry.io/otel/trace v0.20.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.6.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230526203410-71b5a4ffd15e // indirect
