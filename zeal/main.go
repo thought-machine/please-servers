@@ -48,7 +48,7 @@ for the Paladin skill in Diablo II since its job is to bang things down as fast 
 
 func main() {
 	_, info := cli.ParseFlagsOrDie("Zeal", &opts, &opts.Logging)
-	go cli.ServeAdmin(opts.Admin, info)
+	go cli.ServeAdmin("Zeal", opts.Admin, info)
 
 	for domain, headers := range opts.Headers {
 		for name, header := range headers {

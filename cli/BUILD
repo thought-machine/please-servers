@@ -8,6 +8,7 @@ go_library(
         "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "///third_party/go/github.com_thought-machine_http-admin//:http-admin",
         "///third_party/go/go.uber.org_automaxprocs//maxprocs",
+        "///third_party/go/cloud.google.com_go_profiler//:profiler",
     ],
 )
 
