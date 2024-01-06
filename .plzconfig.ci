@@ -4,6 +4,7 @@ dir = .plz-cache
 dircompress = true
 
 [plugin "go"]
+target = //plugins:go
 defaultstatic = true
 gotool = //third_party/go:system_toolchain|go
 coverageredesign = true
