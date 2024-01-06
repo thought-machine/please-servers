@@ -6,7 +6,7 @@ dircompress = true
 [plugin "go"]
 target = //plugins:go
 defaultstatic = true
-gotool = //third_party/go:system_toolchain|go
+gotool = //third_party/go:toolchain|go
 coverageredesign = true
 
 [Plugin "proto"]
