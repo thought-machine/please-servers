@@ -24,6 +24,6 @@ go_test(
         ":trie",
         "///third_party/go/github.com_hashicorp_go-multierror//:go-multierror",
         "//third_party/go:grpc",
-        "//third_party/go:testify",
+        "///third_party/go/github.com_stretchr_testify//assert",
     ],
 )

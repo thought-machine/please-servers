@@ -1,11 +1,13 @@
 plugin_repo(
     name = "go",
-    revision = "v1.7.0",
+    plugin = "go-rules",
+    revision = "v1.11.4",
 )
 
 plugin_repo(
     name = "cc",
-    revision = "v0.3.1",
+    plugin = "cc-rules",
+    revision = "v0.3.2",
 )
 
 plugin_repo(
