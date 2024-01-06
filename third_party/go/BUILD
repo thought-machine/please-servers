@@ -1356,7 +1356,7 @@ go_repo(
 
 go_repo(
     module = "github.com/bazelbuild/remote-apis",
-    version = "v0.0.0-20231221155620-d20ae8b97fd3",
+    version = "v0.0.0-20230411132548-35aee1c4a425",
 )
 
 go_repo(
@@ -3823,7 +3823,7 @@ go_repo(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "2a9420921957c3485fc59c6cae6adc849591ba48",
+    version = "v0.0.0-20230518122452-6e5d9d252ff0",
 )
 
 go_repo(

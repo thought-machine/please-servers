@@ -28,8 +28,8 @@ require (
 	github.com/thought-machine/http-admin v1.1.0
 	go.uber.org/automaxprocs v1.5.3
 	gocloud.dev v0.36.0
-	github.com/golang/snappy v0.0.4 // indirect
-    github.com/google/go-cmp v0.6.0 // indirect
+	github.com/golang/snappy v0.0.4 // This is a required dep that Go mod tidy gets rid of. This breaks Please if it gets removed though.
+    github.com/google/go-cmp v0.6.0 // This is a required dep that Go mod tidy gets rid of. This breaks Please if it gets removed though.
 	golang.org/x/crypto v0.17.0
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	golang.org/x/sync v0.6.0
