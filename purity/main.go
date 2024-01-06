@@ -64,7 +64,7 @@ retains the "personal characteristics" theme.
 func main() {
 	cmd, info := cli.ParseFlagsOrDie("Purity", &opts, &opts.Logging)
 	if cmd == "periodic" {
-		go cli.ServeAdmin(opts.Admin, info)
+		go cli.ServeAdmin("Purity", opts.Admin, info)
 	}
 	if err := run(cmd); err != nil {
 		log.Fatalf("Failed: %s", err)

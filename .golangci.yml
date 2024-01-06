@@ -11,6 +11,7 @@ issues:
     - SA5008  # Warns for duplicate struct tags which are meaningful to go-flags
     - unslice  # This may be useful in some places.
     - ifElseChain  # Generally don't agree.
+    - indent-error-flow # Similar to above, seems to be making questionable choices
     - appendAssign
     - halp  # Make misspell be quiet about this.
     - exitAfterDefer # Potentially useful but not in any cases it fires right now.

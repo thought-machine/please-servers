@@ -652,7 +652,9 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 	s.limiter <- struct{}{}
 	defer func() { <-s.limiter }()
 	start := time.Now()
-	defer writeLatencies.Observe(time.Since(start).Seconds())
+	defer func() {
+		writeLatencies.Observe(time.Since(start).Seconds())
+	}()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	w, err := s.bucket.NewWriter(ctx, key, &blob.WriterOptions{BufferSize: s.bufferSize(digest)})

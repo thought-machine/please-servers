@@ -48,7 +48,8 @@ go_test(
         "///third_party/go/github.com_klauspost_compress//zstd",
         "///third_party/go/google.golang.org_genproto_googleapis_bytestream//:bytestream",
         "//grpcutil",
-        "//third_party/go:testify",
+        "///third_party/go/github.com_stretchr_testify//assert",
+        "///third_party/go/github.com_stretchr_testify//require",
     ],
 )
 

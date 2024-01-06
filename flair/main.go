@@ -47,7 +47,7 @@ want to have more than the minimum number of instances of it (hopefully more tha
 
 func main() {
 	_, info := cli.ParseFlagsOrDie("Flair", &opts, &opts.Logging)
-	go cli.ServeAdmin(opts.Admin, info)
+	go cli.ServeAdmin("Flair", opts.Admin, info)
 	cr := newReplicator(opts.Geometry, opts.Replicas, opts.LoadBalance)
 	ar := newReplicator(opts.AssetGeometry, opts.Replicas, opts.LoadBalance)
 	er := newReplicator(opts.ExecutorGeometry, opts.Replicas, opts.LoadBalance)
