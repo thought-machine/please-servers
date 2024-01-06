@@ -3823,7 +3823,7 @@ go_repo(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "v0.0.0-20230609205527-a985e2617501",
+    version = "2a9420921957c3485fc59c6cae6adc849591ba48",
 )
 
 go_repo(
