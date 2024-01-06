@@ -3,7 +3,6 @@ proto_library(
     name = "resourceusage",
     srcs = [
         "resourceusage.proto",
-        "resourceusage.pb.go",
     ],
     visibility = ["PUBLIC"],
 )
