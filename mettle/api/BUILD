@@ -38,6 +38,7 @@ go_test(
         "//mettle/common",
         "//proto/mettle",
         "//third_party/go:grpc",
-        "//third_party/go:testify",
+        "///third_party/go/github.com_stretchr_testify//require",
+        "///third_party/go/github.com_stretchr_testify//assert",
     ],
 )

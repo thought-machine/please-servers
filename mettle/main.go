@@ -157,7 +157,7 @@ updated blobs dominating much of the data downloaded.
 func main() {
 	cmd, info := cli.ParseFlagsOrDie("Mettle", &opts, &opts.Logging)
 	if cmd != "one" {
-		go cli.ServeAdmin(opts.Admin, info)
+		go cli.ServeAdmin(fmt.Sprintf("Mettle-%s", cmd), opts.Admin, info)
 	}
 
 	if cmd == "dual" {

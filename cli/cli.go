@@ -10,8 +10,10 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/peterebden/go-cli-init/v4/flags"
 	"github.com/peterebden/go-cli-init/v4/logging"
-	"github.com/thought-machine/http-admin"
+	admin "github.com/thought-machine/http-admin"
 	"go.uber.org/automaxprocs/maxprocs"
+
+	"cloud.google.com/go/profiler"
 )
 
 var log = logging.MustGetLogger()
@@ -29,24 +31,41 @@ type LoggingOpts struct {
 }
 
 // AdminOpts is a re-export of the admin type so servers don't need to import it directly.
-type AdminOpts = admin.Opts
+type AdminOpts struct {
+	Admin              admin.Opts
+	EnableGcpProfiling bool `long:"gcp_profiling" description:"Enable pushing profiles to GCP Cloud profiling." env:"ADMIN_GCP_PROFILING"`
+}
 
 // ParseFlagsOrDie parses incoming flags and sets up logging etc.
 func ParseFlagsOrDie(name string, opts interface{}, loggingOpts *LoggingOpts) (string, logging.LogLevelInfo) {
 	cmd := flags.ParseFlagsOrDie(name, opts)
 	info := logging.MustInitStructuredLogging(loggingOpts.Verbosity, loggingOpts.FileVerbosity, loggingOpts.LogFile, loggingOpts.Structured)
 	if _, err := maxprocs.Set(maxprocs.Logger(log.Notice), maxprocs.Min(1)); err != nil {
-		log.Error("Failed to set GOMAXPROCS: %s", err)
+		log.Errorf("Failed to set GOMAXPROCS: %s", err)
 	}
 	return cmd, info
 }
 
 // ServeAdmin starts the admin HTTP server.
 // It will block forever so the caller may well want to use a goroutine.
-func ServeAdmin(opts AdminOpts, info logging.LogLevelInfo) {
-	opts.Logger = logging.MustGetLoggerNamed("github.com.thought-machine.http-admin")
-	opts.LogInfo = info
-	go admin.Serve(opts)
+func ServeAdmin(serviceName string, opts AdminOpts, info logging.LogLevelInfo) {
+	opts.Admin.Logger = logging.MustGetLoggerNamed("github.com.thought-machine.http-admin")
+	opts.Admin.LogInfo = info
+	if opts.EnableGcpProfiling {
+		setupProfiling(serviceName)
+	}
+	go admin.Serve(opts.Admin)
+}
+
+func setupProfiling(serviceName string) {
+	cfg := profiler.Config{
+		Service: serviceName,
+	}
+
+	// Profiler initialization, best done as early as possible.
+	if err := profiler.Start(cfg); err != nil {
+		log.Warningf("Failed to set up profiling, continuing anyway: %s", err)
+	}
 }
 
 // An Action represents a combined hash / size pair written like
