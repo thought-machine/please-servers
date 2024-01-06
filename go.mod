@@ -6,8 +6,8 @@ require (
 	cloud.google.com/go/profiler v0.4.0
 	cloud.google.com/go/pubsub v1.33.0
 	cloud.google.com/go/storage v1.36.0
-	github.com/bazelbuild/remote-apis v0.0.0-20231221155620-d20ae8b97fd3
-	github.com/bazelbuild/remote-apis-sdks v0.0.0-20240105205238-6dd3970069e2
+	github.com/bazelbuild/remote-apis v0.0.0-20230411132548-35aee1c4a425
+	github.com/bazelbuild/remote-apis-sdks v0.0.0-20230419185642-269815af5db1
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-redis/redis/v8 v8.11.5

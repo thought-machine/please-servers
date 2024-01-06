@@ -17,7 +17,6 @@ on:
 jobs:
   analyze:
     name: Analyze
-    # TODO(jpoole): set this back to ubuntu-latest once https://github.com/actions/virtual-environments/issues/1816 lands
     runs-on: ubuntu-latest
 
     strategy:

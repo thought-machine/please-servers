@@ -10,7 +10,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/peterebden/go-cli-init/v4/flags"
 	"github.com/peterebden/go-cli-init/v4/logging"
-	"github.com/thought-machine/http-admin"
+	admin "github.com/thought-machine/http-admin"
 	"go.uber.org/automaxprocs/maxprocs"
 
 	"cloud.google.com/go/profiler"
