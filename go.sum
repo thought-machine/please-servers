@@ -235,6 +235,7 @@ github.com/peterebden/go-sri v1.1.1 h1:KK8yZ5/NX8YzWUY9QvhrP220QsvEKANLLAgvw35Ak
 github.com/peterebden/go-sri v1.1.1/go.mod h1:KIRxtog35NfDWec5LV/iBqqfOEPcMpePZLc7EPE6goQ=
 github.com/peterebden/remote-apis-sdks v0.0.0-20230518122452-6e5d9d252ff0 h1:WV3MausaJ/+IgZUxtxzJY/y9FOX1OutcCKHUCWgfNXs=
 github.com/peterebden/remote-apis-sdks v0.0.0-20230518122452-6e5d9d252ff0/go.mod h1:fUQHOmdjqFNgE7CGmwwqcM0a4f/8/oy23iDvdvELExY=
+github.com/peterebden/remote-apis-sdks v0.0.0-20230519151942-2a9420921957/go.mod h1:fUQHOmdjqFNgE7CGmwwqcM0a4f/8/oy23iDvdvELExY=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
