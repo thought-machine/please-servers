@@ -1,3 +1,7 @@
+Version 11.7.1
+--------------
+    * Use the correct commit of the forked SDK
+
 Version 11.7.0
 --------------
     * Update to Go 1.21
