@@ -52,7 +52,7 @@ func ServeAdmin(serviceName string, opts AdminOpts, info logging.LogLevelInfo) {
 	opts.Admin.Logger = logging.MustGetLoggerNamed("github.com.thought-machine.http-admin")
 	opts.Admin.LogInfo = info
 	if opts.EnableGcpProfiling {
-		setupProfiling(serviceName)
+		setupProfiling(strings.ToLower(serviceName))
 	}
 	go admin.Serve(opts.Admin)
 }
