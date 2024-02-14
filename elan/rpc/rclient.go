@@ -3,8 +3,9 @@ package rpc
 import (
 	"context"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
@@ -67,7 +68,7 @@ func (r *remoteClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*p
 
 func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry, compressors []pb.Compressor_Value) error {
 	defer observeTime(time.Now(), "UploadIfMissing")
-	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cnx()
 	_, _, err := r.c.UploadIfMissing(ctx, entries...)
 	return err
