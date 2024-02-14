@@ -68,7 +68,7 @@ func (r *remoteClient) UpdateActionResult(req *pb.UpdateActionResultRequest) (*p
 
 func (r *remoteClient) UploadIfMissing(entries []*uploadinfo.Entry, compressors []pb.Compressor_Value) error {
 	defer observeTime(time.Now(), "UploadIfMissing")
-	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*8)
+	ctx, cnx := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cnx()
 	_, _, err := r.c.UploadIfMissing(ctx, entries...)
 	return err
