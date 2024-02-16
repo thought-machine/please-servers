@@ -97,10 +97,10 @@ func (e *elanClient) uploadOne(entry *uploadinfo.Entry, compressor pb.Compressor
 	}
 	compressed := compressor != pb.Compressor_IDENTITY
 	key := e.s.compressedKey("cas", entry.Digest.ToProto(), compressed)
-	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
-	defer cancel()
 	e.s.limiter <- struct{}{}
 	defer func() { <-e.s.limiter }()
+	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
+	defer cancel()
 	if len(entry.Contents) > 0 {
 		if compressed {
 			entry.Contents = e.s.compressor.EncodeAll(entry.Contents, make([]byte, 0, entry.Digest.Size))
