@@ -7,9 +7,9 @@ jobs:
       image: thoughtmachine/please-servers:20230319
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: plz-out/gen/third_party/go
           key: ${{ runner.os }}-go-${{ hashFiles('third_party/go/BUILD', 'scripts/Dockerfile') }}
@@ -19,7 +19,7 @@ jobs:
         run: ./pleasew test --profile ci -p -v 2 --exclude //tests/...
       - name: Archive logs
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: logs
           path: |
@@ -32,9 +32,9 @@ jobs:
     if: github.ref == 'refs/heads/master'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: plz-out/gen/third_party/go
           key: ${{ runner.os }}-go-${{ hashFiles('third_party/go/BUILD', 'scripts/Dockerfile') }}
