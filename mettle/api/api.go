@@ -562,8 +562,8 @@ func (s *server) periodicallyDeleteJobs() {
 		for digest, job := range s.jobs {
 			if shouldDeleteJob(job) {
 				s.mutex.Lock()
-				defer s.mutex.Unlock()
 				delete(s.jobs, digest)
+				s.mutex.Unlock()
 				currentRequests.Dec()
 			}
 		}
