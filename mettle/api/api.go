@@ -566,15 +566,15 @@ func (s *server) process(msg *pubsub.Message) {
 
 func (s *server) periodicallyDeleteJobs() {
 	startTime := time.Now()
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	for range s.deleteJobsTicker.C {
+		s.mutex.Lock()
 		for digest, job := range s.jobs {
 			if shouldDeleteJob(job) {
 				delete(s.jobs, digest)
 				currentRequests.Dec()
 			}
 		}
+		s.mutex.Unlock()
 	}
 	deleteJobsDurations.Observe(time.Since(startTime).Seconds())
 }
