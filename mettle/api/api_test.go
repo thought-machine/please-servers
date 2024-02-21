@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
@@ -195,6 +196,70 @@ func TestExecuteAndWaitAfterCompletion(t *testing.T) {
 	assert.NoError(t, err)
 	op2 := receiveUpdate(t, stream2, hash, pb.ExecutionStage_COMPLETED)
 	checkExitCode(t, op2, 0)
+}
+
+func TestShouldDeleteJob(t *testing.T) {
+	now := time.Now()
+	var tests = []struct {
+		name         string
+		job          *job
+		shouldDelete bool
+	}{
+		{
+			name: "incomplete job returns false",
+			job: &job{
+				Done:       false,
+				LastUpdate: now.Add(-1 * time.Minute),
+			},
+			shouldDelete: false,
+		},
+		{
+			name: "completed job within retention time returns false",
+			job: &job{
+				Done:       true,
+				LastUpdate: now.Add(-1 * time.Minute),
+			},
+			shouldDelete: false,
+		},
+		{
+			name: "completed job after retention time returns true",
+			job: &job{
+				Done:       true,
+				LastUpdate: now.Add(-6 * time.Minute),
+			},
+			shouldDelete: true,
+		},
+		{
+			name: "incomplete job with no listeners within expiry time returns false",
+			job: &job{
+				Done:       false,
+				LastUpdate: now.Add(-59 * time.Minute),
+			},
+			shouldDelete: false,
+		},
+		{
+			name: "incomplete job with no listeners after expiry time returns true",
+			job: &job{
+				Done:       false,
+				LastUpdate: now.Add(-61 * time.Minute),
+			},
+			shouldDelete: true,
+		},
+		{
+			name: "incomplete job with listeners after 2x expiry time returns true",
+			job: &job{
+				Done:       false,
+				LastUpdate: now.Add(-121 * time.Minute),
+			},
+			shouldDelete: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.shouldDelete, shouldDeleteJob(test.job))
+		})
+	}
 }
 
 func runExecution(t *testing.T, client pb.ExecutionClient, ex *executor, hash string, expectedExitCode int) {
