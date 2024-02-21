@@ -97,6 +97,12 @@ var preResponsePublishDurations = prometheus.NewHistogram(prometheus.HistogramOp
 	Buckets:   prometheus.DefBuckets,
 })
 
+var deleteJobsDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Namespace: "mettle",
+	Name:      "delete_jobs_durations",
+	Buckets:   prometheus.DefBuckets,
+})
+
 var metrics = []prometheus.Collector{
 	totalRequests,
 	currentRequests,
@@ -108,6 +114,7 @@ var metrics = []prometheus.Collector{
 	requestPublishFailure,
 	responsePublishFailure,
 	preResponsePublishDurations,
+	deleteJobsDurations,
 }
 
 func init() {
@@ -319,6 +326,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
 	preResponsePublishDurations.Observe(time.Since(preResponseStartTime).Seconds())
+
 	b, _ = proto.Marshal(req)
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -558,6 +566,7 @@ func (s *server) process(msg *pubsub.Message) {
 }
 
 func (s *server) periodicallyDeleteJobs() {
+	startTime := time.Now()
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	for range s.deleteJobsTicker.C {
@@ -568,6 +577,7 @@ func (s *server) periodicallyDeleteJobs() {
 			}
 		}
 	}
+	deleteJobsDurations.Observe(time.Since(startTime).Seconds())
 }
 
 func shouldDeleteJob(j *job) bool {
