@@ -326,7 +326,6 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		log.Error("Failed to communicate pre-response message: %s", err)
 	}
 	preResponsePublishDurations.Observe(time.Since(preResponseStartTime).Seconds())
-
 	b, _ = proto.Marshal(req)
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
