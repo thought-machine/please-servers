@@ -1,3 +1,7 @@
+Version 11.8.5
+--------------
+    * Fix bug for periodically deleting jobs 
+
 Version 11.8.4
 --------------
     * delete in memory jobs periodically in one routine 

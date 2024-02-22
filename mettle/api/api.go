@@ -185,7 +185,6 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 	}
 	go srv.Receive()
 	go srv.periodicallyDeleteJobs()
-	defer srv.deleteJobsTicker.Stop()
 
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
