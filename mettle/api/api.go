@@ -139,7 +139,6 @@ func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL 
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
-	defer s.deleteJobsTicker.Stop()
 	grpcutil.ServeForever(lis, s)
 }
 
