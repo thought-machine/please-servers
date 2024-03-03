@@ -167,6 +167,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		client:           client,
 		numPollers:       queueOpts.NumPollers,
 		deleteJobsTicker: time.NewTicker(10 * time.Minute),
+		actuallyValidate: len(allowedPlatform) > 0,
 	}
 	log.Notice("Allowed platform values:")
 	for k, v := range allowedPlatform {
@@ -202,6 +203,7 @@ type server struct {
 	mutex            sync.Mutex
 	numPollers       int
 	deleteJobsTicker *time.Ticker
+	actuallyValidate bool
 }
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
@@ -282,9 +284,13 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
-	platform, err := s.validatePlatform(req)
-	if err != nil {
-		return err
+	var platform map[string]string
+	if s.actuallyValidate {
+		var err error
+		platform, err = s.validatePlatform(req)
+		if err != nil {
+			return err
+		}
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
 		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
