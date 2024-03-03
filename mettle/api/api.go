@@ -49,10 +49,6 @@ var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
 })
-var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: "mettle",
-	Name:      "requests_current",
-})
 
 var totalFailedActions = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
