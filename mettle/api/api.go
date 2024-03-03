@@ -105,7 +105,6 @@ var deleteJobsDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 
 var metrics = []prometheus.Collector{
 	totalRequests,
-	currentRequests,
 	totalFailedActions,
 	totalSuccessfulActions,
 	timeToComplete,
