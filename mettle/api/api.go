@@ -173,6 +173,8 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 			Name:      "requests_current",
 		},
 			func() float64 {
+				srv.mutex.Lock()
+				defer srv.mutex.Unlock()
 				return float64(len(srv.jobs))
 			},
 		))
