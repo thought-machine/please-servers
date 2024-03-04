@@ -284,13 +284,9 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	if req.ActionDigest == nil {
 		return status.Errorf(codes.InvalidArgument, "Action digest not specified")
 	}
-	var platform map[string]string
-	if s.actuallyValidate {
-		var err error
-		platform, err = s.validatePlatform(req)
-		if err != nil {
-			return err
-		}
+	platform, err := s.validatePlatform(req)
+	if err != nil {
+		return err
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
 		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
@@ -600,6 +596,9 @@ func shouldDeleteJob(j *job) bool {
 
 // validatePlatform fetches the platform requirements for this request and checks them.
 func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, error) {
+	if !s.actuallyValidate {
+		return map[string]string{}, nil
+	}
 	action := &pb.Action{}
 	if _, err := s.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(req.ActionDigest), action); err != nil {
 		return nil, err
