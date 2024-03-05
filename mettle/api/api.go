@@ -384,7 +384,7 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 	for op := range ch {
 		op.Name = digest.Hash
 		if err := stream.Send(op); err != nil {
-			log.Error("Failed to forward event for %s: %s", digest.Hash, err)
+			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
 			s.stopStream(digest, ch)
 			return err
 		}
