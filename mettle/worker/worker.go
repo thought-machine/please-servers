@@ -492,7 +492,7 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		}
 	}
 	w.actionDigest = req.ActionDigest
-	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
+	log.Debug("Received task for action digest %s", w.actionDigest.Hash)
 	w.lastURL = w.actionURL()
 
 	action, command, status := w.fetchRequestBlobs(req)
@@ -628,9 +628,9 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	fetchDurations.Observe(time.Since(start).Seconds())
 	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
 		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
-		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+		log.Debug("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
 	} else {
-		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
+		log.Debug("Prepared directory for %s", w.actionDigest.Hash)
 	}
 	log.Debug("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
 	return nil
