@@ -185,7 +185,7 @@ func mustCache(size int64) *ristretto.Cache {
 		BufferItems: 64, // recommended by upstream
 	})
 	if err != nil {
-		log.Fatalf("Failed to construct cache: %s", err)
+		log.Fatalf("Failed to construct in memory cache: %s", err)
 	}
 	return cache
 }
