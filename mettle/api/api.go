@@ -134,7 +134,7 @@ type PubSubOpts struct {
 func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
 	s, lis, err := serve(opts, name, queueOpts, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
 	if err != nil {
-		log.Fatalf("%s", err)
+		log.Fatalf("Failed to start API server: %s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
@@ -150,7 +150,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		return nil, nil, err
 	}
 	if queueOpts.NumPollers < 1 {
-		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
+		return nil, nil, fmt.Errorf("num_pollers must be greater than 1, got: %d", queueOpts.NumPollers)
 	}
 	// The subscription url is made up of the response queue url and the response queue suffix
 	subscriptionURL := queueOpts.ResponseQueue + queueOpts.ResponseQueueSuffix
@@ -217,7 +217,7 @@ type server struct {
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
 func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
-	log.Notice("Received request for inflight executions")
+	log.Debug("Received request for inflight executions")
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	executions := []*bpb.Job{}
@@ -236,7 +236,7 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 	res := &bpb.ServeExecutionsResponse{
 		Jobs: executions,
 	}
-	log.Notice("Serving %d inflight executions", len(executions))
+	log.Debug("Serving %d inflight executions", len(executions))
 	return res, nil
 }
 
@@ -252,7 +252,7 @@ func getExecutions(opts grpcutil.Opts, apiURL string, connTLS bool) (map[string]
 	}
 	defer conn.Close()
 	client := bpb.NewBootstrapClient(conn)
-	log.Notice("Requesting inflight executions...")
+	log.Debug("Requesting inflight executions...")
 	req := &bpb.ServeExecutionsRequest{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -389,7 +389,7 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 			return err
 		}
 	}
-	log.Notice("Completed stream for %s", digest.Hash)
+	log.Debug("Completed stream for %s", digest.Hash)
 	return nil
 }
 
@@ -515,11 +515,11 @@ func (s *server) process(msg *pubsub.Message) {
 			log.Warning("Got an update for %s from %s, failed update: %s. Done: %v", key, worker, response.Status.Message, op.Done)
 			totalFailedActions.Inc()
 		} else {
-			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
+			log.Debug("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
 			totalSuccessfulActions.Inc()
 		}
 	} else {
-		log.Notice("Got an update for %s from %s, now %s. Done: %v", key, worker, metadata.Stage, op.Done)
+		log.Debug("Got an update for %s from %s, now %s. Done: %v", key, worker, metadata.Stage, op.Done)
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -567,15 +567,15 @@ func (s *server) process(msg *pubsub.Message) {
 			if !j.StartTime.IsZero() {
 				timeToComplete.Observe(j.LastUpdate.Sub(j.StartTime).Seconds())
 			}
-			log.Info("Job %s completed by %s", key, worker)
+			log.Debug("Job %s completed by %s", key, worker)
 		}
 	}
 }
 
 func (s *server) periodicallyDeleteJobs() {
 	for range s.deleteJobsTicker.C {
-		startTime := time.Now()
 		s.mutex.Lock()
+		startTime := time.Now()
 		for digest, job := range s.jobs {
 			if shouldDeleteJob(job) {
 				delete(s.jobs, digest)
