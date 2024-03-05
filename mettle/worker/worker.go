@@ -492,7 +492,7 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		}
 	}
 	w.actionDigest = req.ActionDigest
-	log.Notice("Received task for action digest %s", w.actionDigest.Hash)
+	log.Debug("Received task for action digest %s", w.actionDigest.Hash)
 	w.lastURL = w.actionURL()
 
 	action, command, status := w.fetchRequestBlobs(req)
@@ -628,9 +628,9 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	fetchDurations.Observe(time.Since(start).Seconds())
 	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
 		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
-		log.Notice("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+		log.Debug("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
 	} else {
-		log.Notice("Prepared directory for %s", w.actionDigest.Hash)
+		log.Debug("Prepared directory for %s", w.actionDigest.Hash)
 	}
 	log.Debug("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
 	return nil
@@ -691,7 +691,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		cmd.Env[i] = v.Name + "=" + v.Value
 	}
 	err := w.runCommand(cmd, duration)
-	log.Notice("Completed execution for %s", w.actionDigest.Hash)
+	log.Debug("Completed execution for %s", w.actionDigest.Hash)
 	execEnd := time.Now()
 	w.metadata.VirtualExecutionDuration = durationpb.New(duration)
 	w.metadata.ExecutionCompletedTimestamp = toTimestamp(execEnd)
@@ -728,7 +728,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	w.observeSysUsage(cmd, execDuration)
 	if err != nil {
 		log.Debug("Execution failed.\nStdout: %s\nStderr: %s", w.stdout.String(), w.stderr.String())
-		msg := "Execution failed: " + err.Error()
+		msg := "Execution failed for " + w.actionDigest.Hash + ": " + err.Error()
 		msg += w.writeUncachedResult(ar, msg)
 		// Attempt to collect outputs. They may exist and contain useful information such as a test.results file
 		_ = w.collectOutputs(ar, command)
@@ -756,7 +756,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
 	uploadDurations.Observe(end.Sub(execEnd).Seconds())
-	log.Notice("Uploaded outputs for %s", w.actionDigest.Hash)
+	log.Debug("Uploaded outputs for %s", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	w.observeCosts()
 
@@ -781,13 +781,13 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		},
 	})
 	if err != nil {
-		log.Error("Failed to upload action result: %s", err)
+		log.Error("Failed to upload action result for %s: %s", w.actionDigest.Hash, err)
 		return &pb.ExecuteResponse{
 			Status: status(err, codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
 		}
 	}
-	log.Notice("Uploaded action result for %s", w.actionDigest.Hash)
+	log.Debug("Uploaded action result for %s", w.actionDigest.Hash)
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
