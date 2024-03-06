@@ -167,6 +167,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		client:           client,
 		numPollers:       queueOpts.NumPollers,
 		deleteJobsTicker: time.NewTicker(10 * time.Minute),
+		actuallyValidate: len(allowedPlatform) > 0,
 	}
 
 	// _Technically_ this won't happen more than once in normal running, as we'd only run 1 server, but it does happen in tests.
@@ -216,6 +217,7 @@ type server struct {
 	mutex            sync.Mutex
 	numPollers       int
 	deleteJobsTicker *time.Ticker
+	actuallyValidate bool
 }
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
@@ -605,6 +607,9 @@ func shouldDeleteJob(j *job) bool {
 
 // validatePlatform fetches the platform requirements for this request and checks them.
 func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, error) {
+	if !s.actuallyValidate {
+		return map[string]string{}, nil
+	}
 	action := &pb.Action{}
 	if _, err := s.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(req.ActionDigest), action); err != nil {
 		return nil, err
