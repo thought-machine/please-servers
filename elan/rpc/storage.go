@@ -26,7 +26,7 @@ type bucket interface {
 func mustOpenStorage(url string) bucket {
 	bucket, err := blob.OpenBucket(context.Background(), url)
 	if err != nil {
-		log.Fatalf("Failed to open storage %s: %v", url, err)
+		log.Fatalf("Failed to open storage bucket %s: %v", url, err)
 	}
 
 	var gcsClient *storage.Client

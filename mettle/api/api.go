@@ -49,10 +49,6 @@ var totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
 	Name:      "requests_total",
 })
-var currentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: "mettle",
-	Name:      "requests_current",
-})
 
 var totalFailedActions = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "mettle",
@@ -105,7 +101,6 @@ var deleteJobsDurations = prometheus.NewHistogram(prometheus.HistogramOpts{
 
 var metrics = []prometheus.Collector{
 	totalRequests,
-	currentRequests,
 	totalFailedActions,
 	totalSuccessfulActions,
 	timeToComplete,
@@ -116,6 +111,8 @@ var metrics = []prometheus.Collector{
 	preResponsePublishDurations,
 	deleteJobsDurations,
 }
+
+var register sync.Once
 
 func init() {
 	for _, metric := range metrics {
@@ -137,7 +134,7 @@ type PubSubOpts struct {
 func ServeForever(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string, connTLS bool, allowedPlatform map[string][]string, storageURL string, storageTLS bool) {
 	s, lis, err := serve(opts, name, queueOpts, apiURL, connTLS, allowedPlatform, storageURL, storageTLS)
 	if err != nil {
-		log.Fatalf("%s", err)
+		log.Fatalf("Failed to start API server: %s", err)
 	}
 	grpcutil.ServeForever(lis, s)
 }
@@ -153,7 +150,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		return nil, nil, err
 	}
 	if queueOpts.NumPollers < 1 {
-		return nil, nil, fmt.Errorf("too few pollers specified: %d", queueOpts.NumPollers)
+		return nil, nil, fmt.Errorf("num_pollers must be greater than 1, got: %d", queueOpts.NumPollers)
 	}
 	// The subscription url is made up of the response queue url and the response queue suffix
 	subscriptionURL := queueOpts.ResponseQueue + queueOpts.ResponseQueueSuffix
@@ -167,7 +164,23 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		client:           client,
 		numPollers:       queueOpts.NumPollers,
 		deleteJobsTicker: time.NewTicker(30 * time.Second),
+		actuallyValidate: len(allowedPlatform) > 0,
 	}
+
+	// _Technically_ this won't happen more than once in normal running, as we'd only run 1 server, but it does happen in tests.
+	register.Do(func() {
+		prometheus.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace: "mettle",
+			Name:      "requests_current",
+		},
+			func() float64 {
+				srv.mutex.Lock()
+				defer srv.mutex.Unlock()
+				return float64(len(srv.jobs))
+			},
+		))
+	})
+
 	log.Notice("Allowed platform values:")
 	for k, v := range allowedPlatform {
 		log.Notice("    %s: %s", k, strings.Join(v, ", "))
@@ -177,7 +190,6 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		log.Warningf("Failed to get inflight executions: %s", err)
 	} else if len(jobs) > 0 {
 		srv.jobs = jobs
-		currentRequests.Set(float64(len(srv.jobs)))
 		log.Notice("Updated server with %d inflight executions", len(srv.jobs))
 	}
 	go srv.Receive()
@@ -202,11 +214,12 @@ type server struct {
 	mutex            sync.Mutex
 	numPollers       int
 	deleteJobsTicker *time.Ticker
+	actuallyValidate bool
 }
 
 // ServeExecutions serves a list of currently executing jobs over GRPC.
 func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRequest) (*bpb.ServeExecutionsResponse, error) {
-	log.Notice("Received request for inflight executions")
+	log.Debug("Received request for inflight executions")
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	executions := []*bpb.Job{}
@@ -225,7 +238,7 @@ func (s *server) ServeExecutions(ctx context.Context, req *bpb.ServeExecutionsRe
 	res := &bpb.ServeExecutionsResponse{
 		Jobs: executions,
 	}
-	log.Notice("Serving %d inflight executions", len(executions))
+	log.Debug("Serving %d inflight executions", len(executions))
 	return res, nil
 }
 
@@ -241,7 +254,7 @@ func getExecutions(opts grpcutil.Opts, apiURL string, connTLS bool) (map[string]
 	}
 	defer conn.Close()
 	client := bpb.NewBootstrapClient(conn)
-	log.Notice("Requesting inflight executions...")
+	log.Debug("Requesting inflight executions...")
 	req := &bpb.ServeExecutionsRequest{}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -382,7 +395,7 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 			return err
 		}
 	}
-	log.Notice("Completed stream for %s", digest.Hash)
+	log.Debug("Completed stream for %s", digest.Hash)
 	return nil
 }
 
@@ -408,7 +421,6 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		s.jobs[digest.Hash] = j
 		log.Debug("Created job for %s", digest.Hash)
 		totalRequests.Inc()
-		currentRequests.Inc()
 		created = true
 	} else if create && time.Since(j.LastUpdate) >= resumptionTime {
 		// In this path we think the job is too old to be relevant; we don't actually create
@@ -510,11 +522,11 @@ func (s *server) process(msg *pubsub.Message) {
 			log.Warning("Got an update for %s from %s, failed update: %s. Done: %v", key, worker, response.Status.Message, op.Done)
 			totalFailedActions.Inc()
 		} else {
-			log.Notice("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
+			log.Debug("Got an update for %s from %s, completed successfully. Done: %v", key, worker, op.Done)
 			totalSuccessfulActions.Inc()
 		}
 	} else {
-		log.Notice("Got an update for %s from %s, now %s. Done: %v", key, worker, metadata.Stage, op.Done)
+		log.Debug("Got an update for %s from %s, now %s. Done: %v", key, worker, metadata.Stage, op.Done)
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -527,7 +539,6 @@ func (s *server) process(msg *pubsub.Message) {
 			LastUpdate: time.Now(),
 		}
 		s.jobs[key] = j
-		currentRequests.Inc()
 	}
 	if metadata.Stage != pb.ExecutionStage_QUEUED || !j.SentFirst {
 		// Only send QUEUED messages if they're the first one. This prevents us from
@@ -563,19 +574,18 @@ func (s *server) process(msg *pubsub.Message) {
 			if !j.StartTime.IsZero() {
 				timeToComplete.Observe(j.LastUpdate.Sub(j.StartTime).Seconds())
 			}
-			log.Info("Job %s completed by %s", key, worker)
+			log.Debug("Job %s completed by %s", key, worker)
 		}
 	}
 }
 
 func (s *server) periodicallyDeleteJobs() {
 	for range s.deleteJobsTicker.C {
-		startTime := time.Now()
 		s.mutex.Lock()
+		startTime := time.Now()
 		for digest, job := range s.jobs {
 			if shouldDeleteJob(job) {
 				delete(s.jobs, digest)
-				currentRequests.Dec()
 			}
 		}
 		s.mutex.Unlock()
@@ -599,6 +609,9 @@ func shouldDeleteJob(j *job) bool {
 
 // validatePlatform fetches the platform requirements for this request and checks them.
 func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, error) {
+	if !s.actuallyValidate {
+		return map[string]string{}, nil
+	}
 	action := &pb.Action{}
 	if _, err := s.client.ReadProto(context.Background(), digest.NewFromProtoUnvalidated(req.ActionDigest), action); err != nil {
 		return nil, err
