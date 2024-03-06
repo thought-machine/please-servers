@@ -1,6 +1,10 @@
+Version 11.9.0
+--------------
+    * Revert job deletion change to match previous behaviour
+
 Version 11.8.5
 --------------
-    * Fix bug for periodically deleting jobs 
+    * Fix bug for periodically deleting jobs
 
 Version 11.8.4
 --------------

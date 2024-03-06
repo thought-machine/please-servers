@@ -166,7 +166,7 @@ func serve(opts grpcutil.Opts, name string, queueOpts PubSubOpts, apiURL string,
 		platform:         allowedPlatform,
 		client:           client,
 		numPollers:       queueOpts.NumPollers,
-		deleteJobsTicker: time.NewTicker(10 * time.Minute),
+		deleteJobsTicker: time.NewTicker(30 * time.Second),
 		actuallyValidate: len(allowedPlatform) > 0,
 	}
 
@@ -388,6 +388,10 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
 	for op := range ch {
 		op.Name = digest.Hash
+		s.mutex.Lock()
+		j := s.jobs[digest.Hash]
+		j.LastUpdate = time.Now()
+		s.mutex.Unlock()
 		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
 			s.stopStream(digest, ch)
@@ -434,6 +438,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		// at best irrelevant and at worst outdated.
 		j.Current = nil
 		j.StartTime = time.Now()
+		j.LastUpdate = time.Now()
 	} else if j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
@@ -593,7 +598,7 @@ func (s *server) periodicallyDeleteJobs() {
 
 func shouldDeleteJob(j *job) bool {
 	timeSinceLastUpdate := time.Since(j.LastUpdate)
-	if j.Done && timeSinceLastUpdate > retentionTime {
+	if j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > retentionTime {
 		return true
 	}
 	if !j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > expiryTime {
