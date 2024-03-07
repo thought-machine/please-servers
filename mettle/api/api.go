@@ -594,11 +594,11 @@ func shouldDeleteJob(j *job, digest string) bool {
 	if j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > retentionTime {
 		return true
 	}
-	if !j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > expiryTime {
+	if j.Done && timeSinceLastUpdate > expiryTime {
 		return true
 	}
-	if !j.Done && timeSinceLastUpdate > 2*expiryTime {
-		log.Warning("Deleting job with %d listeners action: %s", len(j.Streams), digest)
+	if timeSinceLastUpdate > 2*expiryTime {
+		log.Warningf("Deleting job %s: Done: %v, listeners %d ", digest, j.Done, len(j.Streams))
 		return true
 	}
 	return false
