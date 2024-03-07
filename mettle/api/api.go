@@ -385,10 +385,6 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
 	for op := range ch {
 		op.Name = digest.Hash
-		s.mutex.Lock()
-		j := s.jobs[digest.Hash]
-		j.LastUpdate = time.Now()
-		s.mutex.Unlock()
 		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
 			s.stopStream(digest, ch)
@@ -584,7 +580,7 @@ func (s *server) periodicallyDeleteJobs() {
 		s.mutex.Lock()
 		startTime := time.Now()
 		for digest, job := range s.jobs {
-			if shouldDeleteJob(job) {
+			if shouldDeleteJob(job, digest) {
 				delete(s.jobs, digest)
 			}
 		}
@@ -593,7 +589,7 @@ func (s *server) periodicallyDeleteJobs() {
 	}
 }
 
-func shouldDeleteJob(j *job) bool {
+func shouldDeleteJob(j *job, digest string) bool {
 	timeSinceLastUpdate := time.Since(j.LastUpdate)
 	if j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > retentionTime {
 		return true
@@ -602,6 +598,7 @@ func shouldDeleteJob(j *job) bool {
 		return true
 	}
 	if !j.Done && timeSinceLastUpdate > 2*expiryTime {
+		log.Warning("Deleting job with %d listeners action: %s", len(j.Streams), digest)
 		return true
 	}
 	return false
