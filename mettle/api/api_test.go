@@ -277,7 +277,7 @@ func TestShouldDeleteJob(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.shouldDelete, shouldDeleteJob(test.job))
+			assert.Equal(t, test.shouldDelete, shouldDeleteJob(test.job, "1234"))
 		})
 	}
 }
