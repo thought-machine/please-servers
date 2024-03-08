@@ -591,14 +591,23 @@ func (s *server) periodicallyDeleteJobs() {
 
 func shouldDeleteJob(j *job, digest string) bool {
 	timeSinceLastUpdate := time.Since(j.LastUpdate)
-	if j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > retentionTime {
-		return true
+	if len(j.Streams) == 0 {
+		if j.Done && timeSinceLastUpdate > retentionTime {
+			// Job is complete with no listeners, safe to delete
+			return true
+		} else if !j.Done && timeSinceLastUpdate > expiryTime {
+			// Job is incomplete however nothing is listening, safe to delete
+			return true
+		}
 	}
-	if j.Done && timeSinceLastUpdate > expiryTime {
+	if j.Done && timeSinceLastUpdate > resumptionTime {
+		// Job is done old enough that is it considered stale, safe to delete
+		log.Warningf("Will delete job %s: Done: %t, listeners: %d, lastUpdate: %v", digest, j.Done, len(j.Streams), j.LastUpdate)
 		return true
 	}
 	if timeSinceLastUpdate > 2*expiryTime {
-		log.Warningf("Deleting job %s: Done: %v, listeners %d ", digest, j.Done, len(j.Streams))
+		// Job hasn't had an update in forever, safe to delete
+		log.Warningf("Will delete job %s: Done: %t, listeners: %d, lastUpdate: %v ", digest, j.Done, len(j.Streams), j.LastUpdate)
 		return true
 	}
 	return false
