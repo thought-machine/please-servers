@@ -385,10 +385,6 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
 	for op := range ch {
 		op.Name = digest.Hash
-		s.mutex.Lock()
-		j := s.jobs[digest.Hash]
-		j.LastUpdate = time.Now()
-		s.mutex.Unlock()
 		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
 			s.stopStream(digest, ch)
@@ -436,6 +432,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		j.Current = nil
 		j.StartTime = time.Now()
 		j.LastUpdate = time.Now()
+		j.Done = false
 	} else if j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
@@ -584,7 +581,7 @@ func (s *server) periodicallyDeleteJobs() {
 		s.mutex.Lock()
 		startTime := time.Now()
 		for digest, job := range s.jobs {
-			if shouldDeleteJob(job) {
+			if shouldDeleteJob(job, digest) {
 				delete(s.jobs, digest)
 			}
 		}
@@ -593,15 +590,25 @@ func (s *server) periodicallyDeleteJobs() {
 	}
 }
 
-func shouldDeleteJob(j *job) bool {
+func shouldDeleteJob(j *job, digest string) bool {
 	timeSinceLastUpdate := time.Since(j.LastUpdate)
-	if j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > retentionTime {
+	if len(j.Streams) == 0 {
+		if j.Done && timeSinceLastUpdate > retentionTime {
+			// Job is complete with no listeners, safe to delete
+			return true
+		} else if !j.Done && timeSinceLastUpdate > expiryTime {
+			// Job is incomplete but with no listeners, safe to delete
+			return true
+		}
+	}
+	if j.Done && timeSinceLastUpdate > resumptionTime {
+		// Job is done and old enough that is it considered stale, safe to delete
+		log.Warningf("Will delete job %s: Done: %t, listeners: %d, lastUpdate: %v", digest, j.Done, len(j.Streams), j.LastUpdate)
 		return true
 	}
-	if !j.Done && len(j.Streams) == 0 && timeSinceLastUpdate > expiryTime {
-		return true
-	}
-	if !j.Done && timeSinceLastUpdate > 2*expiryTime {
+	if timeSinceLastUpdate > 2*expiryTime {
+		// Job hasn't had an update in forever, safe to delete
+		log.Warningf("Will delete job %s: Done: %t, listeners: %d, lastUpdate: %v ", digest, j.Done, len(j.Streams), j.LastUpdate)
 		return true
 	}
 	return false

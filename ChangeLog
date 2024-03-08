@@ -1,3 +1,10 @@
+Version 11.9.1
+--------------
+    * Delete done jobs after resuption time has passed
+	* Delete any job after 2x expiry 
+	* Don't set lastUpdate on streaming events 
+	* Add warning logs when deleting jobs with listeners
+
 Version 11.9.0
 --------------
     * Revert job deletion change to match previous behaviour

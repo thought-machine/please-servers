@@ -206,7 +206,7 @@ func TestShouldDeleteJob(t *testing.T) {
 		shouldDelete bool
 	}{
 		{
-			name: "incomplete job returns false",
+			name: "incomplete job doesn't expire",
 			job: &job{
 				Done:       false,
 				LastUpdate: now.Add(-1 * time.Minute),
@@ -214,7 +214,7 @@ func TestShouldDeleteJob(t *testing.T) {
 			shouldDelete: false,
 		},
 		{
-			name: "completed job within retention time returns false",
+			name: "completed job within retention time does not expire",
 			job: &job{
 				Done:       true,
 				LastUpdate: now.Add(-1 * time.Minute),
@@ -222,7 +222,7 @@ func TestShouldDeleteJob(t *testing.T) {
 			shouldDelete: false,
 		},
 		{
-			name: "completed job after retention time and no listeners returns true",
+			name: "completed job after retention time and no listeners does expire",
 			job: &job{
 				Done:       true,
 				LastUpdate: now.Add(-6 * time.Minute),
@@ -231,7 +231,16 @@ func TestShouldDeleteJob(t *testing.T) {
 			shouldDelete: true,
 		},
 		{
-			name: "incomplete job with no listeners within expiry time returns false",
+			name: "complete job with active listeners after 1x resumption time does expire",
+			job: &job{
+				Done:       true,
+				LastUpdate: now.Add(-11 * time.Minute),
+				Streams:    []chan *longrunning.Operation{make(chan *longrunning.Operation), make(chan *longrunning.Operation)},
+			},
+			shouldDelete: true,
+		},
+		{
+			name: "incomplete job with no listeners within expiry time does not expire",
 			job: &job{
 				Done:       false,
 				LastUpdate: now.Add(-59 * time.Minute),
@@ -239,21 +248,12 @@ func TestShouldDeleteJob(t *testing.T) {
 			shouldDelete: false,
 		},
 		{
-			name: "incomplete job with no listeners after expiry time returns true",
+			name: "incomplete job with no listeners after 1x expiry time does expire",
 			job: &job{
 				Done:       false,
 				LastUpdate: now.Add(-61 * time.Minute),
 			},
 			shouldDelete: true,
-		},
-		{
-			name: "complete job with active listeners after 1x expiry time does not expire",
-			job: &job{
-				Done:       true,
-				LastUpdate: now.Add(-121 * time.Minute),
-				Streams:    []chan *longrunning.Operation{make(chan *longrunning.Operation), make(chan *longrunning.Operation)},
-			},
-			shouldDelete: false,
 		},
 		{
 			name: "incomplete job with listeners after 2x expiry time does expire",
@@ -264,20 +264,11 @@ func TestShouldDeleteJob(t *testing.T) {
 			},
 			shouldDelete: true,
 		},
-		{
-			name: "complete job with active listeners after 1x expiry time does not expire",
-			job: &job{
-				Done:       true,
-				LastUpdate: now.Add(-61 * time.Minute),
-				Streams:    []chan *longrunning.Operation{make(chan *longrunning.Operation), make(chan *longrunning.Operation)},
-			},
-			shouldDelete: false,
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.shouldDelete, shouldDeleteJob(test.job))
+			assert.Equal(t, test.shouldDelete, shouldDeleteJob(test.job, "1234"))
 		})
 	}
 }
