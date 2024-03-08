@@ -597,12 +597,12 @@ func shouldDeleteJob(j *job, digest string) bool {
 			// Job is complete with no listeners, safe to delete
 			return true
 		} else if !j.Done && timeSinceLastUpdate > expiryTime {
-			// Job is incomplete however nothing is listening, safe to delete
+			// Job is incomplete but with no listeners, safe to delete
 			return true
 		}
 	}
 	if j.Done && timeSinceLastUpdate > resumptionTime {
-		// Job is done old enough that is it considered stale, safe to delete
+		// Job is done and old enough that is it considered stale, safe to delete
 		log.Warningf("Will delete job %s: Done: %t, listeners: %d, lastUpdate: %v", digest, j.Done, len(j.Streams), j.LastUpdate)
 		return true
 	}
