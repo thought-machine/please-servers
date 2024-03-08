@@ -214,7 +214,7 @@ func TestShouldDeleteJob(t *testing.T) {
 			shouldDelete: false,
 		},
 		{
-			name: "completed job within retention time doesn't expire",
+			name: "completed job within retention time does not expire",
 			job: &job{
 				Done:       true,
 				LastUpdate: now.Add(-1 * time.Minute),
@@ -240,7 +240,7 @@ func TestShouldDeleteJob(t *testing.T) {
 			shouldDelete: true,
 		},
 		{
-			name: "incomplete job with no listeners within expiry time doesn't",
+			name: "incomplete job with no listeners within expiry time does not expire",
 			job: &job{
 				Done:       false,
 				LastUpdate: now.Add(-59 * time.Minute),
