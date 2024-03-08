@@ -432,6 +432,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		j.Current = nil
 		j.StartTime = time.Now()
 		j.LastUpdate = time.Now()
+		j.Done = false
 	} else if j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
