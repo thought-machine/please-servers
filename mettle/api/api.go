@@ -419,21 +419,18 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		totalRequests.Inc()
 		created = true
 	} else if create && time.Since(j.LastUpdate) >= resumptionTime {
-		// In this path we think the job is too old to be relevant; we don't actually create
-		// a new job, but we tell the caller we did so it triggers a new execution.
+		// In this path we think the job is too old to be relevant; clear out any existing current info
+		// and tell the caller we created a new job..
+		j.Current = nil
+		j.StartTime = time.Now()
+		j.LastUpdate = time.Now()
+		j.Done = false
 		created = true
 	} else {
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
 	ch := make(chan *longrunning.Operation, 100)
-	if created {
-		// This request is creating a new stream, clear out any existing current job info; it is now
-		// at best irrelevant and at worst outdated.
-		j.Current = nil
-		j.StartTime = time.Now()
-		j.LastUpdate = time.Now()
-		j.Done = false
-	} else if j.Current != nil {
+	if !created && j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
 		// amount of time until we receive the next real update.
@@ -579,6 +576,7 @@ func (s *server) process(msg *pubsub.Message) {
 func (s *server) periodicallyDeleteJobs() {
 	for range s.deleteJobsTicker.C {
 		s.mutex.Lock()
+		log.Debug("Starting clean")
 		startTime := time.Now()
 		for digest, job := range s.jobs {
 			if shouldDeleteJob(job, digest) {
@@ -586,6 +584,7 @@ func (s *server) periodicallyDeleteJobs() {
 			}
 		}
 		s.mutex.Unlock()
+		log.Debug("Finished clean")
 		deleteJobsDurations.Observe(time.Since(startTime).Seconds())
 	}
 }
