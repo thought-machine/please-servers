@@ -28,8 +28,6 @@ require (
 	github.com/thought-machine/http-admin v1.1.0
 	go.uber.org/automaxprocs v1.5.3
 	gocloud.dev v0.36.0
-	github.com/golang/snappy v0.0.4 // This is a required dep that Go mod tidy gets rid of. This breaks Please if it gets removed though.
-    github.com/google/go-cmp v0.6.0 // This is a required dep that Go mod tidy gets rid of. This breaks Please if it gets removed though.
 	golang.org/x/crypto v0.17.0
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	golang.org/x/sync v0.6.0
@@ -39,7 +37,7 @@ require (
 	google.golang.org/genproto/googleapis/bytestream v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/grpc v1.60.1
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 )
 
