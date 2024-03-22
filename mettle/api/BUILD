@@ -1,6 +1,6 @@
 go_library(
     name = "api",
-    srcs = ["api.go"],
+    srcs = ["api.go", "chan.go"],
     visibility = ["//mettle/..."],
     deps = [
         "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/client",
@@ -25,7 +25,7 @@ go_library(
 
 go_test(
     name = "api_test",
-    srcs = ["api_test.go"],
+    srcs = ["api_test.go", "chan_test.go"],
     deps = [
         ":api",
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/execution/v2",
