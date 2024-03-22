@@ -43,23 +43,25 @@ func (ch *bufferedChannel[T]) Close() {
 
 // Receive receives a new message from the channel. It blocks until one is available.
 func (ch *bufferedChannel[T]) Receive() (T, bool) {
-	ch.lock.Lock()
-	defer ch.lock.Unlock()
 	select {
 	case t, ok := <-ch.ch:
 		return t, ok
 	default:
 	}
+	ch.lock.Lock()
 	if len(ch.buf) > 0 {
 		t := ch.buf[0]
 		ch.buf = ch.buf[1:]
+		ch.lock.Unlock()
 		return t, true
 	}
 	if ch.closed {
 		close(ch.ch)
+		ch.lock.Unlock()
 		var t T
 		return t, false
 	}
+	ch.lock.Unlock()
 	t, ok := <-ch.ch
 	return t, ok
 }
