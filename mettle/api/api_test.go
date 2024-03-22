@@ -226,7 +226,6 @@ func TestShouldDeleteJob(t *testing.T) {
 			job: &job{
 				Done:       true,
 				LastUpdate: now.Add(-6 * time.Minute),
-				Streams:    []chan *longrunning.Operation{},
 			},
 			shouldDelete: true,
 		},
@@ -235,7 +234,7 @@ func TestShouldDeleteJob(t *testing.T) {
 			job: &job{
 				Done:       true,
 				LastUpdate: now.Add(-11 * time.Minute),
-				Streams:    []chan *longrunning.Operation{make(chan *longrunning.Operation), make(chan *longrunning.Operation)},
+				Streams:    []*bufferedOpChannel{newBufferedOpChannel(), newBufferedOpChannel()},
 			},
 			shouldDelete: true,
 		},
@@ -260,7 +259,7 @@ func TestShouldDeleteJob(t *testing.T) {
 			job: &job{
 				Done:       false,
 				LastUpdate: now.Add(-121 * time.Minute),
-				Streams:    []chan *longrunning.Operation{make(chan *longrunning.Operation), make(chan *longrunning.Operation)},
+				Streams:    []*bufferedOpChannel{newBufferedOpChannel(), newBufferedOpChannel()},
 			},
 			shouldDelete: true,
 		},

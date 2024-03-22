@@ -7,6 +7,8 @@ import (
 )
 
 // A bufferedChannel acts like a Go channel but with an (effectively) unlimited buffer.
+// It also avoids creating any additional goroutines (one can write this more concisely with
+// two channels & a goroutine in between, but we can't afford to have a routine per stream)
 type bufferedChannel[T any] struct {
 	ch     chan T
 	buf    []T
@@ -72,4 +74,9 @@ func (ch *bufferedChannel[T]) Receive() (T, bool) {
 	return t, ok
 }
 
-type bufferedOpChannel bufferedChannel[*longrunning.Operation]
+// Specialisation for our use case
+type bufferedOpChannel = bufferedChannel[*longrunning.Operation]
+
+func newBufferedOpChannel() *bufferedOpChannel {
+	return newBufferedChannel[*longrunning.Operation]()
+}

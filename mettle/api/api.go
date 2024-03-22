@@ -431,7 +431,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (*bufferedOpChannel
 	} else {
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
-	ch := newBufferedChannel[*longrunning.Operation]()
+	ch := newBufferedOpChannel()
 	if !created && j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
