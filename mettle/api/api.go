@@ -384,8 +384,8 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 }
 
 // streamEvents streams a series of events back to the client.
-func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
-	for op := range ch {
+func (s *server) streamEvents(digest *pb.Digest, ch *bufferedOpChannel, stream pb.Execution_ExecuteServer) error {
+	for op, ok := ch.Receive(); ok; op, ok = ch.Receive() {
 		op.Name = digest.Hash
 		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
@@ -399,7 +399,7 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 
 // eventStream registers an event stream for a job.
 // The second return value indicates if we created a new execution or are resuming an existing one.
-func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunning.Operation, bool) {
+func (s *server) eventStream(digest *pb.Digest, create bool) (*bufferedOpChannel, bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	j, present := s.jobs[digest.Hash]
@@ -431,12 +431,12 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 	} else {
 		log.Debug("Resuming existing job for %s", digest.Hash)
 	}
-	ch := make(chan *longrunning.Operation, 100)
+	ch := newBufferedChannel[*longrunning.Operation]()
 	if !created && j.Current != nil {
 		// This request is resuming an existing stream, give them an update on the latest thing to happen.
 		// This helps avoid 504s from taking too long to send response headers since it can be an arbitrary
 		// amount of time until we receive the next real update.
-		ch <- j.Current
+		ch.Send(j.Current)
 	}
 	// Keep this stream if we are going to send further updates on it; don't if
 	// we are resuming an existing job that is already completed (in which case there will
@@ -444,13 +444,13 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 	if created || j.Current == nil || !j.Done {
 		j.Streams = append(j.Streams, ch)
 	} else {
-		close(ch)
+		ch.Close()
 	}
 	return ch, created
 }
 
 // stopStream de-registers the given event stream for a job.
-func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation) {
+func (s *server) stopStream(digest *pb.Digest, ch *bufferedOpChannel) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	job, present := s.jobs[digest.Hash]
@@ -458,7 +458,7 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 		log.Warning("stopStream for non-existent job %s", digest.Hash)
 		return
 	}
-	job.Streams = slices.DeleteFunc(job.Streams, func(stream chan *longrunning.Operation) bool {
+	job.Streams = slices.DeleteFunc(job.Streams, func(stream *bufferedOpChannel) bool {
 		return stream == ch
 	})
 }
@@ -546,22 +546,16 @@ func (s *server) process(msg *pubsub.Message) {
 		j.Current = op
 		j.LastUpdate = time.Now()
 		for _, stream := range j.Streams {
-			// Invoke this in a goroutine so we do not block.
-			go func(ch chan<- *longrunning.Operation) {
-				defer func() {
-					recover() // Avoid any chance of panicking from a 'send on closed channel'
-				}()
-				log.Debug("Dispatching update for %s", key)
-				ch <- &longrunning.Operation{
-					Name:     op.Name,
-					Metadata: op.Metadata,
-					Done:     op.Done,
-					Result:   op.Result,
-				}
-				if op.Done {
-					close(ch)
-				}
-			}(stream)
+			log.Debug("Dispatching update for %s", key)
+			stream.Send(&longrunning.Operation{
+				Name:     op.Name,
+				Metadata: op.Metadata,
+				Done:     op.Done,
+				Result:   op.Result,
+			})
+			if op.Done {
+				stream.Close()
+			}
 		}
 		if op.Done {
 			if !j.StartTime.IsZero() {
@@ -639,7 +633,7 @@ func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, er
 
 // A job represents a single execution request.
 type job struct {
-	Streams    []chan *longrunning.Operation
+	Streams    []*bufferedOpChannel
 	Current    *longrunning.Operation
 	StartTime  time.Time
 	LastUpdate time.Time

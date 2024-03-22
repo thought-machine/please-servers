@@ -2,6 +2,8 @@ package api
 
 import (
 	"sync"
+
+	"google.golang.org/genproto/googleapis/longrunning"
 )
 
 // A bufferedChannel acts like a Go channel but with an (effectively) unlimited buffer.
@@ -22,6 +24,10 @@ func newBufferedChannel[T any]() *bufferedChannel[T] {
 func (ch *bufferedChannel[T]) Send(t T) {
 	ch.lock.Lock()
 	defer ch.lock.Unlock()
+	if ch.closed {
+		log.Warning("send on closed bufferedChannel")
+		return
+	}
 	if len(ch.buf) > 0 {
 		ch.buf = append(ch.buf, t)
 		return
@@ -65,3 +71,5 @@ func (ch *bufferedChannel[T]) Receive() (T, bool) {
 	t, ok := <-ch.ch
 	return t, ok
 }
+
+type bufferedOpChannel bufferedChannel[*longrunning.Operation]
