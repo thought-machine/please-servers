@@ -18,7 +18,7 @@ go_stdlib(
 
 go_repo(
     module = "github.com/thought-machine/http-admin",
-    version = "v1.1.0",
+    version = "v1.1.1",
 )
 
 go_repo(
