@@ -291,6 +291,8 @@ github.com/thought-machine/go-flags v1.6.3 h1:AGA+iy7EP7ia/e46jzrmJV3oJhznESq7kN
 github.com/thought-machine/go-flags v1.6.3/go.mod h1:+r2g8uGwgGM7IGZzmMS97mKBFLDbW6vgFO1jxp0rDmg=
 github.com/thought-machine/http-admin v1.1.0 h1:FZaRvTjccInGyPg4QJgwtuS+jKbyYnoHGNvok/rkNYc=
 github.com/thought-machine/http-admin v1.1.0/go.mod h1:p3vUnstLmgqHM3Mxvu4SqbHCZ3cj5xK6ur8lNspB80U=
+github.com/thought-machine/http-admin v1.1.1 h1:3e0giKthGixjpFywkMoT5v91M//iUxODnXrBFyQG83c=
+github.com/thought-machine/http-admin v1.1.1/go.mod h1:p3vUnstLmgqHM3Mxvu4SqbHCZ3cj5xK6ur8lNspB80U=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/yusufpapurcu/wmi v1.2.3 h1:E1ctvB7uKFMOJw3fdOW32DwGE9I7t++CRUEMKvFoFiw=
