@@ -392,6 +392,9 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 			s.stopStream(digest, ch)
 			return err
 		}
+		if op.Done {
+			break
+		}
 	}
 	log.Debug("Completed stream for %s", digest.Hash)
 	return nil
@@ -443,8 +446,6 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 	// be no further update and no point for the receiver to keep waiting).
 	if created || j.Current == nil || !j.Done {
 		j.Streams = append(j.Streams, ch)
-	} else {
-		close(ch)
 	}
 	return ch, created
 }
@@ -546,22 +547,13 @@ func (s *server) process(msg *pubsub.Message) {
 		j.Current = op
 		j.LastUpdate = time.Now()
 		for _, stream := range j.Streams {
-			// Invoke this in a goroutine so we do not block.
-			go func(ch chan<- *longrunning.Operation) {
-				defer func() {
-					recover() // Avoid any chance of panicking from a 'send on closed channel'
-				}()
-				log.Debug("Dispatching update for %s", key)
-				ch <- &longrunning.Operation{
-					Name:     op.Name,
-					Metadata: op.Metadata,
-					Done:     op.Done,
-					Result:   op.Result,
-				}
-				if op.Done {
-					close(ch)
-				}
-			}(stream)
+			log.Debug("Dispatching update for %s", key)
+			stream <- &longrunning.Operation{
+				Name:     op.Name,
+				Metadata: op.Metadata,
+				Done:     op.Done,
+				Result:   op.Result,
+			}
 		}
 		if op.Done {
 			if !j.StartTime.IsZero() {

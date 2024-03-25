@@ -1,3 +1,7 @@
+Version 11.9.3
+--------------
+    * Avoid some cases of potential reordering of streamed events
+
 Version 11.9.2
 --------------
     * Only clear J.current if we reuse an old job
@@ -5,8 +9,8 @@ Version 11.9.2
 Version 11.9.1
 --------------
     * Delete done jobs after resuption time has passed
-	* Delete any job after 2x expiry 
-	* Don't set lastUpdate on streaming events 
+	* Delete any job after 2x expiry
+	* Don't set lastUpdate on streaming events
 	* Add warning logs when deleting jobs with listeners
 
 Version 11.9.0
@@ -19,7 +23,7 @@ Version 11.8.5
 
 Version 11.8.4
 --------------
-    * delete in memory jobs periodically in one routine 
+    * delete in memory jobs periodically in one routine
 
 Version 11.7.4
 --------------
@@ -64,19 +68,19 @@ Version 11.6.0
 
 Version 11.5.0
 --------------
-    * Update gocloud to v0.34.0 to support setting max batchsize on topics 
+    * Update gocloud to v0.34.0 to support setting max batchsize on topics
 
 Version 11.4.2
 --------------
-    * Fix bug in api server 
+    * Fix bug in api server
 
 Version 11.4.2
 --------------
-    * Fix bug in api server 
+    * Fix bug in api server
 
 Version 11.4.0
 --------------
-    * Add api server pubsub opts 
+    * Add api server pubsub opts
 	* Add metrics for failed publish requests
 	* Add no execution in progress metric
 	* Add preresponse publish duration metric
