@@ -4,7 +4,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -456,12 +458,9 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 		log.Warning("stopStream for non-existent job %s", digest.Hash)
 		return
 	}
-	for i, stream := range job.Streams {
-		if stream == ch {
-			job.Streams = append(job.Streams[:i], job.Streams[i+1:]...)
-			break
-		}
-	}
+	job.Streams = slices.DeleteFunc(job.Streams, func(stream chan *longrunning.Operation) bool {
+		return stream == ch
+	})
 }
 
 // Receive runs forever, receiving responses from the queue.
@@ -578,18 +577,14 @@ func (s *server) periodicallyDeleteJobs() {
 		s.mutex.Lock()
 		log.Debug("Starting clean")
 		startTime := time.Now()
-		for digest, job := range s.jobs {
-			if shouldDeleteJob(job, digest) {
-				delete(s.jobs, digest)
-			}
-		}
+		maps.DeleteFunc(s.jobs, shouldDeleteJob)
 		s.mutex.Unlock()
 		log.Debug("Finished clean")
 		deleteJobsDurations.Observe(time.Since(startTime).Seconds())
 	}
 }
 
-func shouldDeleteJob(j *job, digest string) bool {
+func shouldDeleteJob(digest string, j *job) bool {
 	timeSinceLastUpdate := time.Since(j.LastUpdate)
 	if len(j.Streams) == 0 {
 		if j.Done && timeSinceLastUpdate > retentionTime {
@@ -633,22 +628,13 @@ func (s *server) validatePlatform(req *pb.ExecuteRequest) (map[string]string, er
 		}
 		if allowed, present := s.platform[prop.Name]; !present {
 			return nil, status.Errorf(codes.InvalidArgument, "Unsupported platform property %s", prop.Name)
-		} else if !contains(allowed, prop.Value) {
+		} else if !slices.Contains(allowed, prop.Value) {
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid platform property value %s, must be one of: %s", prop.Name, strings.Join(allowed, ", "))
 		} else {
 			log.Debug("Valid platform property %s: %s (from %s)", prop.Name, prop.Value, allowed)
 		}
 	}
 	return m, nil
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, straw := range haystack {
-		if straw == needle {
-			return true
-		}
-	}
-	return false
 }
 
 // A job represents a single execution request.

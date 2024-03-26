@@ -4,17 +4,21 @@ package(default_visibility = ["PUBLIC"])
 
 go_toolchain(
     name = "toolchain",
-    version = "1.21.5",
+    version = "1.22.1",
+    install_std = False,
 )
 
-go_system_toolchain(
-    name = "system_toolchain",
-    tags = ["osusergo"],
+go_stdlib(
+    name = "std",
+    tags = [
+        "netgo",
+        "osusergo",
+    ],
 )
 
 go_repo(
     module = "github.com/thought-machine/http-admin",
-    version = "v1.1.0",
+    version = "v1.1.1",
 )
 
 go_repo(
