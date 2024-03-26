@@ -385,12 +385,15 @@ func (s *server) WaitExecution(req *pb.WaitExecutionRequest, stream pb.Execution
 
 // streamEvents streams a series of events back to the client.
 func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operation, stream pb.Execution_ExecuteServer) error {
+	defer s.stopStream(digest, ch)
 	for op := range ch {
 		op.Name = digest.Hash
 		if err := stream.Send(op); err != nil {
 			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
-			s.stopStream(digest, ch)
 			return err
+		}
+		if op.Done {
+			break
 		}
 	}
 	log.Debug("Completed stream for %s", digest.Hash)
@@ -443,8 +446,6 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 	// be no further update and no point for the receiver to keep waiting).
 	if created || j.Current == nil || !j.Done {
 		j.Streams = append(j.Streams, ch)
-	} else {
-		close(ch)
 	}
 	return ch, created
 }
@@ -546,22 +547,13 @@ func (s *server) process(msg *pubsub.Message) {
 		j.Current = op
 		j.LastUpdate = time.Now()
 		for _, stream := range j.Streams {
-			// Invoke this in a goroutine so we do not block.
-			go func(ch chan<- *longrunning.Operation) {
-				defer func() {
-					recover() // Avoid any chance of panicking from a 'send on closed channel'
-				}()
-				log.Debug("Dispatching update for %s", key)
-				ch <- &longrunning.Operation{
-					Name:     op.Name,
-					Metadata: op.Metadata,
-					Done:     op.Done,
-					Result:   op.Result,
-				}
-				if op.Done {
-					close(ch)
-				}
-			}(stream)
+			log.Debug("Dispatching update for %s", key)
+			stream <- &longrunning.Operation{
+				Name:     op.Name,
+				Metadata: op.Metadata,
+				Done:     op.Done,
+				Result:   op.Result,
+			}
 		}
 		if op.Done {
 			if !j.StartTime.IsZero() {
