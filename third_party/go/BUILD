@@ -145,7 +145,7 @@ go_repo(
     name = "golang-protobuf",
     install = ["..."],
     module = "google.golang.org/protobuf",
-    version = "v1.32.0",
+    version = "v1.33.0",
 )
 
 go_repo(
