@@ -324,28 +324,36 @@ type monitoredRedisClient struct {
 
 func (c *monitoredRedisClient) MGet(ctx context.Context, keys ...string) *redis.SliceCmd {
 	start := time.Now()
-	defer redisLatency.WithLabelValues("MGET").
-		Observe(float64(time.Since(start).Milliseconds()))
+	defer func() {
+		redisLatency.WithLabelValues("MGET").
+			Observe(float64(time.Since(start).Milliseconds()))
+	}()
 	return c.redisClient.MGet(ctx, keys...)
 }
 
 func (c *monitoredRedisClient) Get(ctx context.Context, key string) *redis.StringCmd {
 	start := time.Now()
-	defer redisLatency.WithLabelValues("GET").
-		Observe(float64(time.Since(start).Milliseconds()))
+	defer func() {
+		redisLatency.WithLabelValues("GET").
+			Observe(float64(time.Since(start).Milliseconds()))
+	}()
 	return c.redisClient.Get(ctx, key)
 }
 
 func (c *monitoredRedisClient) MSet(ctx context.Context, pairs ...interface{}) *redis.StatusCmd {
 	start := time.Now()
-	defer redisLatency.WithLabelValues("MSET").
-		Observe(float64(time.Since(start).Milliseconds()))
+	defer func() {
+		redisLatency.WithLabelValues("MSET").
+			Observe(float64(time.Since(start).Milliseconds()))
+	}()
 	return c.redisClient.MSet(ctx, pairs...)
 }
 
 func (c *monitoredRedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd {
 	start := time.Now()
-	defer redisLatency.WithLabelValues("SET").
-		Observe(float64(time.Since(start).Milliseconds()))
+	defer func() {
+		redisLatency.WithLabelValues("SET").
+			Observe(float64(time.Since(start).Milliseconds()))
+	}()
 	return c.redisClient.Set(ctx, key, value, expiration)
 }
