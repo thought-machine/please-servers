@@ -1,3 +1,7 @@
+Version 11.9.4
+--------------
+    * Add metrics to measure latency with redis in mettle workers.
+
 Version 11.9.3
 --------------
     * Avoid some cases of potential reordering of streamed events
