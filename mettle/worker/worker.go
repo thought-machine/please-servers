@@ -133,6 +133,7 @@ var metrics = []prometheus.Collector{
 	redisHits,
 	redisMisses,
 	redisBytesRead,
+	redisLatency,
 	packsDownloaded,
 	packBytesRead,
 	collectOutputErrors,
