@@ -35,6 +35,8 @@ type RedisOpts struct {
 	ReadURL      string `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
 	Password     string `long:"password" description:"AUTH password"`
 	PasswordFile string `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
+	PoolSize     int    `long:"pool_size" env:"REDIS_POOL_SIZE" default:"10" description:"Size of connection pool on primary redis client"`
+	ReadPoolSize int    `long:"read_pool_size" env:"REDIS_READ_POOL_SIZE" default:"10" description:"Size of connection pool on reading redis client"`
 	CAFile       string `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
 	TLS          bool   `long:"tls" description:"Use TLS for connecting to Redis"`
 }
@@ -233,12 +235,14 @@ func (r RedisOpts) Clients() (primary, read *redis.Client) {
 		Addr:      r.URL,
 		Password:  password,
 		TLSConfig: tlsConfig,
+		PoolSize:  r.PoolSize,
 	})
 	if r.ReadURL != "" {
 		read = redis.NewClient(&redis.Options{
 			Addr:      r.ReadURL,
 			Password:  password,
 			TLSConfig: tlsConfig,
+			PoolSize:  r.ReadPoolSize,
 		})
 	} else {
 		read = primary
