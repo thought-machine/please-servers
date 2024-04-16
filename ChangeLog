@@ -1,3 +1,7 @@
+Version 11.9.5
+--------------
+    * Register new redis_latency_ms metrics so it can be scraped.
+
 Version 11.9.4
 --------------
     * Add metrics to measure latency with redis in mettle workers.
