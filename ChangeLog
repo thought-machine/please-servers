@@ -1,3 +1,7 @@
+Version 11.9.7
+--------------
+    * Do not use redis clients when no URL is provided.
+
 Version 11.9.6
 --------------
     * Refactor of redis client initialisation so it's easier to add new
