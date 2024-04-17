@@ -2,6 +2,8 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"runtime"
@@ -9,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/peterebden/go-cli-init/v4/flags"
 	"github.com/peterebden/go-cli-init/v4/logging"
 
@@ -32,6 +35,8 @@ type RedisOpts struct {
 	ReadURL      string `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
 	Password     string `long:"password" description:"AUTH password"`
 	PasswordFile string `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
+	PoolSize     int    `long:"pool_size" env:"REDIS_POOL_SIZE" default:"10" description:"Size of connection pool on primary redis client"`
+	ReadPoolSize int    `long:"read_pool_size" env:"REDIS_READ_POOL_SIZE" default:"10" description:"Size of connection pool on reading redis client"`
 	CAFile       string `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
 	TLS          bool   `long:"tls" description:"Use TLS for connecting to Redis"`
 }
@@ -170,6 +175,7 @@ func main() {
 			NumPollers:            1,
 			SubscriptionBatchSize: 100,
 		}
+		primaryRedis, readRedis := opts.Dual.Redis.Clients()
 
 		// Must ensure the topics are created ahead of time.
 		common.MustOpenTopic(requests)
@@ -179,11 +185,12 @@ func main() {
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
-			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, opts.Dual.Redis.URL, opts.Dual.Redis.ReadURL, opts.Dual.Redis.ReadPassword(), opts.Dual.Redis.CAFile, opts.Dual.Redis.TLS, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0, opts.Worker.ImmediateShutdown)
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, primaryRedis, readRedis, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0, opts.Worker.ImmediateShutdown)
 		}
 		api.ServeForever(opts.Dual.GRPC, "", queues, "", false, opts.Dual.AllowedPlatform, opts.Dual.Storage.Storage[0], opts.Dual.Storage.TLS)
 	} else if cmd == "worker" {
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, opts.Worker.Redis.URL, opts.Worker.Redis.ReadURL, opts.Worker.Redis.ReadPassword(), opts.Worker.Redis.CAFile, opts.Worker.Redis.TLS, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension), opts.Worker.ImmediateShutdown)
+		primaryRedis, readRedis := opts.Worker.Redis.Clients()
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, primaryRedis, readRedis, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension), opts.Worker.ImmediateShutdown)
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues, opts.API.API.URL, opts.API.API.TLS, opts.API.AllowedPlatform, opts.API.Storage.Storage, opts.API.Storage.TLS)
 	} else if err := one(); err != nil {
@@ -211,12 +218,36 @@ func one() error {
 		defer f.Close()
 		defer pprof.WriteHeapProfile(f)
 	}
+	primaryRedis, readRedis := opts.One.Redis.Clients()
 	for _, action := range opts.One.Args.Actions {
-		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.AltSandbox, opts.One.Storage.TokenFile, opts.One.Redis.URL, opts.One.Redis.ReadURL, opts.One.Redis.ReadPassword(), opts.One.Redis.CAFile, opts.One.Redis.TLS, opts.One.Cache.Prefix, opts.One.Cache.Part, false, opts.One.Storage.TLS, action.ToProto()); err != nil {
+		if err := worker.RunOne(opts.InstanceName, "mettle-one", opts.One.Storage.Storage, opts.One.Dir, opts.One.Cache.Dir, opts.One.Sandbox, opts.One.AltSandbox, opts.One.Storage.TokenFile, primaryRedis, readRedis, opts.One.Cache.Prefix, opts.One.Cache.Part, false, opts.One.Storage.TLS, action.ToProto()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (r RedisOpts) Clients() (primary, read *redis.Client) {
+	password := r.ReadPassword()
+	tlsConfig := r.ReadTLSConfig()
+
+	primary = redis.NewClient(&redis.Options{
+		Addr:      r.URL,
+		Password:  password,
+		TLSConfig: tlsConfig,
+		PoolSize:  r.PoolSize,
+	})
+	if r.ReadURL != "" {
+		read = redis.NewClient(&redis.Options{
+			Addr:      r.ReadURL,
+			Password:  password,
+			TLSConfig: tlsConfig,
+			PoolSize:  r.ReadPoolSize,
+		})
+	} else {
+		read = primary
+	}
+	return
 }
 
 func (r RedisOpts) ReadPassword() string {
@@ -230,4 +261,19 @@ func (r RedisOpts) ReadPassword() string {
 		log.Fatalf("Failed to read Redis password file: %s", err)
 	}
 	return strings.TrimSpace(string(b))
+}
+
+func (r RedisOpts) ReadTLSConfig() *tls.Config {
+	if !r.TLS {
+		return nil
+	}
+	caCert, err := os.ReadFile(r.CAFile)
+	if err != nil {
+		log.Fatalf("Failed to read CA file at %s or load TLS config for Redis: %v", r.CAFile, err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+	return &tls.Config{
+		RootCAs: caCertPool,
+	}
 }

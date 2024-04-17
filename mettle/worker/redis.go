@@ -2,8 +2,6 @@ package worker
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"os"
 	"time"
 
@@ -36,48 +34,19 @@ var redisLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   []float64{20, 50, 100, 200, 500, 1000, 2000, 5000, 10000},
 }, []string{"command"})
 
-func getTLSConfig(caFile string) (*tls.Config, error) {
-	caCert, err := os.ReadFile(caFile)
-	if err != nil {
-		return &tls.Config{}, err
-	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-	return &tls.Config{
-		RootCAs: caCertPool,
-	}, nil
-}
-
 // newRedisClient augments an existing elan.Client with a Redis connection.
 // All usage of Redis is best-effort only.
-// If readURL is set, all reads will happen on this URL. If not, everything
-// will go to url.
-func newRedisClient(client elan.Client, url, readURL, password, caFile string, useTLS bool) elan.Client {
-	primaryOpts := &redis.Options{
-		Addr:     url,
-		Password: password,
-	}
-	readOpts := &redis.Options{
-		Addr:     readURL,
-		Password: password,
-	}
-	if useTLS {
-		tlsConfig, err := getTLSConfig(caFile)
-		if err != nil {
-			log.Fatalf("Failed to read CA file at %s or load TLS config for Redis: %s", caFile, err)
-		}
-		primaryOpts.TLSConfig = tlsConfig
-		readOpts.TLSConfig = tlsConfig
-	}
-	primaryClient := redis.NewClient(primaryOpts)
-	readClient := primaryClient
-	if readURL != "" {
-		readClient = redis.NewClient(readOpts)
+// If readRedis is set, all reads will happen on this client. If not, everything
+// will go to the primary client.
+func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client) elan.Client {
+	// This is a safeguard in case the caller does not pass readRedis.
+	if readRedis == nil {
+		readRedis = primaryRedis
 	}
 	return &elanRedisWrapper{
 		elan:      client,
-		redis:     &monitoredRedisClient{primaryClient},
-		readRedis: &monitoredRedisClient{readClient},
+		redis:     &monitoredRedisClient{primaryRedis},
+		readRedis: &monitoredRedisClient{readRedis},
 		timeout:   1 * time.Second,
 		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
 		limiter:   rate.NewLimiter(rate.Every(time.Second*10), 10),
