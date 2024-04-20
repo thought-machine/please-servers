@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"io/ioutil"
 	"net"
@@ -240,6 +241,16 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 }
 
 func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (*pb.ActionResult, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	callers := md.Get("mettle-caller-name")
+
+	caller := ""
+	if len(callers) > 0 && callers[0] != "" {
+		caller = callers[0]
+	} else {
+		// Be paranoid and assume that a client may not have updated, and set the caller to the instance name
+		caller = req.InstanceName
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ar := &pb.ActionResult{}
@@ -256,7 +267,8 @@ func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultReq
 			ar.StdoutRaw = b
 		}
 	}
-	if s.isFileStorage && req.InstanceName != "purity-gc" {
+
+	if s.isFileStorage && caller != "purity-gc" {
 		now := time.Now()
 		if err := os.Chtimes(path.Join(s.storageRoot, s.key("ac", req.ActionDigest)), now, now); err != nil {
 			log.Warning("Failed to change times on file: %s", err)
