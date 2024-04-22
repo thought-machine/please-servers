@@ -1,3 +1,8 @@
+Version 11.9.9
+--------------
+    * Read from redis only blob size is below limit (and could be found in
+      Redis).
+
 Version 11.9.8
 --------------
     * Allow specifying redis timeout through flags/environment.
