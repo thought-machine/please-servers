@@ -230,6 +230,10 @@ func one() error {
 }
 
 func (r RedisOpts) Clients() (primary, read *redis.Client) {
+	if r.URL == "" {
+		return nil, nil
+	}
+
 	password := r.ReadPassword()
 	tlsConfig := r.ReadTLSConfig()
 
