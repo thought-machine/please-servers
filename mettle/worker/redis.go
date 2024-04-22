@@ -47,7 +47,6 @@ func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client) e
 		elan:      client,
 		redis:     &monitoredRedisClient{primaryRedis},
 		readRedis: &monitoredRedisClient{readRedis},
-		timeout:   1 * time.Second,
 		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
 		limiter:   rate.NewLimiter(rate.Every(time.Second*10), 10),
 	}
@@ -57,7 +56,6 @@ type elanRedisWrapper struct {
 	elan      elan.Client
 	redis     redisClient
 	readRedis redisClient
-	timeout   time.Duration
 	maxSize   int64
 	limiter   *rate.Limiter
 }
@@ -67,11 +65,8 @@ func (r *elanRedisWrapper) Healthcheck() error {
 }
 
 func (r *elanRedisWrapper) ReadBlob(dg *pb.Digest) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
 	if r.limiter.Tokens() >= 1.0 {
-		cmd := r.readRedis.Get(ctx, dg.Hash)
+		cmd := r.readRedis.Get(context.Background(), dg.Hash)
 		if err := cmd.Err(); err == nil {
 			blob, _ := cmd.Bytes()
 			return blob, nil
@@ -89,9 +84,7 @@ func (r *elanRedisWrapper) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	}
 	if dg.SizeBytes < r.maxSize {
 		go func(hash string) {
-			ctx, cancel = context.WithTimeout(context.Background(), r.timeout)
-			defer cancel()
-			if cmd := r.redis.Set(ctx, hash, blob, 0); cmd.Val() != "OK" {
+			if cmd := r.redis.Set(context.Background(), hash, blob, 0); cmd.Val() != "OK" {
 				log.Warning("Failed to set blob in Redis: %s", cmd.Err())
 			}
 		}(dg.Hash)
@@ -205,9 +198,7 @@ func (r *elanRedisWrapper) readBlobs(keys []string, metrics bool) [][]byte {
 		// Bail out immediately if Redis has exceeded error limit
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-	resp, err := r.readRedis.MGet(ctx, keys...).Result()
+	resp, err := r.readRedis.MGet(context.Background(), keys...).Result()
 	if err != nil {
 		log.Warning("Failed to check blobs in Redis: %s", err)
 		r.limiter.Reserve()
@@ -247,21 +238,14 @@ func (r *elanRedisWrapper) writeBlobs(uploads []interface{}) {
 		return
 	}
 	log.Debug("Writing %d blobs to Redis...", len(uploads)/2)
-	// we are not using the client timeout, as this will most likely take more than the default 10s
-	// plus this is not in the critical path, so it's not a big issue
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	if cmd := r.redis.MSet(ctx, uploads...); cmd.Val() != "OK" {
+	if cmd := r.redis.MSet(context.Background(), uploads...); cmd.Val() != "OK" {
 		log.Warning("Failed to upload %d blobs to Redis: %s", len(uploads), cmd.Err())
 	}
 	log.Debug("Wrote %d blobs to Redis...", len(uploads)/2)
 }
 
 func (r *elanRedisWrapper) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-	blob, err := r.readRedis.Get(ctx, dg.Hash).Bytes()
+	blob, err := r.readRedis.Get(context.Background(), dg.Hash).Bytes()
 	if err != nil {
 		if err != redis.Nil { // Not found.
 			log.Warning("Error reading blob from Redis: %s", err)
