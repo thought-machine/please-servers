@@ -113,8 +113,8 @@ func (r *elanRedisWrapper) UploadIfMissing(entries []*uploadinfo.Entry, compress
 	entriesByHash := make(map[string]*uploadinfo.Entry, len(entries))
 	// Unfortunately there is no MEXISTS, so we reuse MGET but chuck away the values.
 	// We could also do lots of EXISTS in parallel but this seems simpler...
-	for i, entry := range entries {
-		if entry.Digest.SizeBytes < r.maxSize {
+	for _, entry := range entries {
+		if entry.Digest.Size < r.maxSize {
 			keys = append(keys, entry.Digest.Hash)
 		} else {
 			missing = append(missing, entry)
@@ -165,10 +165,10 @@ func (r *elanRedisWrapper) BatchDownload(dgs []digest.Digest) (map[digest.Digest
 	keys := make([]string, 0, len(dgs))
 	missingDigests := make([]digest.Digest, 0, len(dgs))
 	for _, dg := range dgs {
-		if dg.SizeBytes < r.maxSize {
+		if dg.Size < r.maxSize {
 			keys = append(keys, dg.Hash)
 		} else {
-			missingDigests = append(missingDigests, dg.Hash)
+			missingDigests = append(missingDigests, dg)
 		}
 	}
 	blobs := r.readBlobs(keys, true)
@@ -257,7 +257,7 @@ func (r *elanRedisWrapper) writeBlobs(uploads []interface{}) {
 }
 
 func (r *elanRedisWrapper) ReadToFile(dg digest.Digest, filename string, compressed bool) error {
-	if dg.SizeBytes < r.maxSize {
+	if dg.Size < r.maxSize {
 		blob, err := r.readRedis.Get(context.Background(), dg.Hash).Bytes()
 		if err != nil {
 			if err != redis.Nil { // Not found.
