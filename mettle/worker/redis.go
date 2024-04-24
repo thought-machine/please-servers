@@ -163,6 +163,7 @@ func (r *elanRedisWrapper) UploadIfMissing(entries []*uploadinfo.Entry, compress
 func (r *elanRedisWrapper) BatchDownload(dgs []digest.Digest) (map[digest.Digest][]byte, error) {
 	log.Debug("Checking Redis for batch of %d files...", len(dgs))
 	keys := make([]string, 0, len(dgs))
+	dgsByHash := make(map[string]digest.Digest, len(dgs))
 	missingDigests := make([]digest.Digest, 0, len(dgs))
 	for _, dg := range dgs {
 		if dg.Size < r.maxSize {
@@ -170,6 +171,7 @@ func (r *elanRedisWrapper) BatchDownload(dgs []digest.Digest) (map[digest.Digest
 		} else {
 			missingDigests = append(missingDigests, dg)
 		}
+		dgsByHash[dg.Hash] = dg
 	}
 	blobs := r.readBlobs(keys, true)
 	if blobs == nil {
@@ -178,9 +180,9 @@ func (r *elanRedisWrapper) BatchDownload(dgs []digest.Digest) (map[digest.Digest
 	ret := make(map[digest.Digest][]byte, len(dgs))
 	for i, blob := range blobs {
 		if blob == nil {
-			missingDigests = append(missingDigests, dgs[i])
+			missingDigests = append(missingDigests, dgsByHash[keys[i]])
 		} else {
-			ret[dgs[i]] = blob
+			ret[dgsByHash[keys[i]]] = blob
 		}
 	}
 	if len(missingDigests) == 0 {
