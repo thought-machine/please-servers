@@ -31,16 +31,18 @@ type StorageOpts struct {
 }
 
 type RedisOpts struct {
-	URL          string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
-	ReadURL      string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
-	Password     string         `long:"password" description:"AUTH password"`
-	PasswordFile string         `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
-	PoolSize     int            `long:"pool_size" env:"REDIS_POOL_SIZE" default:"10" description:"Size of connection pool on primary redis client"`
-	ReadPoolSize int            `long:"read_pool_size" env:"REDIS_READ_POOL_SIZE" default:"10" description:"Size of connection pool on reading redis client"`
-	ReadTimeout  flags.Duration `long:"read_timeout" env:"REDIS_READ_TIMEOUT" default:"1s" description:"Timeout on network read (not read commands)"`
-	WriteTimeout flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
-	CAFile       string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
-	TLS          bool           `long:"tls" description:"Use TLS for connecting to Redis"`
+	URL             string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
+	ReadURL         string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
+	Password        string         `long:"password" description:"AUTH password"`
+	PasswordFile    string         `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
+	PoolSize        int            `long:"pool_size" env:"REDIS_POOL_SIZE" default:"10" description:"Size of connection pool on primary redis client"`
+	ReadPoolSize    int            `long:"read_pool_size" env:"REDIS_READ_POOL_SIZE" default:"10" description:"Size of connection pool on reading redis client"`
+	PoolTimeout     flags.Duration `long:"pool_timeout" env:"REDIS_POOL_TIMEOUT" default:"5s" description:"Timeout waiting for free connection to primary redis"`
+	ReadPoolTimeout flags.Duration `long:"read_pool_timeout" env:"REDIS_READ_POOL_TIMEOUT" default:"5s" description:"Timeout waiting for free connection to read replicas"`
+	ReadTimeout     flags.Duration `long:"read_timeout" env:"REDIS_READ_TIMEOUT" default:"1s" description:"Timeout on network read (not read commands)"`
+	WriteTimeout    flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
+	CAFile          string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
+	TLS             bool           `long:"tls" description:"Use TLS for connecting to Redis"`
 }
 
 type CacheOpts struct {
@@ -244,6 +246,7 @@ func (r RedisOpts) Clients() (primary, read *redis.Client) {
 		PoolSize:     r.PoolSize,
 		ReadTimeout:  time.Duration(r.ReadTimeout),
 		WriteTimeout: time.Duration(r.WriteTimeout),
+		PoolTimeout:  time.Duration(r.PoolTimeout),
 	})
 	if r.ReadURL != "" {
 		read = redis.NewClient(&redis.Options{
@@ -253,6 +256,7 @@ func (r RedisOpts) Clients() (primary, read *redis.Client) {
 			PoolSize:     r.ReadPoolSize,
 			ReadTimeout:  time.Duration(r.ReadTimeout),
 			WriteTimeout: time.Duration(r.WriteTimeout),
+			PoolTimeout:  time.Duration(r.ReadPoolTimeout),
 		})
 	} else {
 		read = primary
