@@ -1,3 +1,7 @@
+Version 11.9.11
+--------------
+    * Allow setting pool timeout on redis client.
+
 Version 11.9.10
 --------------
     * Fix BatchRead that returns the wrong number of blobs.
