@@ -196,7 +196,9 @@ func (r *elanRedisWrapper) BatchDownload(dgs []digest.Digest) (map[digest.Digest
 	uploads := make([]interface{}, 0, 2*len(m))
 	for k, v := range m {
 		ret[k] = v
-		uploads = append(uploads, k.Hash, v)
+		if k.Size < r.maxSize {
+			uploads = append(uploads, k.Hash, v)
+		}
 	}
 	go r.writeBlobs(uploads)
 	return ret, nil
