@@ -1,3 +1,10 @@
+Version 11.10.0
+--------------
+    * Move redis flags to a common package.
+    * Implement redis.Limiter and use that with the redis clients.
+    * Allow setting redis MaxSize in flags/environment.
+    * Make elan read from redis.
+
 Version 11.9.12
 --------------
     * Make BatchDownload honour maxSize when uploading to redis.
