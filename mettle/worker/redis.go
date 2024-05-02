@@ -5,8 +5,6 @@ import (
 	"os"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/digest"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
@@ -14,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	elan "github.com/thought-machine/please-servers/elan/rpc"
+	rediscommon "github.com/thought-machine/please-servers/redis"
 )
 
 var redisHits = prometheus.NewCounter(prometheus.CounterOpts{
@@ -38,17 +37,19 @@ var redisLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 // All usage of Redis is best-effort only.
 // If readRedis is set, all reads will happen on this client. If not, everything
 // will go to the primary client.
-func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client) elan.Client {
+func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client, maxSize int64) elan.Client {
 	// This is a safeguard in case the caller does not pass readRedis.
 	if readRedis == nil {
 		readRedis = primaryRedis
+	}
+	if maxSize <= 0 {
+		maxSize = rediscommon.DefaultMaxSize
 	}
 	return &elanRedisWrapper{
 		elan:      client,
 		redis:     &monitoredRedisClient{primaryRedis},
 		readRedis: &monitoredRedisClient{readRedis},
-		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
-		limiter:   rate.NewLimiter(rate.Every(time.Second*10), 10),
+		maxSize:   maxSize,
 	}
 }
 
@@ -57,7 +58,6 @@ type elanRedisWrapper struct {
 	redis     redisClient
 	readRedis redisClient
 	maxSize   int64
-	limiter   *rate.Limiter
 }
 
 func (r *elanRedisWrapper) Healthcheck() error {
@@ -66,17 +66,12 @@ func (r *elanRedisWrapper) Healthcheck() error {
 
 func (r *elanRedisWrapper) ReadBlob(dg *pb.Digest) ([]byte, error) {
 	if dg.SizeBytes < r.maxSize {
-		if r.limiter.Tokens() >= 1.0 {
-			cmd := r.readRedis.Get(context.Background(), dg.Hash)
-			if err := cmd.Err(); err == nil {
-				blob, _ := cmd.Bytes()
-				return blob, nil
-			} else if err != redis.Nil {
-				log.Warningf("Failed to read blob from Redis: %s", err)
-				r.limiter.Reserve()
-			}
-		} else {
-			log.Warningf("limiter error rate exceeded, skipping Redis lookup")
+		cmd := r.readRedis.Get(context.Background(), dg.Hash)
+		if err := cmd.Err(); err == nil {
+			blob, _ := cmd.Bytes()
+			return blob, nil
+		} else if err != redis.Nil {
+			log.Warningf("Failed to read blob from Redis: %s", err)
 		}
 	}
 	// If we get here, the blob didn't exist. Download it then write back to Redis.
@@ -210,14 +205,9 @@ func (r *elanRedisWrapper) readBlobs(keys []string, metrics bool) [][]byte {
 	if len(keys) == 0 {
 		return nil
 	}
-	if r.limiter.Tokens() < 1.0 {
-		// Bail out immediately if Redis has exceeded error limit
-		return nil
-	}
 	resp, err := r.readRedis.MGet(context.Background(), keys...).Result()
 	if err != nil {
 		log.Warning("Failed to check blobs in Redis: %s", err)
-		r.limiter.Reserve()
 		return nil
 	} else if len(resp) != len(keys) {
 		log.Warning("Length mismatch in Redis response; got %d, expected %d", len(resp), len(keys))

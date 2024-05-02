@@ -7,6 +7,7 @@ go_binary(
         "//cli",
         "//elan/rpc",
         "//grpcutil",
+        "//redis",
     ],
 )
 

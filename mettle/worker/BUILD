@@ -33,6 +33,7 @@ go_library(
         "//grpcutil",
         "//mettle/common",
         "//proto/lucidity",
+        "//redis",
         "//rexclient",
         "//third_party/go:golang-protobuf",
         "//third_party/go:grpc",

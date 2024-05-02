@@ -7,6 +7,7 @@ import (
 	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/elan/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
+	"github.com/thought-machine/please-servers/redis"
 )
 
 var opts = struct {
@@ -18,6 +19,7 @@ var opts = struct {
 	DirCacheSize       int64           `long:"dir_cache_size" default:"10240" description:"Number of directory entries to cache for GetTree"`
 	KnownBlobCacheSize flags.ByteSize  `long:"known_blob_cache_size" description:"Max size of known blob cache (in approximate bytes)"`
 	Admin              cli.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
+	Redis              redis.Opts      `group:"Options controlling connection to Redis" namespace:"redis"`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
@@ -33,6 +35,7 @@ modes are intended for testing only.
 
 func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
+	_, readRedis := opts.Redis.Clients()
 	go cli.ServeAdmin("elan", opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize))
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), readRedis, opts.Redis.MaxSize)
 }

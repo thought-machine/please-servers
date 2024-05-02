@@ -49,7 +49,7 @@ func (e *elanClient) WriteBlob(b []byte) (*pb.Digest, error) {
 	key := e.s.compressedKey("cas", dg, compressed)
 	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
 	defer cancel()
-	if e.s.blobExists(ctx, key) {
+	if e.s.blobExists(ctx, CASPrefix, dg, compressed, false) {
 		return dg, nil
 	}
 	err := e.s.bucket.WriteAll(ctx, key, b)
