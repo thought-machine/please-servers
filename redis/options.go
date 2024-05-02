@@ -17,12 +17,12 @@ import (
 // Redis.
 const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
 
-// Flags is a collection of flags used to set up a redis client.
+// Opts is a collection of options used to set up a redis client.
 // It supports single node redis as well as primary and read replicas.
 // NOTE: MaxSize is not used by the clients; it must be honoured in the logic
 // logic that calls the clients. This is just so we have a single place where
 // this option is defined.
-type Flags struct {
+type Opts struct {
 	URL             string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
 	ReadURL         string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
 	Password        string         `long:"password" description:"AUTH password"`
@@ -44,7 +44,7 @@ type Flags struct {
 // At the moment, any error raised while initialising the clients (eg failed
 // to read TLS cert or password) will cause the program to exit.
 // If `URL` is empty, no client is returned. This might change in the future.
-func (r Flags) Clients() (primary, read *redis.Client) {
+func (r Opts) Clients() (primary, read *redis.Client) {
 	if r.URL == "" {
 		return nil, nil
 	} else if r.MaxSize <= 0 {
@@ -82,7 +82,7 @@ func (r Flags) Clients() (primary, read *redis.Client) {
 	return
 }
 
-func (r Flags) readPassword() string {
+func (r Opts) readPassword() string {
 	if r.Password != "" {
 		return r.Password
 	} else if r.PasswordFile == "" {
@@ -95,7 +95,7 @@ func (r Flags) readPassword() string {
 	return strings.TrimSpace(string(b))
 }
 
-func (r Flags) readTLSConfig() *tls.Config {
+func (r Opts) readTLSConfig() *tls.Config {
 	if !r.TLS {
 		return nil
 	}

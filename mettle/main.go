@@ -65,7 +65,7 @@ var opts = struct {
 		ImmediateShutdown bool                    `long:"immediate_shutdown" description:"True if the worker should shut down immediately on a sigterm."`
 		Cache             CacheOpts               `group:"Options controlling caching" namespace:"cache"`
 		Storage           StorageOpts             `group:"Options controlling communication with the CAS server" namespace:"storage"`
-		Redis             redis.Flags             `group:"Options controlling connection to Redis" namespace:"redis"`
+		Redis             redis.Opts              `group:"Options controlling connection to Redis" namespace:"redis"`
 		Queues            struct {
 			RequestQueue  string         `short:"q" long:"request_queue" env:"WORKER_REQUEST_QUEUE" required:"true" description:"URL defining the pub/sub queue to connect to for sending requests, e.g. gcppubsub://my-request-queue"`
 			ResponseQueue string         `short:"r" long:"response_queue" required:"true" env:"WORKER_RESPONSE_QUEUE" description:"URL defining the pub/sub queue to connect to for sending responses, e.g. gcppubsub://my-response-queue"`
@@ -91,7 +91,7 @@ var opts = struct {
 			Storage []string `short:"s" long:"storage_url" required:"true" description:"URL to connect to the CAS server on, e.g. localhost:7878"`
 			TLS     bool     `long:"tls" description:"Use TLS for communication with the storage server"`
 		}
-		Redis           redis.Flags         `group:"Options controlling connection to Redis" namespace:"redis"`
+		Redis           redis.Opts          `group:"Options controlling connection to Redis" namespace:"redis"`
 		AllowedPlatform map[string][]string `long:"allowed_platform" description:"Allowed values for platform properties"`
 	} `command:"dual" description:"Start as both API server and worker. For local testing only."`
 	One struct {
@@ -106,7 +106,7 @@ var opts = struct {
 		MemProfile  string         `long:"mem_profile_file" hidden:"true" description:"Write a memory profile to this file"`
 		Cache       CacheOpts      `group:"Options controlling caching" namespace:"cache"`
 		Storage     StorageOpts    `group:"Options controlling communication with the CAS server"`
-		Redis       redis.Flags    `group:"Options controlling connection to Redis" namespace:"redis"`
+		Redis       redis.Opts     `group:"Options controlling connection to Redis" namespace:"redis"`
 	} `command:"one" description:"Executes a single build action, identified by its action digest."`
 	Admin cli.AdminOpts `group:"Options controlling HTTP admin server" namespace:"admin"`
 }{

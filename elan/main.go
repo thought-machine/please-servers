@@ -19,7 +19,7 @@ var opts = struct {
 	DirCacheSize       int64           `long:"dir_cache_size" default:"10240" description:"Number of directory entries to cache for GetTree"`
 	KnownBlobCacheSize flags.ByteSize  `long:"known_blob_cache_size" description:"Max size of known blob cache (in approximate bytes)"`
 	Admin              cli.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
-	Redis              redis.Flags     `group:"Options controlling connection to Redis" namespace:"redis"`
+	Redis              redis.Opts      `group:"Options controlling connection to Redis" namespace:"redis"`
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
