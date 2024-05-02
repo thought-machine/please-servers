@@ -16,6 +16,7 @@ go_library(
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/execution/v2",
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/semver",
         "///third_party/go/github.com_dgraph-io_ristretto//:ristretto",
+        "///third_party/go/github.com_go-redis_redis_v8//:v8",
         "///third_party/go/github.com_golang_protobuf//proto",
         "///third_party/go/github.com_hashicorp_go-multierror//:go-multierror",
         "///third_party/go/github.com_klauspost_compress//zstd",

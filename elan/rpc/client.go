@@ -19,7 +19,7 @@ func New(url string, tls bool, tokenFile string) (Client, error) {
 	// We can't use url.Parse here because it tends to put too much into the scheme (e.g. example.org:8080 -> scheme:example.org)
 	if strings.Contains(url, "://") {
 		return &elanClient{
-			s:       createServer(url, 8, 10240, 10*1024*1024),
+			s:       createServer(url, 8, 10240, 10*1024*1024, nil, 0),
 			timeout: 3 * time.Minute,
 		}, nil
 	}

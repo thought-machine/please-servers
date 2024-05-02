@@ -30,6 +30,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/bazelbuild/remote-apis/build/bazel/semver"
 	"github.com/dgraph-io/ristretto"
+	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-multierror"
 	"github.com/klauspost/compress/zstd"
@@ -51,6 +52,8 @@ import (
 )
 
 const timeout = 2 * time.Minute
+
+const CASPrefix = "cas"
 
 var log = logging.MustGetLogger()
 
@@ -143,12 +146,12 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) {
-	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) {
+	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, redisMaxSize)
 	grpcutil.ServeForever(lis, s)
 }
 
-func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) *server {
+func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	return &server{
@@ -161,11 +164,13 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 		knownBlobCache: mustCache(maxKnownBlobCacheSize),
 		compressor:     enc,
 		decompressor:   dec,
+		readRedis:      readRedis,
+		redisMaxSize:   redisMaxSize,
 	}
 }
 
-func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64) (net.Listener, *grpc.Server) {
-	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize)
+func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) (net.Listener, *grpc.Server) {
+	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, redisMaxSize)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
@@ -200,6 +205,8 @@ type server struct {
 	dirCache, knownBlobCache *ristretto.Cache
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
+	readRedis                *redis.Client
+	redisMaxSize             int64
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -299,7 +306,7 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 			continue // Ignore the empty blob.
 		}
 		go func(d *pb.Digest) {
-			if !s.blobExists(ctx, s.key("cas", d)) && !s.blobExists(ctx, s.compressedKey("cas", d, true)) {
+			if !s.blobExists(ctx, "cas", d, false, true) && !s.blobExists(ctx, "cas", d, true, false) {
 				mutex.Lock()
 				resp.MissingBlobDigests = append(resp.MissingBlobDigests, d)
 				mutex.Unlock()
@@ -312,7 +319,17 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 }
 
 // blobExists returns true if this blob exists in the underlying storage.
-func (s *server) blobExists(ctx context.Context, key string) bool {
+func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Digest, compressed, redis bool) bool {
+	if redis && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+		exists, err := s.readRedis.Exists(ctx, digest.Hash).Result()
+		if err != nil {
+			log.Warningf("Failed to check blob in Redis: %v", err)
+		} else if exists > 0 {
+			return true
+		}
+	}
+
+	key := s.compressedKey(prefix, digest, compressed)
 	if s.knownBlobCache != nil {
 		if _, present := s.knownBlobCache.Get(key); present {
 			knownBlobCacheHits.Inc()
@@ -371,7 +388,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				rr.Status.Code = int32(codes.InvalidArgument)
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 				blobSizeMismatches.Inc()
-			} else if s.blobExists(ctx, s.compressedKey("cas", r.Digest, compressed)) {
+			} else if s.blobExists(ctx, "cas", r.Digest, compressed, true) {
 				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
 				log.Errorf("Error writing blob %s: %s", r.Digest, err)
@@ -506,6 +523,20 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	if s.isEmpty(digest) {
 		return ioutil.NopCloser(bytes.NewReader(nil)), compressed, nil
 	}
+	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+		// NOTE: we could use GETRANGE here, but given it's a bit more expensive on the redis
+		// side and redisMaxSize is quite small, we get the whole blob
+		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
+		if err != nil {
+			log.Warningf("Failed to get blob in Redis: %v", err)
+		} else if blob != nil && limit == 0 {
+			return ioutil.NopCloser(bytes.NewReader(nil)), false, nil
+		} else if blob != nil && limit > 0 {
+			return io.NopCloser(bytes.NewReader(blob[offset : offset+limit])), false, nil
+		} else if blob != nil && limit < 0 {
+			return io.NopCloser(bytes.NewReader(blob[offset:])), false, nil
+		}
+	}
 	r, err := s.readBlob(ctx, s.compressedKey(prefix, digest, compressed), offset, limit)
 	if err == nil {
 		blobsServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed), compressorLabel(compressed)).Inc()
@@ -585,6 +616,16 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 	} else if s.isEmpty(digest) {
 		return nil, false, nil
 	}
+
+	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
+		if err != nil {
+			log.Warningf("Failed to get blob in Redis: %v", err)
+		} else if blob != nil {
+			return blob, false, nil
+		}
+	}
+
 	// TODO(peterebden): Is it worth trying to cache any knowledge of where to go first for blobs?
 	//                   Or just guessing based on blob size?
 	if allowCompression {
@@ -642,7 +683,7 @@ func (s *server) compressedKey(prefix string, digest *pb.Digest, compressed bool
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {
 	key := s.compressedKey(prefix, digest, compressed)
-	if s.isEmpty(digest) || s.blobExists(ctx, key) {
+	if s.isEmpty(digest) || s.blobExists(ctx, prefix, digest, compressed, true) {
 		// Read and discard entire content; there is no need to update.
 		// There seems to be no way for the server to signal the caller to abort in this way, so
 		// this seems like the most compatible way.
