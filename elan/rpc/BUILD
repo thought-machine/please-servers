@@ -35,6 +35,7 @@ go_library(
         "///third_party/go/google.golang.org_grpc//health/grpc_health_v1",
         "//grpcutil",
         "//proto/purity",
+        "//redis",
         "//rexclient",
         "//third_party/go:grpc",
     ],

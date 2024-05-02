@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	elan "github.com/thought-machine/please-servers/elan/rpc"
+	rediscommon "github.com/thought-machine/please-servers/redis"
 )
 
 var redisHits = prometheus.NewCounter(prometheus.CounterOpts{
@@ -42,7 +43,7 @@ func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client, m
 		readRedis = primaryRedis
 	}
 	if maxSize <= 0 {
-		maxSize = 200 * 1012 // 200 Kelly-Bootle standard units
+		maxSize = rediscommon.DefaultMaxSize
 	}
 	return &elanRedisWrapper{
 		elan:      client,

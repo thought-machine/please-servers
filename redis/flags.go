@@ -13,6 +13,10 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// DefaultMaxSize is the default max size of objects that can be indexed on
+// Redis.
+const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
+
 // Flags is a collection of flags used to set up a redis client.
 // It supports single node redis as well as primary and read replicas.
 // NOTE: MaxSize is not used by the clients; it must be honoured in the logic
