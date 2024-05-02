@@ -21,5 +21,6 @@ go_library(
     deps = [
         "///third_party/go/github.com_go-redis_redis_v8//:v8",
         "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
+        "///third_party/go/golang.org_x_time//rate",
     ],
 )

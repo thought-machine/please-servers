@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/peterebden/go-cli-init/v4/flags"
+	"golang.org/x/time/rate"
 )
 
 // Flags is a collection of flags used to set up a redis client.
@@ -42,6 +43,7 @@ func (r Flags) Clients() (primary, read *redis.Client) {
 
 	password := r.readPassword()
 	tlsConfig := r.readTLSConfig()
+	limiter := &Limiter{limiter: rate.NewLimiter(rate.Every(time.Second*10), 10)}
 
 	primary = redis.NewClient(&redis.Options{
 		Addr:         r.URL,
@@ -51,6 +53,7 @@ func (r Flags) Clients() (primary, read *redis.Client) {
 		ReadTimeout:  time.Duration(r.ReadTimeout),
 		WriteTimeout: time.Duration(r.WriteTimeout),
 		PoolTimeout:  time.Duration(r.PoolTimeout),
+		Limiter:      limiter,
 	})
 	if r.ReadURL != "" {
 		read = redis.NewClient(&redis.Options{
@@ -61,6 +64,7 @@ func (r Flags) Clients() (primary, read *redis.Client) {
 			ReadTimeout:  time.Duration(r.ReadTimeout),
 			WriteTimeout: time.Duration(r.WriteTimeout),
 			PoolTimeout:  time.Duration(r.ReadPoolTimeout),
+			Limiter:      limiter,
 		})
 	} else {
 		read = primary
