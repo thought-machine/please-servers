@@ -3,7 +3,6 @@ go_binary(
     srcs = ["main.go"],
     visibility = ["//package:all"],
     deps = [
-        "///third_party/go/github.com_go-redis_redis_v8//:v8",
         "///third_party/go/github.com_peterebden_go-cli-init_v4//flags",
         "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "//cli",
@@ -11,6 +10,7 @@ go_binary(
         "//mettle/api",
         "//mettle/common",
         "//mettle/worker",
+        "//redis",
     ],
 )
 
