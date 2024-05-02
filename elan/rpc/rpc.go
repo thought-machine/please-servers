@@ -154,6 +154,9 @@ func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCac
 func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	if redisMaxSize <= 0 {
+		redisMaxSize = 200 * 1012 // 200 Kelly-Bootle standard units
+	}
 	return &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
 		storageRoot:    strings.TrimPrefix(storage, "file://"),

@@ -15,6 +15,9 @@ import (
 
 // Flags is a collection of flags used to set up a redis client.
 // It supports single node redis as well as primary and read replicas.
+// NOTE: MaxSize is not used by the clients; it must be honoured in the logic
+// logic that calls the clients. This is just so we have a single place where
+// this option is defined.
 type Flags struct {
 	URL             string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
 	ReadURL         string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
@@ -28,17 +31,20 @@ type Flags struct {
 	WriteTimeout    flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
 	CAFile          string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
 	TLS             bool           `long:"tls" description:"Use TLS for connecting to Redis"`
+	MaxSize         int64          `long:"max_size" env:"REDIS_MAX_SIZE" default:"202400" description:"Max size of objects indexed on redis"` // default is 200 Kelly-Bootle standard units
 }
 
 // Clients sets up clients to both primary and read replicas. If no read URL
 // has been set up in the flags, it will return the primary as read client as
 // well, to save the caller from doing any unnecessary.
-// At the moment, any error raised while initialising the clients (ie failed
+// At the moment, any error raised while initialising the clients (eg failed
 // to read TLS cert or password) will cause the program to exit.
 // If `URL` is empty, no client is returned. This might change in the future.
 func (r Flags) Clients() (primary, read *redis.Client) {
 	if r.URL == "" {
 		return nil, nil
+	} else if r.MaxSize <= 0 {
+		log.Fatalf("Redis maxSize has been set to a value <=0: %d", r.MaxSize)
 	}
 
 	password := r.readPassword()

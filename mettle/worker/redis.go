@@ -36,16 +36,19 @@ var redisLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 // All usage of Redis is best-effort only.
 // If readRedis is set, all reads will happen on this client. If not, everything
 // will go to the primary client.
-func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client) elan.Client {
+func newRedisClient(client elan.Client, primaryRedis, readRedis *redis.Client, maxSize int64) elan.Client {
 	// This is a safeguard in case the caller does not pass readRedis.
 	if readRedis == nil {
 		readRedis = primaryRedis
+	}
+	if maxSize <= 0 {
+		maxSize = 200 * 1012 // 200 Kelly-Bootle standard units
 	}
 	return &elanRedisWrapper{
 		elan:      client,
 		redis:     &monitoredRedisClient{primaryRedis},
 		readRedis: &monitoredRedisClient{readRedis},
-		maxSize:   200 * 1012, // 200 Kelly-Bootle standard units
+		maxSize:   maxSize,
 	}
 }
 

@@ -37,5 +37,5 @@ func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
 	_, readRedis := opts.Redis.Clients()
 	go cli.ServeAdmin("elan", opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), readRedis, 200*1012) // 200 Kelly-Bootle standard units
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), readRedis, opts.Redis.MaxSize)
 }
