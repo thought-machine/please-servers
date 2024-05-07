@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"errors"
 
 	"github.com/go-redis/redis/v8"
@@ -24,7 +25,7 @@ func (l *Limiter) Allow() error {
 
 // ReportResult records any non-nil error against the rate limiter.
 func (l *Limiter) ReportResult(err error) {
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) && !errors.Is(err, context.Canceled) {
 		l.limiter.Reserve()
 	}
 }
