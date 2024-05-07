@@ -323,12 +323,12 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 }
 
 // blobExists returns true if this blob exists in the underlying storage.
-func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Digest, compressed, redis bool) bool {
-	if redis && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Digest, compressed, redisRequest bool) bool {
+	if redisRequest && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
 		exists, err := s.readRedis.Exists(ctx, digest.Hash).Result()
-		if err != nil {
+		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to check blob in Redis: %v", err)
-		} else if exists > 0 {
+		} else if err != redis.Nil && exists > 0 {
 			return true
 		}
 	}
@@ -531,13 +531,13 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 		// NOTE: we could use GETRANGE here, but given it's a bit more expensive on the redis
 		// side and redisMaxSize is quite small, we get the whole blob
 		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
-		if err != nil {
+		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to get blob in Redis: %v", err)
-		} else if blob != nil && limit == 0 {
+		} else if err != redis.Nil && blob != nil && limit == 0 {
 			return ioutil.NopCloser(bytes.NewReader(nil)), false, nil
-		} else if blob != nil && limit > 0 {
+		} else if err != redis.Nil && blob != nil && limit > 0 {
 			return io.NopCloser(bytes.NewReader(blob[offset : offset+limit])), false, nil
-		} else if blob != nil && limit < 0 {
+		} else if err != redis.Nil && blob != nil && limit < 0 {
 			return io.NopCloser(bytes.NewReader(blob[offset:])), false, nil
 		}
 	}
@@ -623,9 +623,9 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 
 	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
 		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
-		if err != nil {
+		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to get blob in Redis: %v", err)
-		} else if blob != nil {
+		} else if err != redis.Nil && blob != nil {
 			return blob, false, nil
 		}
 	}

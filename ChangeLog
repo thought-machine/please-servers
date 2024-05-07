@@ -1,3 +1,7 @@
+Version 11.10.1
+--------------
+    * Stop printing warnings when we get redis.Nil errors.
+
 Version 11.10.0
 --------------
     * Move redis flags to a common package.
