@@ -41,5 +41,3 @@ go_test(
         "///third_party/go/golang.org_x_time//rate",
     ],
 )
-
-
