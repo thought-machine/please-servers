@@ -23,19 +23,21 @@ const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
 // logic that calls the clients. This is just so we have a single place where
 // this option is defined.
 type Opts struct {
-	URL             string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
-	ReadURL         string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
-	Password        string         `long:"password" description:"AUTH password"`
-	PasswordFile    string         `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
-	PoolSize        int            `long:"pool_size" env:"REDIS_POOL_SIZE" default:"10" description:"Size of connection pool on primary redis client"`
-	ReadPoolSize    int            `long:"read_pool_size" env:"REDIS_READ_POOL_SIZE" default:"10" description:"Size of connection pool on reading redis client"`
-	PoolTimeout     flags.Duration `long:"pool_timeout" env:"REDIS_POOL_TIMEOUT" default:"5s" description:"Timeout waiting for free connection to primary redis"`
-	ReadPoolTimeout flags.Duration `long:"read_pool_timeout" env:"REDIS_READ_POOL_TIMEOUT" default:"5s" description:"Timeout waiting for free connection to read replicas"`
-	ReadTimeout     flags.Duration `long:"read_timeout" env:"REDIS_READ_TIMEOUT" default:"1s" description:"Timeout on network read (not read commands)"`
-	WriteTimeout    flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
-	CAFile          string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
-	TLS             bool           `long:"tls" description:"Use TLS for connecting to Redis"`
-	MaxSize         int64          `long:"max_size" env:"REDIS_MAX_SIZE" default:"202400" description:"Max size of objects indexed on redis"` // default is 200 Kelly-Bootle standard units
+	URL              string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
+	ReadURL          string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
+	Password         string         `long:"password" description:"AUTH password"`
+	PasswordFile     string         `long:"password_file" env:"REDIS_PASSWORD_FILE" description:"File containing AUTH password"`
+	PoolSize         int            `long:"pool_size" env:"REDIS_POOL_SIZE" default:"10" description:"Size of connection pool on primary redis client"`
+	ReadPoolSize     int            `long:"read_pool_size" env:"REDIS_READ_POOL_SIZE" default:"10" description:"Size of connection pool on reading redis client"`
+	MinIdleConns     int            `long:"min_idle_conns" env:"REDIS_MIN_IDLE_CONNS" default:"0" description:"Minimum number of idle connections to primary redis."`
+	ReadMinIdleConns int            `long:"read_min_idle_conns" env:"REDIS_READ_MIN_IDLE_CONNS" default:"0" description:"Minimum number of idle connections to read replicas."`
+	PoolTimeout      flags.Duration `long:"pool_timeout" env:"REDIS_POOL_TIMEOUT" default:"5s" description:"Timeout waiting for free connection to primary redis"`
+	ReadPoolTimeout  flags.Duration `long:"read_pool_timeout" env:"REDIS_READ_POOL_TIMEOUT" default:"5s" description:"Timeout waiting for free connection to read replicas"`
+	ReadTimeout      flags.Duration `long:"read_timeout" env:"REDIS_READ_TIMEOUT" default:"1s" description:"Timeout on network read (not read commands)"`
+	WriteTimeout     flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
+	CAFile           string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
+	TLS              bool           `long:"tls" description:"Use TLS for connecting to Redis"`
+	MaxSize          int64          `long:"max_size" env:"REDIS_MAX_SIZE" default:"202400" description:"Max size of objects indexed on redis"` // default is 200 Kelly-Bootle standard units
 }
 
 // Clients sets up clients to both primary and read replicas. If no read URL
@@ -63,6 +65,7 @@ func (r Opts) Clients() (primary, read *redis.Client) {
 		ReadTimeout:  time.Duration(r.ReadTimeout),
 		WriteTimeout: time.Duration(r.WriteTimeout),
 		PoolTimeout:  time.Duration(r.PoolTimeout),
+		MinIdleConns: r.MinIdleConns,
 		Limiter:      limiter,
 	})
 	if r.ReadURL != "" {
@@ -74,6 +77,7 @@ func (r Opts) Clients() (primary, read *redis.Client) {
 			ReadTimeout:  time.Duration(r.ReadTimeout),
 			WriteTimeout: time.Duration(r.WriteTimeout),
 			PoolTimeout:  time.Duration(r.ReadPoolTimeout),
+			MinIdleConns: r.ReadMinIdleConns,
 			Limiter:      limiter,
 		})
 	} else {
