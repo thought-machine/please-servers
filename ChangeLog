@@ -1,3 +1,8 @@
+Version 11.10.2
+--------------
+    * Add some tests to redis limiter.
+    * Dont take into account context canceled in limiter.
+
 Version 11.10.1
 --------------
     * Stop printing warnings when we get redis.Nil errors.
