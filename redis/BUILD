@@ -16,7 +16,10 @@ sh_cmd(
 
 go_library(
     name = "redis",
-    srcs = glob(["*.go"]),
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
     visibility = ["PUBLIC"],
     deps = [
         "///third_party/go/github.com_go-redis_redis_v8//:v8",
@@ -24,3 +27,19 @@ go_library(
         "///third_party/go/golang.org_x_time//rate",
     ],
 )
+
+go_test(
+    name = "redis_test",
+    srcs = glob(
+        ["*_test.go"],
+    ),
+    deps = [
+        ":redis",
+        "///third_party/go/github.com_go-redis_redis_v8//:v8",
+        "///third_party/go/github.com_stretchr_testify//assert",
+        "///third_party/go/github.com_stretchr_testify//require",
+        "///third_party/go/golang.org_x_time//rate",
+    ],
+)
+
+
