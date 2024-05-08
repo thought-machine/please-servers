@@ -32,6 +32,6 @@ func (l *Limiter) ReportResult(err error) {
 		!errors.Is(err, redis.Nil) &&
 		!errors.Is(err, ErrRateLimitReached) &&
 		!errors.Is(err, context.Canceled) {
-		l.limiter.Reserve()
+		l.limiter.Allow()
 	}
 }

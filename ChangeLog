@@ -1,3 +1,7 @@
+Version 11.10.3
+--------------
+    * Stop reserving rate limiter once past limit.
+
 Version 11.10.2
 --------------
     * Add some tests to redis limiter.
