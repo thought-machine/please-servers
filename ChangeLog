@@ -1,7 +1,7 @@
 Version 11.10.2
 --------------
     * Add some tests to redis limiter.
-    * Dont take into account context canceled in limiter.
+    * Don't take into account context canceled in limiter.
     * Add option to set mininum number of idle connections to redis.
     * Prevent limiter from counting its own errors towards rate limit.
 
