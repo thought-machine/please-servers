@@ -56,6 +56,10 @@ func TestLimiterReportResult(t *testing.T) {
 			result:    context.Canceled,
 			allowMore: true,
 		},
+		"allows rate limit errors": {
+			result:    ErrRateLimitReached,
+			allowMore: true,
+		},
 		"other errors are not allowed and count towards rate limit": {
 			result:    errors.New("random infra error"),
 			allowMore: false,
