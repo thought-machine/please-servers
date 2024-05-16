@@ -1,3 +1,7 @@
+Version 11.10.4
+--------------
+    * Check caches in the correct order.
+
 Version 11.10.3
 --------------
     * Stop reserving rate limiter once past limit.
