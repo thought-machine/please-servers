@@ -323,7 +323,21 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 }
 
 // blobExists returns true if this blob exists in the underlying storage.
-func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Digest, compressed, redisRequest bool) bool {
+func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Digest, compressed, redisRequest bool) (exists bool) {
+	key := s.compressedKey(prefix, digest, compressed)
+	if s.knownBlobCache != nil {
+		if _, present := s.knownBlobCache.Get(key); present {
+			knownBlobCacheHits.Inc()
+			return true
+		}
+		knownBlobCacheMisses.Inc()
+	}
+	defer func() {
+		if exists {
+			s.markKnownBlob(key)
+		}
+	}()
+
 	if redisRequest && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
 		exists, err := s.readRedis.Exists(ctx, digest.Hash).Result()
 		if err != nil && err != redis.Nil {
@@ -333,21 +347,9 @@ func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Diges
 		}
 	}
 
-	key := s.compressedKey(prefix, digest, compressed)
-	if s.knownBlobCache != nil {
-		if _, present := s.knownBlobCache.Get(key); present {
-			knownBlobCacheHits.Inc()
-			return true
-		}
-		knownBlobCacheMisses.Inc()
-	}
 	// N.B. if the blob is not known in the cache we still have to check, since something
 	//      else could have written it when we weren't looking.
-	if !s.blobExistsUncached(ctx, key) {
-		return false
-	}
-	s.markKnownBlob(key)
-	return true
+	return s.blobExistsUncached(ctx, key)
 }
 
 func (s *server) blobExistsUncached(ctx context.Context, key string) bool {
