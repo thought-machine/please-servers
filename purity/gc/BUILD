@@ -18,5 +18,6 @@ go_library(
         "//proto/purity",
         "//rexclient",
         "//third_party/go:grpc",
+        "///third_party/go/google.golang.org_grpc//metadata",
     ],
 )

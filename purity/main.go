@@ -20,7 +20,7 @@ var opts = struct {
 	Logging cli.LoggingOpts `group:"Options controlling logging output"`
 	GC      struct {
 		URL          string `short:"u" long:"url" required:"true" description:"URL for the storage server"`
-		InstanceName string `short:"i" long:"instance_name" default:"purity-gc" description:"Name of this execution instance"`
+		InstanceName string `short:"i" long:"instance_name" default:"mettle" description:"Name of this execution instance"`
 		TokenFile    string `long:"token_file" description:"File containing token to authenticate gRPC requests with"`
 		TLS          bool   `long:"tls" description:"Use TLS for communicating with the storage server"`
 	} `group:"Options controlling GC settings"`

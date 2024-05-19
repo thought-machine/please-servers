@@ -16,6 +16,8 @@ service GC {
 message ListRequest {
   // The prefix of blobs to list. Should be exactly two hex characters.
   string prefix = 1;
+  // The instance name for the CAS server.
+  string instance_name = 2;
 }
 
 message ListResponse {
@@ -53,6 +55,8 @@ message DeleteRequest {
   // False gives the server an option to 'soft' delete them (however it may
   // interpret that).
   bool hard = 4;
+  // The instance name for the CAS server.
+  string instance_name = 5;
 }
 
 message DeleteResponse {}

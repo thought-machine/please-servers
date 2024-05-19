@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"google.golang.org/grpc/metadata"
 	"path"
 	"sort"
 	"sync"
@@ -124,6 +125,8 @@ type Action struct {
 	InputSize, OutputSize int
 }
 
+const name = "purity-gc"
+
 type collector struct {
 	client            *client.Client
 	gcclient          ppb.GCClient
@@ -187,6 +190,7 @@ func (c *collector) LoadAllBlobs() error {
 			for j := 0; j < 16; j++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 				defer cancel()
+				ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("mettle-caller-name", name))
 				resp, err := c.gcclient.List(ctx, &ppb.ListRequest{
 					Prefix: hex.EncodeToString([]byte{byte(i*16 + j)}),
 				})
@@ -475,6 +479,7 @@ func (c *collector) ReplicateBlobs(rf int) error {
 	if err := c.replicateBlobs("blobs", blobs, func(dg *pb.Digest) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
+		ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("mettle-caller-name", name))
 		blob, _, err := c.client.ReadBlob(ctx, digest.NewFromProtoUnvalidated(dg))
 		if err != nil {
 			return err
@@ -487,6 +492,7 @@ func (c *collector) ReplicateBlobs(rf int) error {
 	return c.replicateBlobs("action results", ars, func(dg *pb.Digest) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
+		ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("mettle-caller-name", name))
 		ar, err := c.client.GetActionResult(ctx, &pb.GetActionResultRequest{
 			InstanceName: c.client.InstanceName,
 			ActionDigest: dg,
@@ -616,6 +622,7 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 func (c *collector) inputDirs(ar *ppb.ActionResult) (*pb.Action, []*pb.Directory, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("mettle-caller-name", name))
 	action := &pb.Action{}
 	blob, present := c.allBlobs[ar.Hash]
 	if !present {

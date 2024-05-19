@@ -38,6 +38,7 @@ go_library(
         "//redis",
         "//rexclient",
         "//third_party/go:grpc",
+        "///third_party/go/google.golang.org_grpc//metadata",
     ],
 )
 
