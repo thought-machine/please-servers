@@ -310,7 +310,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	// If we're allowed to check the cache, see if this one has already been done.
 	// A well-behaved client will likely have done this itself but we should make sure again.
 	if !req.SkipCacheLookup {
-		if err := stream.Send(common.BuildOperation(pb.ExecutionStage_CACHE_CHECK, req.ActionDigest, nil)); err != nil {
+		if err := stream.Send(common.BuildOperation(pb.ExecutionStage_CACHE_CHECK, req.ActionDigest, nil, nil)); err != nil {
 			log.Warningf("Failed to forward to stream: %s", err)
 		}
 		if ar, err := s.client.CheckActionCache(context.Background(), req.ActionDigest); err != nil {
@@ -320,7 +320,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 				Result:       ar,
 				CachedResult: true,
 				Status:       &rpcstatus.Status{Code: int32(codes.OK)},
-			}))
+			}, nil))
 		}
 	}
 
@@ -331,7 +331,7 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 	}
 	// Dispatch a pre-emptive response message to let our colleagues know we've queued it.
 	// We will also receive & forward this message.
-	b := common.MarshalOperation(pb.ExecutionStage_QUEUED, req.ActionDigest, nil)
+	b := common.MarshalOperation(pb.ExecutionStage_QUEUED, req.ActionDigest, nil, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	preResponseStartTime := time.Now()

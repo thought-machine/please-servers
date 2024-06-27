@@ -1065,7 +1065,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 // update sends an update on the response channel
 func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteResponse) error {
 	w.Report(true, stage == pb.ExecutionStage_EXECUTING, true, stage.String())
-	body := common.MarshalOperation(stage, w.actionDigest, response)
+	body := common.MarshalOperation(stage, w.actionDigest, response, w.metadata)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	return common.PublishWithOrderingKey(ctx, w.responses, body, w.actionDigest.Hash, w.name)

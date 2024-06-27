@@ -173,10 +173,11 @@ func CheckPath(path string) error {
 }
 
 // BuildOperation constructs a longrunning.Operation proto for a task. response may be nil.
-func BuildOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, response *pb.ExecuteResponse) *longrunning.Operation {
+func BuildOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, response *pb.ExecuteResponse, metadata *pb.ExecutedActionMetadata) *longrunning.Operation {
 	any, _ := ptypes.MarshalAny(&pb.ExecuteOperationMetadata{
-		Stage:        stage,
-		ActionDigest: actionDigest,
+		Stage:                    stage,
+		ActionDigest:             actionDigest,
+		PartialExecutionMetadata: metadata,
 	})
 	op := &longrunning.Operation{
 		Name:     actionDigest.Hash,
@@ -191,7 +192,7 @@ func BuildOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, resp
 }
 
 // MarshalOperation is like BuildOperation but gives you back the serialised proto.
-func MarshalOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, response *pb.ExecuteResponse) []byte {
-	b, _ := proto.Marshal(BuildOperation(stage, actionDigest, response))
+func MarshalOperation(stage pb.ExecutionStage_Value, actionDigest *pb.Digest, response *pb.ExecuteResponse, metadata *pb.ExecutedActionMetadata) []byte {
+	b, _ := proto.Marshal(BuildOperation(stage, actionDigest, response, metadata))
 	return b
 }
