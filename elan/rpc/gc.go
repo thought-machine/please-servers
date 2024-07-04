@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/hashicorp/go-multierror"
+	"github.com/klauspost/compress/zstd"
 	"gocloud.dev/blob"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,20 +25,27 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 	var g multierror.Group
 	resp := &ppb.ListResponse{}
 	g.Go(func() error {
-		ar, err := s.list(ctx, "ac", req.Prefix)
+		ar, err := s.list(ctx, ACPrefix, req.Prefix)
 		resp.ActionResults = ar
 		return err
 	})
 	g.Go(func() error {
-		ar, err := s.list(ctx, "cas", req.Prefix)
+		ar, err := s.list(ctx, CASPrefix, req.Prefix)
 		for _, a := range ar {
 			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes, Replicas: 1, CachePrefix: a.CachePrefix})
 		}
 		return err
 	})
 	g.Go(func() error {
-		ar, err := s.list(ctx, "zstd_cas", req.Prefix)
+		ar, err := s.list(ctx, CompressedCASPrefix, req.Prefix)
 		for _, a := range ar {
+			// here we need to get the uncompressed size of the blob, otherwise REX SDK will complain about it
+			if size, err := s.getBlobUncompressedSize(ctx, a.Hash); err != nil {
+				// this is not an issue for GC, but would be for replication
+				log.Warningf("failed getting uncompressed size for blob %s (defaulting to compressed size): %v", a.Hash, err)
+			} else {
+				a.SizeBytes = int64(size)
+			}
 			resp.Blobs = append(resp.Blobs, &ppb.Blob{Hash: a.Hash, SizeBytes: a.SizeBytes, Replicas: 1, CachePrefix: a.CachePrefix})
 		}
 		return err
@@ -61,7 +70,7 @@ func (s *server) list(ctx context.Context, prefix1, prefix2 string) ([]*ppb.Acti
 		} else if hash := path.Base(obj.Key); !strings.HasPrefix(hash, "tmp") {
 			ret = append(ret, &ppb.ActionResult{
 				Hash:         hash,
-				SizeBytes:    obj.Size, // Note that this might not be accurate for compressed blobs. For GC it is unlikely to matter deeply.
+				SizeBytes:    obj.Size,
 				LastAccessed: obj.ModTime.Unix(),
 				Replicas:     1,
 				CachePrefix:  prefix,
@@ -69,6 +78,25 @@ func (s *server) list(ctx context.Context, prefix1, prefix2 string) ([]*ppb.Acti
 		}
 	}
 	return ret, nil
+}
+
+func (s *server) getBlobUncompressedSize(ctx context.Context, hash string) (uint64, error) {
+	r, err := s.bucket.NewRangeReader(ctx, s.key(CompressedCASPrefix, &pb.Digest{Hash: hash}), 0, zstd.HeaderMaxSize, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed opening blob to get uncompressed size: %v", err)
+	}
+	defer r.Close()
+
+	hdr := make([]byte, zstd.HeaderMaxSize)
+	if _, err = r.Read(hdr); err != nil {
+		return 0, fmt.Errorf("failed reading zstd header: %v", err)
+	}
+
+	var zhdr zstd.Header
+	if err = zhdr.Decode(hdr); err != nil {
+		return 0, fmt.Errorf("failed decoding zstd header: %v", err)
+	}
+	return zhdr.FrameContentSize, nil
 }
 
 func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.DeleteResponse, error) {

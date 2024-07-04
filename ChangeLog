@@ -1,3 +1,7 @@
+Version 11.10.6
+---------------
+    * Fix Elan's List endpoint to return true size for compressed blobs.
+
 Version 11.10.5
 ---------------
     * Populate partial ExecutedActionMetadata messages during execution
