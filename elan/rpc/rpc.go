@@ -54,7 +54,11 @@ import (
 
 const timeout = 2 * time.Minute
 
-const CASPrefix = "cas"
+const (
+	ACPrefix            = "ac"
+	CASPrefix           = "cas"
+	CompressedCASPrefix = "zstd_cas"
+)
 
 var log = logging.MustGetLogger()
 
