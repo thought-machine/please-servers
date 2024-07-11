@@ -17,7 +17,7 @@ import (
 // If a Lucidity server hasn't been configured, calling this has no effect.
 func (w *worker) Report(healthy, busy, alive bool, status string, args ...interface{}) {
 	if w.lucidChan != nil {
-		w.lucidChan <- &lpb.UpdateRequest{
+		w.lucidChan <- &lpb.Worker{
 			Name:          w.name,
 			Version:       w.version,
 			StartTime:     w.startTime.Unix(),
@@ -47,7 +47,7 @@ func (w *worker) sendReports() {
 		log.Error("Failed to retrieve hostname: %s", err)
 	}
 	t := time.NewTicker(5 * time.Minute)
-	var last *lpb.UpdateRequest
+	var last *lpb.Worker
 	for {
 		select {
 		case report := <-w.lucidChan:
@@ -62,7 +62,7 @@ func (w *worker) sendReports() {
 	}
 }
 
-func (w *worker) sendReport(report *lpb.UpdateRequest) {
+func (w *worker) sendReport(report *lpb.Worker) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if resp, err := w.lucidity.Update(ctx, report); err != nil {

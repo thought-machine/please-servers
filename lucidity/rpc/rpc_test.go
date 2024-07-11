@@ -18,7 +18,7 @@ func TestValidVersion(t *testing.T) {
 
 	// Helper function. Returns true if this update would trigger disabling the worker.
 	update := func(name, version string) bool {
-		r, err := s.Update(context.Background(), &pb.UpdateRequest{
+		r, err := s.Update(context.Background(), &pb.Worker{
 			Name:       name,
 			Version:    version,
 			Healthy:    true,
@@ -41,14 +41,14 @@ func TestListWorkers(t *testing.T) {
 	now := time.Now().Unix()
 	const version = "1.0"
 	s := newServer(1.0)
-	worker1 := &pb.UpdateRequest{
+	worker1 := &pb.Worker{
 		Name:       "worker-1",
 		Hostname:   "hydrogen",
 		Version:    version,
 		Healthy:    true,
 		UpdateTime: now,
 	}
-	worker2 := &pb.UpdateRequest{
+	worker2 := &pb.Worker{
 		Name:       "worker-2",
 		Hostname:   "helium",
 		Version:    version,
