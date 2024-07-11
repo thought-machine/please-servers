@@ -1,3 +1,8 @@
+Version 11.11.0
+---------------
+    * Add a gRPC API to Lucidity which can be used to programmatically retrieve workers
+    * Mettle workers now report the hostname they're running on to Lucidity
+
 Version 11.10.6
 ---------------
     * Fix Elan's List endpoint to return true size for compressed blobs.
