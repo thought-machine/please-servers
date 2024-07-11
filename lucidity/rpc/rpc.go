@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"slices"
 	"sync"
 	"time"
 
@@ -105,6 +106,14 @@ func (s *server) listWorkers(req *pb.ListWorkersRequest) *pb.ListWorkersResponse
 			workers.Workers = append(workers.Workers, r)
 		}
 		return true
+	})
+	slices.SortFunc(workers.Workers, func(a, b *pb.UpdateRequest) int {
+		if a.Name < b.Name {
+			return -1
+		} else if a.Name > b.Name {
+			return 1
+		}
+		return 0
 	})
 	return workers
 }
