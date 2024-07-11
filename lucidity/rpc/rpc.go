@@ -92,6 +92,23 @@ func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateR
 	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !req.Healthy}, nil
 }
 
+func (s *server) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest) (*pb.ListWorkersResponse, error) {
+	return s.listWorkers(req), nil
+}
+
+func (s *server) listWorkers(req *pb.ListWorkersRequest) *pb.ListWorkersResponse {
+	workers := &pb.ListWorkersResponse{}
+	s.workers.Range(func(k, v interface{}) bool {
+		r := v.(*pb.UpdateRequest)
+		if req.Hostname == "" || r.Hostname == req.Hostname {
+			s.checkWorkerHealth(r)
+			workers.Workers = append(workers.Workers, r)
+		}
+		return true
+	})
+	return workers
+}
+
 func (s *server) checkWorkerHealth(req *pb.UpdateRequest) {
 	if req.UpdateTime < time.Now().Add(-10*time.Minute).Unix() {
 		req.Healthy = false
@@ -103,13 +120,7 @@ func (s *server) checkWorkerHealth(req *pb.UpdateRequest) {
 }
 
 func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
-	workers := &pb.Workers{}
-	s.workers.Range(func(k, v interface{}) bool {
-		r := v.(*pb.UpdateRequest)
-		s.checkWorkerHealth(r)
-		workers.Workers = append(workers.Workers, r)
-		return true
-	})
+	workers := s.listWorkers(&pb.ListWorkersRequest{})
 	m := jsonpb.Marshaler{
 		OrigName: true,
 		Indent:   "  ",

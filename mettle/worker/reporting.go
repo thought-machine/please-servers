@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 
@@ -41,11 +42,16 @@ func (w *worker) currentTaskID() string {
 
 // sendReports sends reports to Lucidity indefinitely.
 func (w *worker) sendReports() {
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Error("Failed to retrieve hostname: %s", err)
+	}
 	t := time.NewTicker(5 * time.Minute)
 	var last *lpb.UpdateRequest
 	for {
 		select {
 		case report := <-w.lucidChan:
+			report.Hostname = hostname
 			w.sendReport(report)
 			last = report
 		case <-t.C:
