@@ -101,7 +101,7 @@ func (s *server) listWorkers(req *pb.ListWorkersRequest) *pb.ListWorkersResponse
 	workers := &pb.ListWorkersResponse{}
 	s.workers.Range(func(k, v interface{}) bool {
 		r := v.(*pb.Worker)
-		if req.Hostname == "" || r.Hostname == req.Hostname {
+		if (req.Hostname == "" || r.Hostname == req.Hostname) && (req.Name == "" || r.Name == req.Name) {
 			s.checkWorkerHealth(r)
 			workers.Workers = append(workers.Workers, r)
 		}

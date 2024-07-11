@@ -50,8 +50,10 @@ message UpdateResponse {
 }
 
 message ListWorkersRequest {
+  // The worker name to return
+  string name = 1;
   // The hostname to return workers for
-  string hostname = 1;
+  string hostname = 2;
 }
 
 message ListWorkersResponse {
