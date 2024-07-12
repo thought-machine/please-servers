@@ -4,7 +4,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: thoughtmachine/please-servers:20230319
+      image: thoughtmachine/please-servers:20240711
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     container:
-      image: thoughtmachine/please-servers:20230319
+      image: thoughtmachine/please-servers:20240711
     if: github.ref == 'refs/heads/master'
     steps:
       - name: Checkout code
