@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 
 	pb "github.com/thought-machine/please-servers/proto/lucidity"
@@ -17,7 +18,7 @@ func TestValidVersion(t *testing.T) {
 
 	// Helper function. Returns true if this update would trigger disabling the worker.
 	update := func(name, version string) bool {
-		r, err := s.Update(context.Background(), &pb.UpdateRequest{
+		r, err := s.Update(context.Background(), &pb.Worker{
 			Name:       name,
 			Version:    version,
 			Healthy:    true,
@@ -34,4 +35,35 @@ func TestValidVersion(t *testing.T) {
 	assert.False(t, update("worker-2", "2.0")) // worker-2 is still OK as it was before though
 	assert.False(t, update("worker-1", "2.0")) // worker-1 has now updated and is alive again.
 	assert.True(t, update("worker-3", "3.0"))  // worker-3 has now updated beyond the others and it disables.
+}
+
+func TestListWorkers(t *testing.T) {
+	now := time.Now().Unix()
+	const version = "1.0"
+	s := newServer(1.0)
+	worker1 := &pb.Worker{
+		Name:       "worker-1",
+		Hostname:   "hydrogen",
+		Version:    version,
+		Healthy:    true,
+		UpdateTime: now,
+	}
+	worker2 := &pb.Worker{
+		Name:       "worker-2",
+		Hostname:   "helium",
+		Version:    version,
+		Healthy:    true,
+		UpdateTime: now,
+	}
+	s.Update(context.Background(), worker1)
+	s.Update(context.Background(), worker2)
+	resp, err := s.ListWorkers(context.Background(), &pb.ListWorkersRequest{})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(resp.Workers))
+	assert.True(t, proto.Equal(worker1, resp.Workers[0]))
+	assert.True(t, proto.Equal(worker2, resp.Workers[1]))
+	resp, err = s.ListWorkers(context.Background(), &pb.ListWorkersRequest{Hostname: "helium"})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(resp.Workers))
+	assert.True(t, proto.Equal(worker2, resp.Workers[0]))
 }

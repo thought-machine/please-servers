@@ -345,7 +345,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 		}
 	}
 	if lucidity != "" {
-		w.lucidChan = make(chan *lpb.UpdateRequest, 100)
+		w.lucidChan = make(chan *lpb.Worker, 100)
 		log.Notice("Dialling Lucidity...")
 		conn, err := grpcutil.Dial(lucidity, true, "", tokenFile) // CA is currently not configurable.
 		if err != nil {
@@ -375,7 +375,7 @@ type worker struct {
 	client          elan.Client
 	rclient         *client.Client
 	lucidity        lpb.LucidityClient
-	lucidChan       chan *lpb.UpdateRequest
+	lucidChan       chan *lpb.Worker
 	cache           *ristretto.Cache
 	instanceName    string
 	dir, rootDir    string

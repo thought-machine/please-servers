@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"slices"
 	"sync"
 	"time"
 
@@ -80,19 +81,44 @@ func newServer(minProportion float64) *server {
 	}
 }
 
-func (s *server) Update(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
+func (s *server) Update(ctx context.Context, req *pb.Worker) (*pb.UpdateResponse, error) {
 	req.UpdateTime = time.Now().Unix()
 	v, ok := s.workers.Load(req.Name)
-	req.Disabled = ok && v.(*pb.UpdateRequest).Disabled
+	req.Disabled = ok && v.(*pb.Worker).Disabled
 	s.workers.Store(req.Name, req)
-	if !ok || v.(*pb.UpdateRequest).Version != req.Version {
+	if !ok || v.(*pb.Worker).Version != req.Version {
 		s.recalculateValidVersions()
 	}
 	s.checkWorkerHealth(req)
 	return &pb.UpdateResponse{ShouldDisable: req.Disabled || !req.Healthy}, nil
 }
 
-func (s *server) checkWorkerHealth(req *pb.UpdateRequest) {
+func (s *server) ListWorkers(ctx context.Context, req *pb.ListWorkersRequest) (*pb.ListWorkersResponse, error) {
+	return s.listWorkers(req), nil
+}
+
+func (s *server) listWorkers(req *pb.ListWorkersRequest) *pb.ListWorkersResponse {
+	workers := &pb.ListWorkersResponse{}
+	s.workers.Range(func(k, v interface{}) bool {
+		r := v.(*pb.Worker)
+		if (req.Hostname == "" || r.Hostname == req.Hostname) && (req.Name == "" || r.Name == req.Name) {
+			s.checkWorkerHealth(r)
+			workers.Workers = append(workers.Workers, r)
+		}
+		return true
+	})
+	slices.SortFunc(workers.Workers, func(a, b *pb.Worker) int {
+		if a.Name < b.Name {
+			return -1
+		} else if a.Name > b.Name {
+			return 1
+		}
+		return 0
+	})
+	return workers
+}
+
+func (s *server) checkWorkerHealth(req *pb.Worker) {
 	if req.UpdateTime < time.Now().Add(-10*time.Minute).Unix() {
 		req.Healthy = false
 		req.Status = "Too long since last update"
@@ -103,13 +129,7 @@ func (s *server) checkWorkerHealth(req *pb.UpdateRequest) {
 }
 
 func (s *server) ServeWorkers(w http.ResponseWriter, r *http.Request) {
-	workers := &pb.Workers{}
-	s.workers.Range(func(k, v interface{}) bool {
-		r := v.(*pb.UpdateRequest)
-		s.checkWorkerHealth(r)
-		workers.Workers = append(workers.Workers, r)
-		return true
-	})
+	workers := s.listWorkers(&pb.ListWorkersRequest{})
 	m := jsonpb.Marshaler{
 		OrigName: true,
 		Indent:   "  ",
@@ -146,7 +166,7 @@ func (s *server) ServeDisable(w http.ResponseWriter, r *http.Request) {
 		log.Warning("Request to disable unknown worker %s", req.Name)
 		w.WriteHeader(http.StatusNotFound)
 	} else {
-		v.(*pb.UpdateRequest).Disabled = req.Disable
+		v.(*pb.Worker).Disabled = req.Disable
 	}
 }
 
@@ -158,7 +178,7 @@ func (s *server) Clean(maxAge time.Duration) {
 	for range time.NewTicker(maxAge / 10).C {
 		min := time.Now().Add(-maxAge).Unix()
 		s.workers.Range(func(k, v interface{}) bool {
-			if v.(*pb.UpdateRequest).UpdateTime < min {
+			if v.(*pb.Worker).UpdateTime < min {
 				go s.removeWorker(k.(string))
 			}
 			return true
@@ -176,7 +196,7 @@ func (s *server) recalculateValidVersions() {
 	counts := map[string]int{}
 	n := 0
 	s.workers.Range(func(k, v interface{}) bool {
-		counts[v.(*pb.UpdateRequest).Version]++
+		counts[v.(*pb.Worker).Version]++
 		n++
 		return true
 	})
@@ -222,7 +242,7 @@ func (s *server) Describe(out chan<- *prometheus.Desc) {
 func (s *server) Collect(out chan<- prometheus.Metric) {
 	var total, unhealthy, dead, busy float64
 	s.workers.Range(func(_, v interface{}) bool {
-		r := v.(*pb.UpdateRequest)
+		r := v.(*pb.Worker)
 		s.checkWorkerHealth(r)
 		if !r.Healthy {
 			unhealthy++

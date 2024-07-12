@@ -8,12 +8,16 @@ option go_package = "github.com/thought-machine/please-servers/proto/lucidity";
 // central server and send some basic information about their status.
 service Lucidity {
   // Update sends the server an update on the current state of a worker.
-  rpc Update(UpdateRequest) returns (UpdateResponse);
+  rpc Update(Worker) returns (UpdateResponse);
+  // List the current set of workers
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse);
 }
 
-message UpdateRequest {
+message Worker {
   // The name of this worker.
   string name = 1;
+  // The host name of the machine the worker is on
+  string hostname = 13;
   // The version this worker is currently at
   string version = 12;
   // The time the worker started at (as a Unix timestamp)
@@ -45,10 +49,17 @@ message UpdateResponse {
   bool should_disable = 1;
 }
 
-// This is not part of the actual RPC API but is used to serve from HTTP.
-message Workers {
-  // List of all the currently known workers.
-  repeated UpdateRequest workers = 1;
+message ListWorkersRequest {
+  // The worker name to return
+  string name = 1;
+  // The hostname to return workers for
+  string hostname = 2;
+}
+
+message ListWorkersResponse {
+  // List of all the currently known workers, optionally filtered on the
+  // request.
+  repeated Worker workers = 1;
 }
 
 // This is part of the HTTP API; the request to disable a worker.
