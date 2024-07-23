@@ -6,9 +6,11 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 // Dial is a convenience function wrapping up some common gRPC functionality.
@@ -22,6 +24,10 @@ func Dial(address string, tls bool, caFile, tokenFile string) (*grpc.ClientConn,
 func DialOptions(tokenFile string) []grpc.DialOption {
 	opts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(419430400)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:    20 * time.Second,
+			Timeout: 20 * time.Second,
+		}),
 	}
 	if tokenFile == "" {
 		return opts
