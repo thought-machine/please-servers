@@ -1,3 +1,7 @@
+Version 11.11.1
+---------------
+    * Add keepalive config to gRPC dial parameters
+
 Version 11.11.0
 ---------------
     * Add a gRPC API to Lucidity which can be used to programmatically retrieve workers
