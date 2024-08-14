@@ -35,6 +35,7 @@ var opts = struct {
 		After  cli.Action `short:"a" long:"after" required:"true" description:"'After' action hash"`
 	} `command:"diff" description:"Show differences between two actions"`
 	Show struct {
+		NoInputs bool `long:"no_inputs" description:"Don't list input files"`
 		Args struct {
 			Actions []cli.Action `positional-arg-name:"action" required:"true" description:"Hashes of actions to display"`
 		} `positional-args:"true"`
@@ -212,8 +213,10 @@ func show(client *client.Client) {
 		command := &pb.Command{}
 		mustGetProto(client, a.ToProto(), action)
 		mustGetProto(client, action.CommandDigest, command)
-		log.Notice("Inputs:")
-		showDir(client, action.InputRootDigest, "")
+		if !opts.Show.NoInputs {
+			log.Notice("Inputs:")
+			showDir(client, action.InputRootDigest, "")
+		}
 		if ar, err := client.CheckActionCache(context.Background(), &pb.Digest{Hash: a.Hash, SizeBytes: int64(a.Size)}); err != nil {
 			log.Error("Error retrieving action result: %s", err)
 		} else if ar == nil {
@@ -222,6 +225,8 @@ func show(client *client.Client) {
 			log.Notice("Outputs:")
 			log.Notice("[%s/%08d] Action result", a.Hash, a.Size)
 			showActionResult(client, ar)
+			showOutput(client, ar, ar.StdoutDigest, "Standard output")
+			showOutput(client, ar, ar.StdoutDigest, "Standard error")
 		}
 	}
 }
@@ -294,6 +299,19 @@ func showActionResult(client *client.Client, ar *pb.ActionResult) {
 			showDir(client, dg.ToProto(), strings.Repeat("  ", strings.Count(d.Path, "/")+1))
 		}
 	}
+}
+
+func showOutput(client *client.Client, ar *pb.ActionResult, dg *pb.Digest, name string) {
+	if dg == nil {
+		return
+	}
+	log.Notice("%s [%s/%08d]:", name, dg.Hash, dg.SizeBytes)
+	b, _, err := client.ReadBlob(context.Background(), digest.NewFromProtoUnvalidated(dg))
+	if err != nil {
+		log.Errorf("Failed to fetch blob: %s", err)
+		return
+	}
+	fmt.Println(string(b))
 }
 
 func topn() error {
