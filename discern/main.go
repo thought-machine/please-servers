@@ -36,7 +36,7 @@ var opts = struct {
 	} `command:"diff" description:"Show differences between two actions"`
 	Show struct {
 		NoInputs bool `long:"no_inputs" description:"Don't list input files"`
-		Args struct {
+		Args     struct {
 			Actions []cli.Action `positional-arg-name:"action" required:"true" description:"Hashes of actions to display"`
 		} `positional-args:"true"`
 	} `command:"show" description:"Show detail about an action or series of them"`
