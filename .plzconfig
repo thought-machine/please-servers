@@ -35,7 +35,7 @@ target = //plugins:shell
 
 [plugin "proto"]
 target = //plugins:proto
-languagedef = ///go_proto//build_defs:go
+languagedef = ///go_proto//build_defs:go_proto
 ProtocTool = //third_party/proto:protoc
 
 [plugin "go_proto"]
