@@ -136,6 +136,7 @@ func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesReq
 }
 
 func (s *server) GetActionResult(ctx context.Context, req *pb.GetActionResultRequest) (ar *pb.ActionResult, err error) {
+	log.Debugf("received GetActionResultRequest for %+v", req.GetActionDigest())
 	err = s.replicator.SequentialDigest(req.ActionDigest, func(srv *trie.Server) error {
 		ctx, cancel := context.WithTimeout(ctx, s.timeout)
 		defer cancel()
@@ -275,6 +276,7 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 }
 
 func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsRequest) (*pb.BatchReadBlobsResponse, error) {
+	log.Debugf("received BatchReadBlobsRequest for %+v", req.GetDigests())
 	blobs := map[*trie.Server][]*pb.Digest{}
 	for _, d := range req.Digests {
 		s := s.replicator.Trie.Get(d.Hash)
@@ -402,6 +404,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 }
 
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
+	log.Debugf("received ReadRequest for %+v", req.GetResourceName())
 	hash, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
 		return err
@@ -565,6 +568,7 @@ func (s *server) assetHash(quals []*apb.Qualifier) string {
 }
 
 func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServer) error {
+	log.Debugf("received ExecuteRequest for %+v", req.GetActionDigest())
 	return s.exeReplicator.SequentialDigest(req.ActionDigest, func(srv *trie.Server) error {
 		client, err := srv.Exe.Execute(s.forwardMetadata(stream.Context()), req)
 		if err != nil {

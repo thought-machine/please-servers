@@ -1,3 +1,7 @@
+Version 11.11.2
+---------------
+    * Add some debug logs to flair.
+
 Version 11.11.1
 ---------------
     * Add keepalive config to gRPC dial parameters
