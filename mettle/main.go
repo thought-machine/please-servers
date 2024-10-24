@@ -60,6 +60,8 @@ var opts = struct {
 		Timeout           flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace      flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold   float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		ConnCheck string                  `long:"connectivity_check" choice:"gstatic" choice:"firefox" description:"Run an HTTP connectivity check periodically to verify if HTTP access is working"`
+		ConnCheckPeriod   flags.Duration          `long:"connectivity_check_period" default:"1h" description:"Periodicity to re-check connectivity at"`
 		VersionFile       string                  `long:"version_file" description:"File containing version tag"`
 		Costs             map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
 		ImmediateShutdown bool                    `long:"immediate_shutdown" description:"True if the worker should shut down immediately on a sigterm."`
@@ -84,6 +86,8 @@ var opts = struct {
 		Timeout         flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace    flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
+		ConnCheck string                  `long:"connectivity_check" choice:"gstatic" choice:"firefox" description:"Run an HTTP connectivity check periodically to verify if HTTP access is working"`
+		ConnCheckPeriod   flags.Duration          `long:"connectivity_check_period" default:"1h" description:"Periodicity to re-check connectivity at"`
 		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
 		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
 		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
@@ -171,12 +175,12 @@ func main() {
 		}
 		for i := 0; i < opts.Dual.NumWorkers; i++ {
 			storage := opts.Dual.Storage.Storage[i%len(opts.Dual.Storage.Storage)]
-			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, primaryRedis, readRedis, opts.Dual.Redis.MaxSize, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.VersionFile, opts.Dual.Costs, 0, opts.Worker.ImmediateShutdown)
+			go worker.RunForever(opts.InstanceName, requests+"?ackdeadline=10m", responses, fmt.Sprintf("%s-%d", opts.InstanceName, i), storage, opts.Dual.Dir, opts.Dual.Cache.Dir, opts.Dual.Browser, opts.Dual.Sandbox, opts.Dual.AltSandbox, opts.Dual.Lucidity, "", opts.Dual.GRPC.TokenFile, primaryRedis, readRedis, opts.Dual.Redis.MaxSize, opts.Dual.Cache.Prefix, opts.Dual.Cache.Part, !opts.Dual.NoClean, opts.Dual.Storage.TLS, int64(opts.Dual.Cache.MaxMem), int64(opts.Dual.MinDiskSpace), opts.Dual.MemoryThreshold, opts.Dual.ConnCheck, time.Duration(opts.Dual.ConnCheckPeriod), opts.Dual.VersionFile, opts.Dual.Costs, 0, opts.Worker.ImmediateShutdown)
 		}
 		api.ServeForever(opts.Dual.GRPC, "", queues, "", false, opts.Dual.AllowedPlatform, opts.Dual.Storage.Storage[0], opts.Dual.Storage.TLS)
 	} else if cmd == "worker" {
 		primaryRedis, readRedis := opts.Worker.Redis.Clients()
-		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, primaryRedis, readRedis, opts.Worker.Redis.MaxSize, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension), opts.Worker.ImmediateShutdown)
+		worker.RunForever(opts.InstanceName, opts.Worker.Queues.RequestQueue, opts.Worker.Queues.ResponseQueue, opts.Worker.Name, opts.Worker.Storage.Storage, opts.Worker.Dir, opts.Worker.Cache.Dir, opts.Worker.Browser, opts.Worker.Sandbox, opts.Worker.AltSandbox, opts.Worker.Lucidity, opts.Worker.PromGateway, opts.Worker.Storage.TokenFile, primaryRedis, readRedis, opts.Worker.Redis.MaxSize, opts.Worker.Cache.Prefix, opts.Worker.Cache.Part, !opts.Worker.NoClean, opts.Worker.Storage.TLS, int64(opts.Worker.Cache.MaxMem), int64(opts.Worker.MinDiskSpace), opts.Worker.MemoryThreshold, opts.Worker.ConnCheck, time.Duration(opts.Worker.ConnCheckPeriod), opts.Worker.VersionFile, opts.Worker.Costs, time.Duration(opts.Worker.Queues.AckExtension), opts.Worker.ImmediateShutdown)
 	} else if cmd == "api" {
 		api.ServeForever(opts.API.GRPC, opts.API.Queues.ResponseQueueSuffix, opts.API.Queues, opts.API.API.URL, opts.API.API.TLS, opts.API.AllowedPlatform, opts.API.Storage.Storage, opts.API.Storage.TLS)
 	} else if err := one(); err != nil {

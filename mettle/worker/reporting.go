@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"net/http"
 	"syscall"
 	"time"
 
@@ -166,4 +167,27 @@ func (w *worker) checkLiveConnection() bool {
 		return false
 	}
 	return true
+}
+
+// checkConnectivity tries to check connectivity to an external checker. It dies if it doesn't work.
+func (w *worker) checkConnectivity(check string) {
+	switch check {
+	case "gstatic":
+		if resp, err := http.Get("https://connectivitycheck.gstatic.com/generate_204"); err != nil {
+			log.Fatalf("Failed to complete connectivity check: %s", err)
+		} else if resp.StatusCode != http.StatusNoContent {
+			log.Fatalf("Connectivity check returned unexpected status: %s", resp.Status)
+		}
+	case "firefox":
+		if resp, err := http.Get("https://detectportal.firefox.com/canonical.html"); err != nil {
+			log.Fatalf("Failed to complete connectivity check: %s", err)
+		} else if resp.StatusCode != http.StatusOK {
+			log.Fatalf("Connectivity check returned unexpected status: %s", resp.Status)
+		}
+	case "":
+		return  // no check
+	default:
+		log.Fatalf("unknown connectivity check type: %s", check)
+	}
+	log.Notice("%s connectivity check succeeded", check)
 }
