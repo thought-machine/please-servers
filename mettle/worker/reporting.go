@@ -3,8 +3,8 @@ package worker
 import (
 	"context"
 	"fmt"
-	"os"
 	"net/http"
+	"os"
 	"syscall"
 	"time"
 
@@ -185,7 +185,7 @@ func (w *worker) checkConnectivity(check string) {
 			log.Fatalf("Connectivity check returned unexpected status: %s", resp.Status)
 		}
 	case "":
-		return  // no check
+		return // no check
 	default:
 		log.Fatalf("unknown connectivity check type: %s", check)
 	}

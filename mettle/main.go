@@ -60,7 +60,7 @@ var opts = struct {
 		Timeout           flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace      flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold   float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
-		ConnCheck string                  `long:"connectivity_check" choice:"gstatic" choice:"firefox" description:"Run an HTTP connectivity check periodically to verify if HTTP access is working"`
+		ConnCheck         string                  `long:"connectivity_check" choice:"gstatic" choice:"firefox" description:"Run an HTTP connectivity check periodically to verify if HTTP access is working"`
 		ConnCheckPeriod   flags.Duration          `long:"connectivity_check_period" default:"1h" description:"Periodicity to re-check connectivity at"`
 		VersionFile       string                  `long:"version_file" description:"File containing version tag"`
 		Costs             map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
@@ -86,8 +86,8 @@ var opts = struct {
 		Timeout         flags.Duration          `long:"timeout" hidden:"true" description:"Deprecated, has no effect."`
 		MinDiskSpace    flags.ByteSize          `long:"min_disk_space" default:"1G" description:"Don't accept builds unless at least this much disk space is available"`
 		MemoryThreshold float64                 `long:"memory_threshold" default:"100.0" description:"Don't accept builds unless available memory is under this percentage"`
-		ConnCheck string                  `long:"connectivity_check" choice:"gstatic" choice:"firefox" description:"Run an HTTP connectivity check periodically to verify if HTTP access is working"`
-		ConnCheckPeriod   flags.Duration          `long:"connectivity_check_period" default:"1h" description:"Periodicity to re-check connectivity at"`
+		ConnCheck       string                  `long:"connectivity_check" choice:"gstatic" choice:"firefox" description:"Run an HTTP connectivity check periodically to verify if HTTP access is working"`
+		ConnCheckPeriod flags.Duration          `long:"connectivity_check_period" default:"1h" description:"Periodicity to re-check connectivity at"`
 		VersionFile     string                  `long:"version_file" description:"File containing version tag"`
 		Costs           map[string]cli.Currency `long:"cost" description:"Per-second costs to associate with each build action."`
 		Cache           CacheOpts               `group:"Options controlling caching" namespace:"cache"`
