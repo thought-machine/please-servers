@@ -187,8 +187,6 @@ func (w *worker) downloadAllFiles(files map[sdkdigest.Digest][]fileNode, packs m
 		g.Go(func() error { return w.downloadFiles(fileNodes) })
 	}
 	for dg, paths := range packs {
-		dg := dg
-		paths := paths
 		g.Go(func() error {
 			return w.downloadPack(dg, paths)
 		})

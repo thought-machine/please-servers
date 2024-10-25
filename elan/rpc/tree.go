@@ -35,7 +35,6 @@ func (s *server) getTree(digest *pb.Digest, stopAtPack bool) ([]*pb.Directory, e
 	var g multierror.Group
 	var mutex sync.Mutex
 	for _, child := range dir.Directories {
-		child := child
 		g.Go(func() error {
 			dirs, err := s.getTree(child.Digest, stopAtPack)
 			mutex.Lock()

@@ -181,8 +181,6 @@ func (s *server) FindMissingBlobs(ctx context.Context, req *pb.FindMissingBlobsR
 	var g errgroup.Group
 	var mutex sync.Mutex
 	for srv, b := range blobs {
-		srv := srv
-		b := b
 		g.Go(func() error {
 			var mutex2 sync.Mutex
 			found := make(map[string]struct{}, len(b))
@@ -235,8 +233,6 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 	var mutex sync.Mutex
 	m := make(map[string][]*pb.BatchUpdateBlobsResponse_Response, len(blobs)*s.replicator.Replicas)
 	for srv, rs := range blobs {
-		srv := srv
-		rs := rs
 		g.Go(func() error {
 			return s.replicator.Parallel(srv.Start, func(srv *trie.Server) error {
 				ctx, cancel := context.WithTimeout(ctx, s.timeout)
@@ -297,8 +293,6 @@ func (s *server) BatchReadBlobs(ctx context.Context, req *pb.BatchReadBlobsReque
 	}()
 
 	for srv, d := range blobs {
-		srv := srv
-		d := d
 		g.Go(func() error {
 			return s.replicator.SequentialAck(srv.Start, func(s2 *trie.Server) (bool, error) {
 				ctx, cancel := context.WithTimeout(ctx, s.timeout)
@@ -367,7 +361,7 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 			} else if len(r.Responses) != 1 {
 				return fmt.Errorf("missing blob in response") // shouldn't happen...
 			} else if s := r.Responses[0].Status; s.Code != int32(codes.OK) {
-				return status.Errorf(codes.Code(s.Code), s.Message)
+				return status.Errorf(codes.Code(s.Code), "%s", s.Message)
 			}
 			resp = r
 			return nil
@@ -610,7 +604,7 @@ func (s *server) forwardMetadata(ctx context.Context) context.Context {
 
 func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
 	if len(req.Prefix) != 2 {
-		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: %s", req.Prefix)
 	}
 	var mutex sync.Mutex
 	resp := &ppb.ListResponse{}
@@ -672,7 +666,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 
 func (s *server) Delete(ctx context.Context, req *ppb.DeleteRequest) (*ppb.DeleteResponse, error) {
 	if len(req.Prefix) != 2 {
-		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: %s", req.Prefix)
 	}
 	return &ppb.DeleteResponse{}, s.replicator.All(req.Prefix, func(srv *trie.Server) error {
 		ctx, cancel := context.WithTimeout(ctx, 10*s.timeout) // Multiply up timeout since this operation can be expensive.

@@ -182,7 +182,6 @@ func (c *collector) LoadAllBlobs() error {
 	var g multierror.Group
 	var mutex sync.Mutex
 	for i := 0; i < 16; i++ {
-		i := i
 		g.Go(func() error {
 			for j := 0; j < 16; j++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)

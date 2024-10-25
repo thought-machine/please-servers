@@ -20,7 +20,7 @@ import (
 
 func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListResponse, error) {
 	if len(req.Prefix) != 2 {
-		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: "+req.Prefix)
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid prefix provided: %s", req.Prefix)
 	}
 	var g multierror.Group
 	resp := &ppb.ListResponse{}
