@@ -158,7 +158,7 @@ func TestErrorCode(t *testing.T) {
 		t.Run(fmt.Sprintf("%s_%s", tc.Output, tc.Inputs), func(t *testing.T) {
 			var merr *multierror.Error
 			for _, input := range tc.Inputs {
-				merr = multierror.Append(merr, status.Errorf(input, input.String()))
+				merr = multierror.Append(merr, status.Errorf(input, "%s", input))
 			}
 			assert.Equal(t, tc.Output, errorCode(merr))
 		})
