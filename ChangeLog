@@ -1,3 +1,7 @@
+Version 11.12.0
+---------------
+    * Add a new flag for connectivity checks to an external server
+
 Version 11.11.1
 ---------------
     * Add keepalive config to gRPC dial parameters
