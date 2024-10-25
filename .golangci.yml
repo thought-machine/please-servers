@@ -1,8 +1,5 @@
 run:
   timeout: 5m
-  skip-dirs:
-    - plz-out/
-    - tests/
 
 issues:
   exclude:
@@ -18,6 +15,9 @@ issues:
     - unused-parameter # Quite a few of these, some legit, many are fulfilling interfaces
     - redefines-builtin # Not really a big issue
     - empty-block # Only came up once and was a false positive. This should be easily handled by review.
+  exclude-dirs:
+    - plz-out/
+    - tests/
   exclude-rules:
     - path: _test\.go
       linters:
@@ -36,7 +36,7 @@ linters:
     - bodyclose
     - dogsled
     - dupl
-    - exportloopref
+    - copyloopvar
     - gocritic
     - gofmt
     - revive

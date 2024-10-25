@@ -173,15 +173,21 @@ func (w *worker) checkLiveConnection() bool {
 func (w *worker) checkConnectivity(check string) {
 	switch check {
 	case "gstatic":
-		if resp, err := http.Get("https://connectivitycheck.gstatic.com/generate_204"); err != nil {
+		resp, err := http.Get("https://connectivitycheck.gstatic.com/generate_204")
+		if err != nil {
 			log.Fatalf("Failed to complete connectivity check: %s", err)
-		} else if resp.StatusCode != http.StatusNoContent {
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
 			log.Fatalf("Connectivity check returned unexpected status: %s", resp.Status)
 		}
 	case "firefox":
-		if resp, err := http.Get("https://detectportal.firefox.com/canonical.html"); err != nil {
+		resp, err := http.Get("https://detectportal.firefox.com/canonical.html")
+		if err != nil {
 			log.Fatalf("Failed to complete connectivity check: %s", err)
-		} else if resp.StatusCode != http.StatusOK {
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
 			log.Fatalf("Connectivity check returned unexpected status: %s", resp.Status)
 		}
 	case "":

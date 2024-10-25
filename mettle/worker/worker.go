@@ -242,7 +242,7 @@ func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, c
 			// our queues or something else bad happened internally  so we are basically doomed
 			// and should stop.
 			err = fmt.Errorf("Failed to run task: %s", err)
-			w.Report(false, false, false, err.Error())
+			w.Report(false, false, false, "%s", err)
 			return err
 		}
 	}
@@ -533,7 +533,7 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 
 // forceShutdown sends any shutdown reports and calls log.Fatal() to shut down the worker
 func (w *worker) forceShutdown(shutdownMsg string) {
-	w.Report(false, false, false, shutdownMsg)
+	w.Report(false, false, false, "%s", shutdownMsg)
 	log.Info("Force shutting down worker")
 	if w.currentMsg != nil {
 		if w.actionDigest != nil {
@@ -901,7 +901,7 @@ func (w *worker) writeUncachedResult(ar *pb.ActionResult, msg string) string {
 	b, _ := proto.Marshal(&bbcas.UncachedActionResult{
 		ActionDigest: w.actionDigest,
 		ExecuteResponse: &pb.ExecuteResponse{
-			Status: status(nil, codes.Unknown, msg),
+			Status: status(nil, codes.Unknown, "%s", msg),
 			Result: ar,
 		},
 	})
@@ -1075,7 +1075,7 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 
 // update sends an update on the response channel
 func (w *worker) update(stage pb.ExecutionStage_Value, response *pb.ExecuteResponse) error {
-	w.Report(true, stage == pb.ExecutionStage_EXECUTING, true, stage.String())
+	w.Report(true, stage == pb.ExecutionStage_EXECUTING, true, "%s", stage)
 	body := common.MarshalOperation(stage, w.actionDigest, response, w.metadata)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
