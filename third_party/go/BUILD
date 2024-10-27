@@ -4,7 +4,7 @@ package(default_visibility = ["PUBLIC"])
 
 go_toolchain(
     name = "toolchain",
-    version = "1.22.5",
+    version = "1.23.2",
     install_std = False,
 )
 
