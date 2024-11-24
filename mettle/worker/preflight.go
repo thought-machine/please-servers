@@ -61,6 +61,8 @@ func (w *worker) runPreflightAction() error {
 	log.Notice("Running pre-flight action...")
 	if resp := w.runTaskRequest(req); resp.Status.Code != 0 {
 		return fmt.Errorf("Failed to run pre-flight request: %s %s", resp.Status, resp.Message)
+	} else if resp.Result.ExitCode != 0 {
+		return fmt.Errorf("Failed to run pre-flight request: exit code %d: %s", resp.Result.ExitCode, resp.Message)
 	}
 	log.Notice("Pre-flight action run successfully!")
 	return nil
