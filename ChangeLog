@@ -1,3 +1,7 @@
+Version 11.13.0
+---------------
+    * Add a pre-flight action to ensure workers are succesfully able to execute actions (#325)
+
 Version 11.12.0
 ---------------
     * Add a new flag for connectivity checks to an external server

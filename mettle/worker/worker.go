@@ -148,8 +148,8 @@ func init() {
 }
 
 // RunForever runs the worker, receiving jobs until terminated.
-func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile string, primaryRedis, readRedis *redis.Client, redisMaxSize int64, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, connCheck string, connCheckPeriod time.Duration, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) {
-	err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, primaryRedis, readRedis, redisMaxSize, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, connCheck, connCheckPeriod, versionFile, costs, ackExtension, immediateShutdown)
+func RunForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile string, primaryRedis, readRedis *redis.Client, redisMaxSize int64, cachePrefix, cacheParts []string, clean, preflightAction, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, connCheck string, connCheckPeriod time.Duration, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) {
+	err := runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, primaryRedis, readRedis, redisMaxSize, cachePrefix, cacheParts, clean, preflightAction, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, connCheck, connCheckPeriod, versionFile, costs, ackExtension, immediateShutdown)
 	log.Fatalf("Failed to run: %s", err)
 }
 
@@ -184,12 +184,19 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	return nil
 }
 
-func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile string, primaryRedis, readRedis *redis.Client, redisMaxSize int64, cachePrefix, cacheParts []string, clean, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, connCheck string, connCheckPeriod time.Duration, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) error {
+func runForever(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile string, primaryRedis, readRedis *redis.Client, redisMaxSize int64, cachePrefix, cacheParts []string, clean, preflightAction, secureStorage bool, maxCacheSize, minDiskSpace int64, memoryThreshold float64, connCheck string, connCheckPeriod time.Duration, versionFile string, costs map[string]mettlecli.Currency, ackExtension time.Duration, immediateShutdown bool) error {
 	w, err := initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, dir, cacheDir, browserURL, sandbox, altSandbox, lucidity, promGatewayURL, tokenFile, primaryRedis, readRedis, redisMaxSize, cachePrefix, cacheParts, clean, secureStorage, maxCacheSize, minDiskSpace, memoryThreshold, versionFile, costs, ackExtension)
 	if err != nil {
 		return err
 	}
 	defer w.ShutdownQueues()
+
+	if preflightAction {
+		if err := w.runPreflightAction(); err != nil {
+			return err
+		}
+	}
+
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -488,14 +495,6 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 		defer cancel()
 		go w.extendAckDeadline(ctx, msg)
 	}
-	totalBuilds.Inc()
-	currentBuilds.WithLabelValues(w.instanceName).Inc()
-	defer currentBuilds.WithLabelValues(w.instanceName).Dec()
-	w.metadata = &pb.ExecutedActionMetadata{
-		Worker:               w.name,
-		WorkerStartTimestamp: ptypes.TimestampNow(),
-	}
-	w.taskStartTime = time.Now()
 	req := &pb.ExecuteRequest{}
 	if err := proto.Unmarshal(msg.Body, req); err != nil {
 		log.Error("Badly serialised request: %s")
@@ -504,6 +503,19 @@ func (w *worker) runTask(msg *pubsub.Message) *pb.ExecuteResponse {
 			Status: status(err, codes.FailedPrecondition, "Badly serialised request: %s", err),
 		}
 	}
+	return w.runTaskRequest(req)
+}
+
+// runTaskRequest runs a task from a proto request
+func (w *worker) runTaskRequest(req *pb.ExecuteRequest) *pb.ExecuteResponse {
+	totalBuilds.Inc()
+	currentBuilds.WithLabelValues(w.instanceName).Inc()
+	defer currentBuilds.WithLabelValues(w.instanceName).Dec()
+	w.metadata = &pb.ExecutedActionMetadata{
+		Worker:               w.name,
+		WorkerStartTimestamp: ptypes.TimestampNow(),
+	}
+	w.taskStartTime = time.Now()
 	w.actionDigest = req.ActionDigest
 	log.Debug("Received task for action digest %s", w.actionDigest.Hash)
 	w.lastURL = w.actionURL()
