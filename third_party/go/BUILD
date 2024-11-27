@@ -430,7 +430,7 @@ go_repo(
 
 go_repo(
     module = "golang.org/x/net",
-    version = "v0.19.0",
+    version = "v0.23.0",
 )
 
 go_repo(
@@ -655,7 +655,7 @@ go_repo(
 
 go_repo(
     module = "golang.org/x/sys",
-    version = "v0.16.0",
+    version = "v0.18.0",
 )
 
 go_repo(
@@ -910,7 +910,7 @@ go_repo(
 
 go_repo(
     module = "golang.org/x/term",
-    version = "v0.16.0",
+    version = "v0.18.0",
 )
 
 go_repo(
@@ -1360,7 +1360,7 @@ go_repo(
 
 go_repo(
     module = "github.com/bazelbuild/remote-apis",
-    version = "v0.0.0-20230411132548-35aee1c4a425",
+    version = "v0.0.0-20240215191509-9ff14cecffe5",
 )
 
 go_repo(
@@ -1395,7 +1395,7 @@ go_repo(
 
 go_repo(
     module = "cloud.google.com/go/compute/metadata",
-    version = "v0.2.3",
+    version = "v0.3.0",
 )
 
 go_repo(
@@ -2305,7 +2305,7 @@ go_repo(
 
 go_repo(
     module = "golang.org/x/oauth2",
-    version = "v0.15.0",
+    version = "v0.20.0",
 )
 
 go_repo(
@@ -2790,7 +2790,7 @@ go_repo(
 
 go_repo(
     module = "golang.org/x/crypto",
-    version = "v0.17.0",
+    version = "v0.21.0",
 )
 
 go_repo(
@@ -3005,7 +3005,7 @@ go_repo(
 
 go_repo(
     module = "github.com/klauspost/compress",
-    version = "v1.17.4",
+    version = "v1.17.8",
 )
 
 go_repo(
@@ -3827,7 +3827,7 @@ go_repo(
 go_mod_download(
     name = "remote-apis-sdks_download",
     module = "github.com/peterebden/remote-apis-sdks",
-    version = "v0.0.0-20230519151942-2a9420921957",
+    version = "v0.0.0-20241127162508-1863bc8b3d59",
 )
 
 go_repo(
