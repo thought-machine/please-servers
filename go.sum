@@ -237,6 +237,8 @@ github.com/peterebden/remote-apis-sdks v0.0.0-20230518122452-6e5d9d252ff0 h1:WV3
 github.com/peterebden/remote-apis-sdks v0.0.0-20230518122452-6e5d9d252ff0/go.mod h1:fUQHOmdjqFNgE7CGmwwqcM0a4f/8/oy23iDvdvELExY=
 github.com/peterebden/remote-apis-sdks v0.0.0-20230519151942-2a9420921957 h1:0bVOFvzOMhUkJJKNqYvdQroaXWKqROy/cSIGVxeQbhI=
 github.com/peterebden/remote-apis-sdks v0.0.0-20230519151942-2a9420921957/go.mod h1:fUQHOmdjqFNgE7CGmwwqcM0a4f/8/oy23iDvdvELExY=
+github.com/peterebden/remote-apis-sdks v0.0.0-20241127142115-378ae120bc7f h1:AAM8vWxchMZIEg9lNO+6fKCGdDCkR750E3wKiSPMvUQ=
+github.com/peterebden/remote-apis-sdks v0.0.0-20241127142115-378ae120bc7f/go.mod h1:u2f6SqJPpli9wlmEkgODVbR+1BSZF2HIulRm3CWGvJs=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
