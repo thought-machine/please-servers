@@ -194,7 +194,7 @@ func mustCache(size int64) *ristretto.Cache {
 	}
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		// Recommended NumCounters is ~10x unique cache entries.
-		// The average cache entry is approximated to 100 bytes to get size/10.
+		// NumCounters = size/10 is chosen to be optimal for cache entries of approx 100 bytes.
 		NumCounters: size / 10,
 		MaxCost:     size,
 		BufferItems: 64, // recommended by upstream
