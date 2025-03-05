@@ -1,3 +1,7 @@
+Version 11.13.1
+---------------
+    * Reduce log level for action execution requests to `Debug`.
+
 Version 11.13.0
 ---------------
     * Add a pre-flight action to ensure workers are succesfully able to execute actions (#325)
