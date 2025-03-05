@@ -302,9 +302,9 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		return err
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
-		log.Notice("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
+		log.Debug("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
 	} else {
-		log.Notice("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
+		log.Debug("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
 	}
 
 	// If we're allowed to check the cache, see if this one has already been done.
