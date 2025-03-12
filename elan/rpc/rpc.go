@@ -659,7 +659,7 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 }
 
 func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
-	// Bypass semaphore for Action Cache blobs.
+	// Bypass semaphore for Action Cache blobs; reading these should be cheap.
 	if !strings.HasPrefix(key, ACPrefix+"/") {
 		s.limiter <- struct{}{}
 		defer func() { <-s.limiter }()
