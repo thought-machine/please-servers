@@ -659,8 +659,11 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 }
 
 func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	// Bypass semaphore for Action Cache blobs.
+	if !strings.HasPrefix(key, ACPrefix+"/") {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	b, err := s.bucket.ReadAll(ctx, key)
