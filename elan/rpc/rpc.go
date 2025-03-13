@@ -359,8 +359,7 @@ func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Diges
 }
 
 func (s *server) blobExistsUncached(ctx context.Context, key string) bool {
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	// No limitter needed for light weight existence checks.
 	exists, _ := s.bucket.Exists(ctx, key)
 	return exists
 }
