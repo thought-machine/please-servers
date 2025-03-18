@@ -151,34 +151,34 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) {
-	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, redisMaxSize)
+func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, objectSizeCutoff int64) {
+	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, objectSizeCutoff)
 	grpcutil.ServeForever(lis, s)
 }
 
-func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) *server {
+func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, objectSizeCutoff int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	if redisMaxSize <= 0 {
-		redisMaxSize = rediscommon.DefaultMaxSize
+	if objectSizeCutoff <= 0 {
+		objectSizeCutoff = rediscommon.DefaultMaxSize
 	}
 	return &server{
-		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
-		storageRoot:    strings.TrimPrefix(storage, "file://"),
-		isFileStorage:  strings.HasPrefix(storage, "file://"),
-		bucket:         mustOpenStorage(storage),
-		limiter:        make(chan struct{}, parallelism),
-		dirCache:       mustCache(maxDirCacheSize),
-		knownBlobCache: mustCache(maxKnownBlobCacheSize),
-		compressor:     enc,
-		decompressor:   dec,
-		readRedis:      readRedis,
-		redisMaxSize:   redisMaxSize,
+		bytestreamRe:     regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
+		storageRoot:      strings.TrimPrefix(storage, "file://"),
+		isFileStorage:    strings.HasPrefix(storage, "file://"),
+		bucket:           mustOpenStorage(storage),
+		limiter:          make(chan struct{}, parallelism),
+		dirCache:         mustCache(maxDirCacheSize),
+		knownBlobCache:   mustCache(maxKnownBlobCacheSize),
+		compressor:       enc,
+		decompressor:     dec,
+		readRedis:        readRedis,
+		objectSizeCutoff: objectSizeCutoff,
 	}
 }
 
-func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) (net.Listener, *grpc.Server) {
-	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, redisMaxSize)
+func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, objectSizeCutoff int64) (net.Listener, *grpc.Server) {
+	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, objectSizeCutoff)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
@@ -216,7 +216,7 @@ type server struct {
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
 	readRedis                *redis.Client
-	redisMaxSize             int64
+	objectSizeCutoff         int64
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -344,7 +344,7 @@ func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Diges
 		}
 	}()
 
-	if redisRequest && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+	if redisRequest && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.objectSizeCutoff {
 		exists, err := s.readRedis.Exists(ctx, digest.Hash).Result()
 		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to check blob in Redis: %v", err)
@@ -534,9 +534,9 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	if s.isEmpty(digest) {
 		return ioutil.NopCloser(bytes.NewReader(nil)), compressed, nil
 	}
-	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.objectSizeCutoff {
 		// NOTE: we could use GETRANGE here, but given it's a bit more expensive on the redis
-		// side and redisMaxSize is quite small, we get the whole blob
+		// side and objectSizeCutoff is quite small, we get the whole blob
 		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
 		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to get blob in Redis: %v", err)
@@ -628,7 +628,7 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 		return nil, false, nil
 	}
 
-	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.objectSizeCutoff {
 		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
 		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to get blob in Redis: %v", err)

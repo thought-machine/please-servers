@@ -15,7 +15,7 @@ var opts = struct {
 	Logging            cli.LoggingOpts `group:"Options controlling logging output"`
 	GRPC               grpcutil.Opts   `group:"Options controlling the gRPC server"`
 	Storage            string          `short:"s" long:"storage" env:"STORAGE_URL" required:"true" description:"URL defining where to store data, eg. gs://bucket-name."`
-	Parallelism        int             `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer. Light weight AC requests are not limited."`
+	Parallelism        int             `long:"parallelism" default:"50" description:"Maximum number of in-flight parallel requests to the backend storage layer. Light weight requests are not limited."`
 	DirCacheSize       int64           `long:"dir_cache_size" default:"10240" description:"Number of directory entries to cache for GetTree"`
 	KnownBlobCacheSize flags.ByteSize  `long:"known_blob_cache_size" description:"Max size of known blob cache (in approximate bytes)"`
 	Admin              cli.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
