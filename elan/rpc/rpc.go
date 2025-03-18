@@ -503,8 +503,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	} else if req.ReadLimit == 0 || req.ReadOffset+req.ReadLimit >= digest.SizeBytes {
 		req.ReadLimit = -1
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.objectSizeCutoff {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	r, needCompression, err := s.readCompressed(ctx, "cas", digest, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
@@ -658,8 +660,7 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 }
 
 func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
-	// Bypass semaphore for Action Cache blobs; reading these should be cheap.
-	if !strings.HasPrefix(key, ACPrefix+"/") {
+	if digest.SizeBytes > s.objectSizeCutoff {
 		s.limiter <- struct{}{}
 		defer func() { <-s.limiter }()
 	}
@@ -704,8 +705,10 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		_, err := io.Copy(ioutil.Discard, r)
 		return err
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.objectSizeCutoff {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	start := time.Now()
 	defer func() {
 		writeLatencies.Observe(time.Since(start).Seconds())
@@ -744,8 +747,10 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 }
 
 func (s *server) writeAll(ctx context.Context, digest *pb.Digest, data []byte, compressed bool) error {
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.objectSizeCutoff {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	canonical := data
 	if compressed {
 		decompressed, err := s.decompressor.DecodeAll(canonical, make([]byte, 0, digest.SizeBytes))
