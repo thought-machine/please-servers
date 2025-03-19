@@ -37,7 +37,7 @@ type Opts struct {
 	WriteTimeout     flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
 	CAFile           string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
 	TLS              bool           `long:"tls" description:"Use TLS for connecting to Redis"`
-	MaxSize          int64          `long:"max_size" env:"OBJ_SIZE_CUTOFF" default:"202400" description:"Max size of objects indexed on redis. Access to larger objects in the google bucket is rate limited."` // default is 200 Kelly-Bootle standard units
+	MaxSize          int64          `long:"max_size" env:"LARGE_BLOB_SIZE" default:"202400" description:"Max size of objects indexed on redis. Access to larger objects in the google bucket is rate limited."` // default is 200 Kelly-Bootle standard units
 }
 
 // Clients sets up clients to both primary and read replicas. If no read URL
