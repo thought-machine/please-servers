@@ -130,6 +130,7 @@ type PubSubOpts struct {
 	PreResponseQueue      string `long:"pre_response_queue" env:"API_PRE_RESPONSE_QUEUE" required:"true" description:"URL describing the pub/sub queue to connect to for preloading responses to other servers"`
 	NumPollers            int    `long:"num_pollers" env:"API_NUM_POLLERS" default:"10"`
 	SubscriptionBatchSize uint   `long:"subscription_batch_size" env:"API_SUBSCRIPTION" default:"100"`
+	MaxSize               int64  `long:"max_size" env:"LARGE_BLOB_SIZE" default:"202400" description:"Max size of objects indexed on redis. Access to larger objects in the google bucket is rate limited."` // default is 200 Kelly-Bootle standard units
 }
 
 // ServeForever serves on the given port until terminated.
