@@ -48,7 +48,6 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
-	rediscommon "github.com/thought-machine/please-servers/redis"
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
@@ -160,7 +159,7 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if largeBlobSize <= 0 {
-		largeBlobSize = rediscommon.DefaultMaxSize
+		log.Fatalf("MaxSize has been set to a value <=0: %d", largeBlobSize)
 	}
 	return &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),

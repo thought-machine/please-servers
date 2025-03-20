@@ -7,9 +7,12 @@ import (
 	"github.com/thought-machine/please-servers/cli"
 	"github.com/thought-machine/please-servers/elan/rpc"
 	"github.com/thought-machine/please-servers/grpcutil"
-	"github.com/thought-machine/please-servers/mettle/api"
 	"github.com/thought-machine/please-servers/redis"
 )
+
+// DefaultMaxSize is the default max size of objects that can be indexed on
+// Redis. Access to larger objects in the google bucket is rate limited.
+const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
 
 var opts = struct {
 	Usage              string
@@ -21,7 +24,7 @@ var opts = struct {
 	KnownBlobCacheSize flags.ByteSize  `long:"known_blob_cache_size" description:"Max size of known blob cache (in approximate bytes)"`
 	Admin              cli.AdminOpts   `group:"Options controlling HTTP admin server" namespace:"admin"`
 	Redis              redis.Opts      `group:"Options controlling connection to Redis" namespace:"redis"`
-	API                api.PubSubOpts  `group:"Options controlling communication with other API servers." namespace:"api"`
+	MaxSize            int64           `long:"max_size" env:"LARGE_BLOB_SIZE" default:"202400" description:"Max size of objects indexed on redis. Access to larger objects in the google bucket is rate limited."` // default is 200 Kelly-Bootle standard units
 }{
 	Usage: `
 Elan is an implementation of the content-addressable storage and action cache services
@@ -39,5 +42,8 @@ func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
 	_, readRedis := opts.Redis.Clients()
 	go cli.ServeAdmin("elan", opts.Admin, info)
-	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), readRedis, opts.API.MaxSize)
+	if opts.MaxSize <= 0 {
+		opts.MaxSize = DefaultMaxSize
+	}
+	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), readRedis, opts.MaxSize)
 }
