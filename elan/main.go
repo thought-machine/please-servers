@@ -10,10 +10,6 @@ import (
 	"github.com/thought-machine/please-servers/redis"
 )
 
-// DefaultMaxSize is the default max size of objects that can be indexed on
-// Redis. Access to larger objects in the google bucket is rate limited.
-const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
-
 var opts = struct {
 	Usage              string
 	Logging            cli.LoggingOpts `group:"Options controlling logging output"`
@@ -42,8 +38,5 @@ func main() {
 	_, info := cli.ParseFlagsOrDie("Elan", &opts, &opts.Logging)
 	_, readRedis := opts.Redis.Clients()
 	go cli.ServeAdmin("elan", opts.Admin, info)
-	if opts.MaxSize <= 0 {
-		opts.MaxSize = DefaultMaxSize
-	}
 	rpc.ServeForever(opts.GRPC, opts.Storage, opts.Parallelism, opts.DirCacheSize, int64(opts.KnownBlobCacheSize), readRedis, opts.MaxSize)
 }

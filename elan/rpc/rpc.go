@@ -59,6 +59,10 @@ const (
 	CompressedCASPrefix = "zstd_cas"
 )
 
+// DefaultMaxSize is the default max size of objects that can be indexed on
+// Redis. Access to larger objects in the google bucket is rate limited.
+const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
+
 var log = logging.MustGetLogger()
 
 // emptyHash is the sha256 hash of the empty file.
@@ -159,7 +163,7 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	if largeBlobSize <= 0 {
-		log.Fatalf("MaxSize has been set to a value <=0: %d", largeBlobSize)
+		largeBlobSize = DefaultMaxSize
 	}
 	return &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
