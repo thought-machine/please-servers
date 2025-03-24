@@ -48,7 +48,6 @@ import (
 
 	"github.com/thought-machine/please-servers/grpcutil"
 	ppb "github.com/thought-machine/please-servers/proto/purity"
-	rediscommon "github.com/thought-machine/please-servers/redis"
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
@@ -59,6 +58,10 @@ const (
 	CASPrefix           = "cas"
 	CompressedCASPrefix = "zstd_cas"
 )
+
+// DefaultMaxSize is the default max size of objects that can be indexed on
+// Redis. Access to larger objects in the google bucket is rate limited.
+const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
 
 var log = logging.MustGetLogger()
 
@@ -151,16 +154,16 @@ func init() {
 }
 
 // ServeForever serves on the given port until terminated.
-func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) {
-	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, redisMaxSize)
+func ServeForever(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, largeBlobSize int64) {
+	lis, s := startServer(opts, storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, largeBlobSize)
 	grpcutil.ServeForever(lis, s)
 }
 
-func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) *server {
+func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, largeBlobSize int64) *server {
 	dec, _ := zstd.NewReader(nil)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	if redisMaxSize <= 0 {
-		redisMaxSize = rediscommon.DefaultMaxSize
+	if largeBlobSize <= 0 {
+		largeBlobSize = DefaultMaxSize
 	}
 	return &server{
 		bytestreamRe:   regexp.MustCompile("(?:uploads/[0-9a-f-]+/)?(blobs|compressed-blobs/zstd)/([0-9a-f]+)/([0-9]+)"),
@@ -173,12 +176,12 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 		compressor:     enc,
 		decompressor:   dec,
 		readRedis:      readRedis,
-		redisMaxSize:   redisMaxSize,
+		largeBlobSize:  largeBlobSize,
 	}
 }
 
-func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, redisMaxSize int64) (net.Listener, *grpc.Server) {
-	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, redisMaxSize)
+func startServer(opts grpcutil.Opts, storage string, parallelism int, maxDirCacheSize, maxKnownBlobCacheSize int64, readRedis *redis.Client, largeBlobSize int64) (net.Listener, *grpc.Server) {
+	srv := createServer(storage, parallelism, maxDirCacheSize, maxKnownBlobCacheSize, readRedis, largeBlobSize)
 	lis, s := grpcutil.NewServer(opts)
 	pb.RegisterCapabilitiesServer(s, srv)
 	pb.RegisterActionCacheServer(s, srv)
@@ -216,7 +219,7 @@ type server struct {
 	compressor               *zstd.Encoder
 	decompressor             *zstd.Decoder
 	readRedis                *redis.Client
-	redisMaxSize             int64
+	largeBlobSize            int64
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -344,7 +347,7 @@ func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Diges
 		}
 	}()
 
-	if redisRequest && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+	if redisRequest && s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.largeBlobSize {
 		exists, err := s.readRedis.Exists(ctx, digest.Hash).Result()
 		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to check blob in Redis: %v", err)
@@ -359,8 +362,7 @@ func (s *server) blobExists(ctx context.Context, prefix string, digest *pb.Diges
 }
 
 func (s *server) blobExistsUncached(ctx context.Context, key string) bool {
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	// No limitter needed for light weight existence checks.
 	exists, _ := s.bucket.Exists(ctx, key)
 	return exists
 }
@@ -504,8 +506,10 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	} else if req.ReadLimit == 0 || req.ReadOffset+req.ReadLimit >= digest.SizeBytes {
 		req.ReadLimit = -1
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.largeBlobSize {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	r, needCompression, err := s.readCompressed(ctx, "cas", digest, compressed, req.ReadOffset, req.ReadLimit)
 	if err != nil {
 		return err
@@ -535,9 +539,9 @@ func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.D
 	if s.isEmpty(digest) {
 		return ioutil.NopCloser(bytes.NewReader(nil)), compressed, nil
 	}
-	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.largeBlobSize {
 		// NOTE: we could use GETRANGE here, but given it's a bit more expensive on the redis
-		// side and redisMaxSize is quite small, we get the whole blob
+		// side and largeBlobSize is quite small, we get the whole blob
 		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
 		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to get blob in Redis: %v", err)
@@ -629,7 +633,7 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 		return nil, false, nil
 	}
 
-	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.redisMaxSize {
+	if s.readRedis != nil && prefix == CASPrefix && digest.SizeBytes < s.largeBlobSize {
 		blob, err := s.readRedis.Get(ctx, digest.Hash).Bytes()
 		if err != nil && err != redis.Nil {
 			log.Warningf("Failed to get blob in Redis: %v", err)
@@ -659,8 +663,10 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 }
 
 func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.largeBlobSize {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	start := time.Now()
 	defer func() { readDurations.Observe(time.Since(start).Seconds()) }()
 	b, err := s.bucket.ReadAll(ctx, key)
@@ -702,8 +708,10 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 		_, err := io.Copy(ioutil.Discard, r)
 		return err
 	}
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.largeBlobSize {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	start := time.Now()
 	defer func() {
 		writeLatencies.Observe(time.Since(start).Seconds())
@@ -742,8 +750,10 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 }
 
 func (s *server) writeAll(ctx context.Context, digest *pb.Digest, data []byte, compressed bool) error {
-	s.limiter <- struct{}{}
-	defer func() { <-s.limiter }()
+	if digest.SizeBytes > s.largeBlobSize {
+		s.limiter <- struct{}{}
+		defer func() { <-s.limiter }()
+	}
 	canonical := data
 	if compressed {
 		decompressed, err := s.decompressor.DecodeAll(canonical, make([]byte, 0, digest.SizeBytes))

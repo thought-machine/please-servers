@@ -14,14 +14,14 @@ import (
 )
 
 // DefaultMaxSize is the default max size of objects that can be indexed on
-// Redis.
+// Redis. Access to larger objects in the google bucket is rate limited.
 const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
 
 // Opts is a collection of options used to set up a redis client.
 // It supports single node redis as well as primary and read replicas.
 // NOTE: MaxSize is not used by the clients; it must be honoured in the logic
-// logic that calls the clients. This is just so we have a single place where
-// this option is defined.
+// that calls the clients. This is just so we have a single place where this
+// option is defined.
 type Opts struct {
 	URL              string         `long:"url" env:"REDIS_URL" description:"host:port of Redis server"`
 	ReadURL          string         `long:"read_url" env:"REDIS_READ_URL" description:"host:port of a Redis read replica, if set any read operation will be routed to it"`
@@ -37,7 +37,7 @@ type Opts struct {
 	WriteTimeout     flags.Duration `long:"write_timeout" env:"REDIS_WRITE_TIMEOUT" default:"1m" description:"Timeout on network write (not write commands)"`
 	CAFile           string         `long:"ca_file" env:"REDIS_CA_FILE" description:"File containing the Redis instance CA cert"`
 	TLS              bool           `long:"tls" description:"Use TLS for connecting to Redis"`
-	MaxSize          int64          `long:"max_size" env:"REDIS_MAX_SIZE" default:"202400" description:"Max size of objects indexed on redis"` // default is 200 Kelly-Bootle standard units
+	MaxSize          int64          `long:"max_size" env:"LARGE_BLOB_SIZE" default:"202400" description:"Max size of objects indexed on redis. Access to larger objects in the google bucket is rate limited."` // default is 200 Kelly-Bootle standard units
 }
 
 // Clients sets up clients to both primary and read replicas. If no read URL
