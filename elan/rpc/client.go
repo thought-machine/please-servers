@@ -29,7 +29,7 @@ func New(url string, tls bool, tokenFile string) (Client, error) {
 	}
 	return &remoteClient{
 		c:      client,
-		health: hpb.NewHealthClient(client.CASConnection),
+		health: hpb.NewHealthClient(client.CASConnection()),
 	}, nil
 }
 
