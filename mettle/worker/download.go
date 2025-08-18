@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -88,7 +89,7 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	}
 	if usePacks {
 		if dg := rexclient.PackDigest(dir); dg.Hash != "" {
-			log.Debug("Replacing dir %s with pack digest %s/%d", root, dg.Hash, dg.Size)
+			slog.Debug("Replacing dir with pack digest", "root", root, "hash", dg.Hash, "size", dg.Size)
 			packs[dg] = append(packs[dg], root)
 			return nil
 		}

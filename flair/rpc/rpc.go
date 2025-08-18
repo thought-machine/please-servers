@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -636,7 +637,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 				if (existing.LastAccessed < ageThreshold && ar.LastAccessed >= ageThreshold) || (ar.LastAccessed < ageThreshold && existing.LastAccessed >= ageThreshold) {
 					existingLastAccessed := time.Unix(existing.LastAccessed, 0)
 					arLastAccessed := time.Unix(ar.LastAccessed, 0)
-					log.Debug("AR %s: one replica accessed at %s, one at %s.", ar.Hash, existingLastAccessed, arLastAccessed)
+					slog.Debug("AR: replicas accessed at existingLastAccessed and lastAccessed", "hash", ar.Hash, "existingLastAccessed", existingLastAccessed, "lastAccessed", arLastAccessed)
 				}
 				// End temporary logging
 				if existing.LastAccessed < ar.LastAccessed {

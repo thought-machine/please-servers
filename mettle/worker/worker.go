@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -163,7 +164,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	}
 	defer w.ShutdownQueues()
 
-	log.Notice("Queuing task for %s", digest.Hash)
+	slog.Info("Queuing task", "hash", digest.Hash)
 	b, _ := proto.Marshal(&pb.ExecuteRequest{
 		InstanceName: instanceName,
 		ActionDigest: digest,
@@ -171,7 +172,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	if err := topic.Send(context.Background(), &pubsub.Message{Body: b}); err != nil {
 		log.Fatalf("Failed to submit job to internal queue: %s", err)
 	}
-	log.Notice("Queued task for %s", digest.Hash)
+	slog.Info("Queued task", "hash", digest.Hash)
 
 	if response, err := w.RunTask(context.Background()); err != nil {
 		return fmt.Errorf("Failed to run task: %s", err)
@@ -180,7 +181,7 @@ func RunOne(instanceName, name, storage, dir, cacheDir, sandbox, altSandbox, tok
 	} else if response.Result.ExitCode != 0 {
 		return fmt.Errorf("Execution failed: %s", response.Message)
 	}
-	log.Notice("Completed execution successfully for %s", digest.Hash)
+	slog.Info("Completed execution successfully", "hash", digest.Hash)
 	return nil
 }
 
@@ -517,7 +518,7 @@ func (w *worker) runTaskRequest(req *pb.ExecuteRequest) *pb.ExecuteResponse {
 	}
 	w.taskStartTime = time.Now()
 	w.actionDigest = req.ActionDigest
-	log.Debug("Received task for action digest %s", w.actionDigest.Hash)
+	slog.Debug("Received task for action digest", "hash", w.actionDigest.Hash)
 	w.lastURL = w.actionURL()
 
 	action, command, status := w.fetchRequestBlobs(req)
@@ -529,7 +530,7 @@ func (w *worker) runTaskRequest(req *pb.ExecuteRequest) *pb.ExecuteResponse {
 		}
 	}
 	if status := w.prepareDir(action, command); status != nil {
-		log.Warning("Failed to prepare directory for action digest %s: %s", w.actionDigest.Hash, status)
+		slog.Warn("Failed to prepare directory for action digest", "hash", w.actionDigest.Hash, "status", status)
 		ar := &pb.ActionResult{
 			ExitCode:          255, // Not really but shouldn't look like it was successful
 			ExecutionMetadata: w.metadata,
@@ -549,7 +550,7 @@ func (w *worker) forceShutdown(shutdownMsg string) {
 	log.Info("Force shutting down worker")
 	if w.currentMsg != nil {
 		if w.actionDigest != nil {
-			log.Infof("Nacking action: %s", w.actionDigest.Hash)
+			slog.Info("Nacking action", "hash", w.actionDigest.Hash)
 		} else {
 			log.Error("Nacking action but action digest is nil")
 		}
@@ -595,7 +596,7 @@ func (w *worker) extendAckDeadlineOnce(ctx context.Context, client *psraw.Subscr
 		AckIds:             []string{ackID},
 		AckDeadlineSeconds: int32(w.ackExtension.Seconds()),
 	}); err != nil {
-		log.Warning("Failed to extend ack deadline for %s: %s", w.actionDigest.Hash, err)
+		slog.Warn("Failed to extend ack deadline", "hash", w.actionDigest.Hash, "error", err)
 	}
 }
 
@@ -616,7 +617,7 @@ func (w *worker) fetchRequestBlobs(req *pb.ExecuteRequest) (*pb.Action, *pb.Comm
 // prepareDir prepares the directory for executing this request.
 func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.Status {
 	if status := w.prepareDirWithPacks(action, command, true); status != nil {
-		log.Warning("Failed to prepare directory with packs for %s, falling back to without: %s", w.actionDigest.Hash, status)
+		slog.Warn("Failed to prepare directory with packs, falling back to without", "hash", w.actionDigest.Hash, "status", status)
 		return w.prepareDirWithPacks(action, command, false)
 	}
 	return nil
@@ -624,7 +625,7 @@ func (w *worker) prepareDir(action *pb.Action, command *pb.Command) *rpcstatus.S
 
 // prepareDirWithPacks is like prepareDir but optionally uses pack files to optimise the download.
 func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, usePacks bool) *rpcstatus.Status {
-	log.Info("Preparing directory for %s", w.actionDigest.Hash)
+	slog.Info("Preparing directory", "hash", w.actionDigest.Hash)
 	defer func() {
 		w.metadata.InputFetchCompletedTimestamp = toTimestamp(time.Now())
 	}()
@@ -653,9 +654,14 @@ func (w *worker) prepareDirWithPacks(action *pb.Action, command *pb.Command, use
 	fetchDurations.Observe(time.Since(start).Seconds())
 	if total := w.cachedBytes + w.downloadedBytes; total > 0 {
 		percentage := float64(w.downloadedBytes) * 100.0 / float64(total)
-		log.Debug("Prepared directory for %s; downloaded %s / %s (%0.1f%%).", w.actionDigest.Hash, humanize.Bytes(uint64(w.downloadedBytes)), humanize.Bytes(uint64(total)), percentage)
+		slog.Debug("Prepared directory",
+			"hash", w.actionDigest.Hash,
+			"bytes", humanize.Bytes(uint64(w.downloadedBytes)),
+			"total", humanize.Bytes(uint64(total)),
+			"percentage", fmt.Sprintf("%0.1f%%", percentage),
+		)
 	} else {
-		log.Debug("Prepared directory for %s", w.actionDigest.Hash)
+		slog.Debug("Prepared directory", "hash", w.actionDigest.Hash)
 	}
 	log.Debug("Metadata fetch: %s, dir creation: %s, file download: %s", w.metadataFetch, w.dirCreation, w.fileDownload)
 	return nil
@@ -696,7 +702,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	start := time.Now()
 	w.metadata.ExecutionStartTimestamp = toTimestamp(start)
 	duration, _ := ptypes.Duration(action.Timeout)
-	log.Debug("Executing action %s with timeout %s", w.actionDigest.Hash, duration)
+	slog.Debug("Executing action with timeout", "hash", w.actionDigest.Hash, "duration", duration)
 	cmd := exec.Command(commandPath(command), command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 	cmd.SysProcAttr = sysProcAttr()
@@ -716,7 +722,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		cmd.Env[i] = v.Name + "=" + v.Value
 	}
 	err := w.runCommand(cmd, duration)
-	log.Debug("Completed execution for %s", w.actionDigest.Hash)
+	slog.Debug("Completed execution", "hash", w.actionDigest.Hash)
 	execEnd := time.Now()
 	w.metadata.VirtualExecutionDuration = durationpb.New(duration)
 	w.metadata.ExecutionCompletedTimestamp = toTimestamp(execEnd)
@@ -731,7 +737,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 
 	stdoutDigest, uploadErr := w.client.WriteBlob(w.stdout.Bytes())
 	if uploadErr != nil {
-		log.Error("Failed to upload stdout for %s: %s", w.actionDigest.Hash, uploadErr)
+		slog.Error("Failed to upload stdout", "hash", w.actionDigest.Hash, "error", uploadErr)
 		return &pb.ExecuteResponse{
 			Status: status(uploadErr, codes.Internal, "Failed to upload stdout: %s", uploadErr),
 			Result: ar,
@@ -741,7 +747,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 
 	stderrDigest, uploadErr := w.client.WriteBlob(w.stderr.Bytes())
 	if uploadErr != nil {
-		log.Error("Failed to upload stderr for %s: %s", w.actionDigest.Hash, uploadErr)
+		slog.Error("Failed to upload stderr", "hash", w.actionDigest.Hash, "error", uploadErr)
 		return &pb.ExecuteResponse{
 			Status: status(uploadErr, codes.Internal, "Failed to upload stderr: %s", uploadErr),
 			Result: ar,
@@ -749,7 +755,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	}
 	ar.StderrDigest = stderrDigest
 
-	log.Info("Uploading outputs for %s", w.actionDigest.Hash)
+	slog.Info("Uploading outputs", "hash", w.actionDigest.Hash)
 	w.observeSysUsage(cmd, execDuration)
 	if err != nil {
 		log.Debug("Execution failed.\nStdout: %s\nStderr: %s", w.stdout.String(), w.stderr.String())
@@ -772,7 +778,7 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	}
 	if err := w.collectOutputs(ar, command); err != nil {
 		collectOutputErrors.Inc()
-		log.Error("Failed to collect outputs for %s: %s", w.actionDigest.Hash, err)
+		slog.Error("Failed to collect outputs", "hash", w.actionDigest.Hash, "error", err)
 		return &pb.ExecuteResponse{
 			Status: status(err, codes.Internal, "Failed to collect outputs: %s", err),
 			Result: ar,
@@ -781,13 +787,13 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	end := time.Now()
 	w.metadata.OutputUploadCompletedTimestamp = toTimestamp(end)
 	uploadDurations.Observe(end.Sub(execEnd).Seconds())
-	log.Debug("Uploaded outputs for %s", w.actionDigest.Hash)
+	slog.Debug("Uploaded outputs", "hash", w.actionDigest.Hash)
 	w.metadata.WorkerCompletedTimestamp = toTimestamp(time.Now())
 	w.observeCosts()
 
 	// If the result was missing some output paths, we should still return it however avoid caching the result
 	if !containsAllOutputPaths(command, ar) {
-		log.Warning("Result missing some outputs %s", w.actionDigest.Hash)
+		slog.Warn("Result missing some outputs", "hash", w.actionDigest.Hash)
 		msg := "result was missing some outputs"
 		w.writeUncachedResult(ar, msg)
 		return &pb.ExecuteResponse{
@@ -806,13 +812,13 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		},
 	})
 	if err != nil {
-		log.Error("Failed to upload action result for %s: %s", w.actionDigest.Hash, err)
+		slog.Error("Failed to upload action result", "hash", w.actionDigest.Hash, "error", err)
 		return &pb.ExecuteResponse{
 			Status: status(err, codes.Internal, "Failed to upload action result: %s", err),
 			Result: ar,
 		}
 	}
-	log.Debug("Uploaded action result for %s", w.actionDigest.Hash)
+	slog.Debug("Uploaded action result", "hash", w.actionDigest.Hash)
 	return &pb.ExecuteResponse{
 		Status: &rpcstatus.Status{Code: int32(codes.OK)},
 		Result: ar,
@@ -887,14 +893,14 @@ func (w *worker) runCommand(cmd *exec.Cmd, timeout time.Duration) error {
 	case err := <-ch:
 		return err
 	case <-time.After(timeout):
-		log.Warning("Terminating process for %s due to timeout", w.actionDigest.Hash)
+		slog.Warn("Terminating process due to timeout", "hash", w.actionDigest.Hash)
 		cmd.Process.Signal(os.Signal(syscall.SIGTERM))
 
 		select {
 		case <-ch:
 			return ErrTimeout
 		case <-time.After(5 * time.Second):
-			log.Warning("Killing process for %s", w.actionDigest.Hash)
+			slog.Warn("Killing process", "hash", w.actionDigest.Hash)
 			cmd.Process.Kill()
 			return ErrTimeout
 		}

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -113,7 +114,7 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 					InstanceName: s.storageClient.InstanceName,
 					BlobDigests:  []*rpb.Digest{ar.OutputFiles[0].Digest},
 				}); err == nil && len(resp.MissingBlobDigests) == 0 {
-					log.Info("Retrieved %s from action cache (as %s/%d) and exists in CAS", req.Uris, dg.Hash, dg.Size)
+					slog.Info("Retrieved URIs from action cache and exists in CAS", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size)
 					return &pb.FetchBlobResponse{
 						Status:     &rpcstatus.Status{},
 						BlobDigest: ar.OutputFiles[0].Digest,
@@ -122,17 +123,17 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 				//  Missed the CAS, note it down, and move on to usual times.
 				casMissing.Inc()
 			} else {
-				log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
+				slog.Warn("Found URIs in action cache", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size, "outputs", len(ar.OutputFiles))
 			}
 		} else {
 			if len(ar.OutputFiles) == 1 {
-				log.Info("Retrieved %s from action cache (as %s/%d). Did not check CAS", req.Uris, dg.Hash, dg.Size)
+				slog.Info("Retrieved URIs from action cache. Did not check CAS", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size)
 				return &pb.FetchBlobResponse{
 					Status:     &rpcstatus.Status{},
 					BlobDigest: ar.OutputFiles[0].Digest,
 				}, nil
 			}
-			log.Warning("Found %s in action cache (as %s/%d) but it has %d outputs", req.Uris, dg.Hash, dg.Size, len(ar.OutputFiles))
+			slog.Warn("Found URIs in action cache", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size, "outputs", len(ar.OutputFiles))
 		}
 	}
 	resp, err := s.fetchBlob(ctx, req)
@@ -253,7 +254,7 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	defer cancel()
 	digest, err := s.storageClient.WriteBlob(ctx, blob)
 	if err == nil {
-		log.Info("Wrote %s as compressed blob %s", url, digest.Hash)
+		slog.Info("Wrote url as compressed blob", "url", url, "hash", digest.Hash)
 	}
 	return digest.ToProto(), err
 }

@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net"
 	"slices"
@@ -302,9 +303,10 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		return err
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
-		log.Debug("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
+		slog.Debug("Received an ExecuteRequest",
+			"hash", req.ActionDigest.Hash, "toolName", md.ToolDetails.ToolName, "toolVersion", md.ToolDetails.ToolVersion, "actionID", md.ActionId, "correlationID", md.CorrelatedInvocationsId)
 	} else {
-		log.Debug("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
+		slog.Debug("Received an ExecuteRequest", "hash", req.ActionDigest.Hash)
 	}
 
 	// If we're allowed to check the cache, see if this one has already been done.
@@ -389,14 +391,14 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 	for op := range ch {
 		op.Name = digest.Hash
 		if err := stream.Send(op); err != nil {
-			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
+			slog.Warn("Failed to forward event", "hash", digest.Hash, "error", err)
 			return err
 		}
 		if op.Done {
 			break
 		}
 	}
-	log.Debug("Completed stream for %s", digest.Hash)
+	slog.Debug("Completed stream", "hash", digest.Hash)
 	return nil
 }
 
@@ -420,7 +422,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 			LastUpdate: time.Now(),
 		}
 		s.jobs[digest.Hash] = j
-		log.Debug("Created job for %s", digest.Hash)
+		slog.Debug("Created job", "hash", digest.Hash)
 		totalRequests.Inc()
 		created = true
 	} else if create && time.Since(j.LastUpdate) >= resumptionTime {
@@ -432,7 +434,7 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		j.Done = false
 		created = true
 	} else {
-		log.Debug("Resuming existing job for %s", digest.Hash)
+		slog.Debug("Resuming existing job", "hash", digest.Hash)
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	if !created && j.Current != nil {
@@ -456,7 +458,7 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 	defer s.mutex.Unlock()
 	job, present := s.jobs[digest.Hash]
 	if !present {
-		log.Warning("stopStream for non-existent job %s", digest.Hash)
+		slog.Warn("stopStream for non-existent job", "hash", digest.Hash)
 		return
 	}
 	job.Streams = slices.DeleteFunc(job.Streams, func(stream chan *longrunning.Operation) bool {

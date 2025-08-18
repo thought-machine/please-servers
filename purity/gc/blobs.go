@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -37,14 +38,14 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	log.Debugf("marking input blobs for %s: %v", ar.Hash, inputBlobs)
+	slog.Debug("marking input blobs", "hash", ar.Hash, "inputBlobs", inputBlobs)
 	var inputSize int64
 	for _, b := range inputBlobs {
 		c.referencedBlobs[b.Hash] = struct{}{}
 		inputSize += b.SizeBytes
 	}
 	c.inputSizes[ar.Hash] = int(inputSize)
-	log.Debugf("marking output blobs for %s: %v", ar.Hash, outputBlobs)
+	slog.Debug("marking output blobs", "hash", ar.Hash, "outputBlobs", outputBlobs)
 	var outputSize int64
 	for _, b := range outputBlobs {
 		c.referencedBlobs[b.Hash] = struct{}{}
@@ -64,7 +65,7 @@ func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 	// like any other blob with the same digest as the AR.
 	blob, present := c.allBlobs[dg.Hash]
 	if !present {
-		log.Errorf("missing action for %s", dg.Hash)
+		slog.Error("missing action", "hash", dg.Hash)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
@@ -74,14 +75,14 @@ func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 		Hash: dg.Hash,
 		Size: blob.SizeBytes,
 	}, action); err != nil {
-		log.Errorf("Failed to read action %s: %v", dg.Hash, err)
+		slog.Error("Failed to read action", "hash", dg.Hash, "error", err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
 
 	digests, err := c.blobsForAction(action)
 	if err != nil {
-		log.Errorf("Failed to get blobs for action %s: %v", dg.Hash, err)
+		slog.Error("Failed to get blobs for action", "hash", dg.Hash, "error", err)
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
@@ -143,7 +144,7 @@ func (c *collector) outputBlobs(ar *ppb.ActionResult) ([]*pb.Digest, error) {
 		BlobDigests:  outputBlobs,
 	})
 	if err != nil {
-		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
+		slog.Warn("Failed to check blob digests", "hash", ar.Hash, "error", err)
 	}
 	if resp != nil && len(resp.MissingBlobDigests) > 0 {
 		digests := make([]string, len(resp.MissingBlobDigests))

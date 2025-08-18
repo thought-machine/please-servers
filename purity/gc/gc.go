@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"path"
 	"sort"
 	"sync"
@@ -255,7 +256,7 @@ func (c *collector) MarkReferencedBlobs() error {
 				if _, present := c.liveActionResults[ar.Hash]; present {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
-						log.Debug("Failed to find referenced blobs for %s: %s", ar.Hash, err)
+						slog.Debug("Failed to find referenced blobs", "hash", ar.Hash, "error", err)
 						c.markBroken(ar.Hash, ar.SizeBytes)
 					}
 					atomic.AddInt64(&live, 1)
@@ -292,7 +293,7 @@ func (c *collector) RemoveActionResults() error {
 	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
-			log.Debug("Identified action result %s for deletion", ar.Hash)
+			slog.Debug("Identified action result for deletion", "hash", ar.Hash)
 			ars = append(ars, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes, CachePrefix: ar.CachePrefix})
 			totalSize += ar.SizeBytes
 			numArs++
@@ -318,18 +319,18 @@ func (c *collector) RemoveActionResults() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			for _, ar := range ars {
-				log.Debug("Removing action result %s", ar.Hash)
+				slog.Debug("Removing action result", "hash", ar.Hash)
 				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 					Prefix:        ar.Hash[:2],
 					ActionResults: []*ppb.Blob{ar},
 					Hard:          true,
 				}); err != nil {
-					log.Warning("Failed to delete action result %s%s marking as live: %v", ar.CachePrefix, ar.Hash, err)
+					slog.Warn("Failed to delete action result marking as live", "prefix", ar.CachePrefix, "hash", ar.Hash, "error", err)
 					c.mutex.Lock()
 					c.liveActionResults[ar.Hash] = ar.SizeBytes
 					c.mutex.Unlock()
 				} else {
-					log.Debug("Deleted action result: %s", ar.Hash)
+					slog.Debug("Deleted action result", "hash", ar.Hash)
 					c.mutex.Lock()
 					delete(c.actionRFs, ar.Hash)
 					c.mutex.Unlock()
@@ -353,7 +354,7 @@ func (c *collector) RemoveBlobs() error {
 	var totalSize int64
 	for hash, blob := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
-			log.Debug("Identified blob %s for deletion", hash)
+			slog.Debug("Identified blob for deletion", "hash", hash)
 			key := blob.Hash[:2]
 			blobs[key] = append(blobs[key], blob)
 			delete(c.blobRFs, hash)
@@ -423,7 +424,7 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	var merr *multierror.Error
 	for _, digest := range digests {
 		cachePrefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
-		log.Debug("Removing action result %s%s", cachePrefix, digest.Hash)
+		slog.Debug("Removing action result", "cache", cachePrefix, "hash", digest.Hash)
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
 			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, CachePrefix: cachePrefix}},
@@ -569,7 +570,7 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		}
 		dir, present := m[digest.Hash]
 		if !present {
-			log.Errorf("Failed to find input directory with hash %s", digest.Hash)
+			slog.Error("Failed to find input directory with hash", "hash", digest.Hash)
 			return
 		}
 		for _, file := range dir.Files {
@@ -595,7 +596,7 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 			for _, ar := range ars {
 				action, dirs, err := c.inputDirs(ar)
 				if err != nil {
-					log.Errorf("failed to get input dir for %s: %v", ar.Hash, err)
+					slog.Error("failed to get input dir", "hash", ar.Hash, "error", err)
 				} else {
 					markBlobs(c.inputDirMap(dirs), action.InputRootDigest, "")
 				}

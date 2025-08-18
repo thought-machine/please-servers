@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 			// here we need to get the uncompressed size of the blob, otherwise REX SDK will complain about it
 			if size, err := s.getBlobUncompressedSize(ctx, a.Hash); err != nil {
 				// this is not an issue for GC, but would be for replication
-				log.Warningf("failed getting uncompressed size for blob %s (defaulting to compressed size): %v", a.Hash, err)
+				slog.Warn("failed getting uncompressed size for blob (defaulting to compressed size)", "error", err, "hash", a.Hash)
 			} else {
 				a.SizeBytes = int64(size)
 			}
