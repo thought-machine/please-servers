@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -27,6 +26,7 @@ import (
 	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/peterebden/go-sri"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -36,6 +36,7 @@ import (
 )
 
 var log = logging.MustGetLogger()
+var logr = logrus.New()
 
 var bytesReceived = prometheus.NewCounter(prometheus.CounterOpts{
 	Namespace: "zeal",
@@ -114,7 +115,11 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 					InstanceName: s.storageClient.InstanceName,
 					BlobDigests:  []*rpb.Digest{ar.OutputFiles[0].Digest},
 				}); err == nil && len(resp.MissingBlobDigests) == 0 {
-					slog.Info("Retrieved URIs from action cache and exists in CAS", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size)
+					logr.WithFields(logrus.Fields{
+						"hash": dg.Hash,
+						"uris": req.Uris,
+						"size": dg.Size,
+					}).Info("Retrieved URIs from action cache and exists in CAS")
 					return &pb.FetchBlobResponse{
 						Status:     &rpcstatus.Status{},
 						BlobDigest: ar.OutputFiles[0].Digest,
@@ -123,17 +128,32 @@ func (s *server) FetchBlob(ctx context.Context, req *pb.FetchBlobRequest) (*pb.F
 				//  Missed the CAS, note it down, and move on to usual times.
 				casMissing.Inc()
 			} else {
-				slog.Warn("Found URIs in action cache", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size, "outputs", len(ar.OutputFiles))
+				logr.WithFields(logrus.Fields{
+					"hash":    dg.Hash,
+					"uris":    req.Uris,
+					"size":    dg.Size,
+					"outputs": len(ar.OutputFiles),
+				}).Warn("Found URIs in action cache")
 			}
 		} else {
 			if len(ar.OutputFiles) == 1 {
-				slog.Info("Retrieved URIs from action cache. Did not check CAS", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size)
+				logr.WithFields(logrus.Fields{
+					"hash":    dg.Hash,
+					"uris":    req.Uris,
+					"size":    dg.Size,
+					"outputs": len(ar.OutputFiles),
+				}).Info("Retrieved URIs from action cache. Did not check CAS")
 				return &pb.FetchBlobResponse{
 					Status:     &rpcstatus.Status{},
 					BlobDigest: ar.OutputFiles[0].Digest,
 				}, nil
 			}
-			slog.Warn("Found URIs in action cache", "uris", req.Uris, "hash", dg.Hash, "size", dg.Size, "outputs", len(ar.OutputFiles))
+			logr.WithFields(logrus.Fields{
+				"hash":    dg.Hash,
+				"uris":    req.Uris,
+				"size":    dg.Size,
+				"outputs": len(ar.OutputFiles),
+			}).Warn("Found URIs in action cache")
 		}
 	}
 	resp, err := s.fetchBlob(ctx, req)
@@ -254,7 +274,10 @@ func (s *server) fetchURL(ctx context.Context, url string, qualifiers []*pb.Qual
 	defer cancel()
 	digest, err := s.storageClient.WriteBlob(ctx, blob)
 	if err == nil {
-		slog.Info("Wrote url as compressed blob", "url", url, "hash", digest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash": digest.Hash,
+			"url":  url,
+		}).Info("Wrote url as compressed blob")
 	}
 	return digest.ToProto(), err
 }

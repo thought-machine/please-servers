@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"path"
 	"sort"
 	"sync"
@@ -18,12 +17,14 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/go-multierror"
 	"github.com/peterebden/go-cli-init/v4/logging"
+	"github.com/sirupsen/logrus"
 
 	ppb "github.com/thought-machine/please-servers/proto/purity"
 	"github.com/thought-machine/please-servers/rexclient"
 )
 
 var log = logging.MustGetLogger()
+var logr = logrus.New()
 
 // We use eternity to indicate cases where we don't care about max blob age.
 const eternity = 1000000 * time.Hour
@@ -256,7 +257,9 @@ func (c *collector) MarkReferencedBlobs() error {
 				if _, present := c.liveActionResults[ar.Hash]; present {
 					if err := c.markReferencedBlobs(ar); err != nil {
 						// Not fatal otherwise one bad action result will stop the whole show.
-						slog.Debug("Failed to find referenced blobs", "hash", ar.Hash, "error", err)
+						logr.WithFields(logrus.Fields{
+							"hash": ar.Hash,
+						}).WithError(err).Debug("Failed to find referenced blobs")
 						c.markBroken(ar.Hash, ar.SizeBytes)
 					}
 					atomic.AddInt64(&live, 1)
@@ -293,7 +296,9 @@ func (c *collector) RemoveActionResults() error {
 	var totalSize int64
 	for _, ar := range c.actionResults {
 		if c.shouldDelete(ar) {
-			slog.Debug("Identified action result for deletion", "hash", ar.Hash)
+			logr.WithFields(logrus.Fields{
+				"hash": ar.Hash,
+			}).Debug("Identified action result for deletion")
 			ars = append(ars, &ppb.Blob{Hash: ar.Hash, SizeBytes: ar.SizeBytes, CachePrefix: ar.CachePrefix})
 			totalSize += ar.SizeBytes
 			numArs++
@@ -319,18 +324,25 @@ func (c *collector) RemoveActionResults() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 			defer cancel()
 			for _, ar := range ars {
-				slog.Debug("Removing action result", "hash", ar.Hash)
+				logr.WithFields(logrus.Fields{
+					"hash": ar.Hash,
+				}).Debug("Removing action result")
 				if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 					Prefix:        ar.Hash[:2],
 					ActionResults: []*ppb.Blob{ar},
 					Hard:          true,
 				}); err != nil {
-					slog.Warn("Failed to delete action result marking as live", "prefix", ar.CachePrefix, "hash", ar.Hash, "error", err)
+					logr.WithFields(logrus.Fields{
+						"hash":   ar.Hash,
+						"prefix": ar.CachePrefix,
+					}).WithError(err).Warn("Failed to delete action result marking as live")
 					c.mutex.Lock()
 					c.liveActionResults[ar.Hash] = ar.SizeBytes
 					c.mutex.Unlock()
 				} else {
-					slog.Debug("Deleted action result", "hash", ar.Hash)
+					logr.WithFields(logrus.Fields{
+						"hash": ar.Hash,
+					}).Debug("Deleted action result")
 					c.mutex.Lock()
 					delete(c.actionRFs, ar.Hash)
 					c.mutex.Unlock()
@@ -354,7 +366,9 @@ func (c *collector) RemoveBlobs() error {
 	var totalSize int64
 	for hash, blob := range c.allBlobs {
 		if _, present := c.referencedBlobs[hash]; !present {
-			slog.Debug("Identified blob for deletion", "hash", hash)
+			logr.WithFields(logrus.Fields{
+				"hash": hash,
+			}).Debug("Identified blob for deletion")
 			key := blob.Hash[:2]
 			blobs[key] = append(blobs[key], blob)
 			delete(c.blobRFs, hash)
@@ -424,7 +438,10 @@ func (c *collector) RemoveSpecificBlobs(digests []*pb.Digest) error {
 	var merr *multierror.Error
 	for _, digest := range digests {
 		cachePrefix := fmt.Sprintf("ac/%s/", digest.Hash[:2])
-		slog.Debug("Removing action result", "cache", cachePrefix, "hash", digest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash":  digest.Hash,
+			"cache": cachePrefix,
+		}).Debug("Removing action result")
 		if _, err := c.gcclient.Delete(ctx, &ppb.DeleteRequest{
 			Prefix:        digest.Hash[:2],
 			ActionResults: []*ppb.Blob{{Hash: digest.Hash, SizeBytes: digest.SizeBytes, CachePrefix: cachePrefix}},
@@ -570,7 +587,9 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 		}
 		dir, present := m[digest.Hash]
 		if !present {
-			slog.Error("Failed to find input directory with hash", "hash", digest.Hash)
+			logr.WithFields(logrus.Fields{
+				"hash": digest.Hash,
+			}).Error("Failed to find input directory with hash")
 			return
 		}
 		for _, file := range dir.Files {
@@ -596,7 +615,9 @@ func (c *collector) BlobUsage() ([]Blob, error) {
 			for _, ar := range ars {
 				action, dirs, err := c.inputDirs(ar)
 				if err != nil {
-					slog.Error("failed to get input dir", "hash", ar.Hash, "error", err)
+					logr.WithFields(logrus.Fields{
+						"hash": ar.Hash,
+					}).WithError(err).Error("failed to get input dir")
 				} else {
 					markBlobs(c.inputDirMap(dirs), action.InputRootDigest, "")
 				}

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/peterebden/go-sri"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/grpc/codes"
@@ -35,6 +35,7 @@ import (
 )
 
 var log = logging.MustGetLogger()
+var logr = logrus.New()
 
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
@@ -637,7 +638,11 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 				if (existing.LastAccessed < ageThreshold && ar.LastAccessed >= ageThreshold) || (ar.LastAccessed < ageThreshold && existing.LastAccessed >= ageThreshold) {
 					existingLastAccessed := time.Unix(existing.LastAccessed, 0)
 					arLastAccessed := time.Unix(ar.LastAccessed, 0)
-					slog.Debug("AR: replicas accessed at existingLastAccessed and lastAccessed", "hash", ar.Hash, "existingLastAccessed", existingLastAccessed, "lastAccessed", arLastAccessed)
+					logr.WithFields(logrus.Fields{
+						"hash":                 ar.Hash,
+						"existingLastAccessed": existingLastAccessed,
+						"lastAccessed":         arLastAccessed,
+					}).Debug("AR: replicas accessed at existingLastAccessed and lastAccessed")
 				}
 				// End temporary logging
 				if existing.LastAccessed < ar.LastAccessed {

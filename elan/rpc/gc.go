@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/hashicorp/go-multierror"
 	"github.com/klauspost/compress/zstd"
+	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -43,7 +43,9 @@ func (s *server) List(ctx context.Context, req *ppb.ListRequest) (*ppb.ListRespo
 			// here we need to get the uncompressed size of the blob, otherwise REX SDK will complain about it
 			if size, err := s.getBlobUncompressedSize(ctx, a.Hash); err != nil {
 				// this is not an issue for GC, but would be for replication
-				slog.Warn("failed getting uncompressed size for blob (defaulting to compressed size)", "error", err, "hash", a.Hash)
+				logr.WithFields(logrus.Fields{
+					"hash": a.Hash,
+				}).WithError(err).Warn("failed getting uncompressed size for blob (defaulting to compressed size)")
 			} else {
 				a.SizeBytes = int64(size)
 			}
