@@ -52,3 +52,14 @@ desc = Runs an instance of each server for local development
 [alias "buildlocal"]
 cmd = build //elan:run_local //mettle:run_local //browser:run_local //zeal:run_local //flair:run_local //lucidity:run_local //redis:run_local
 desc = Builds (but doesn't run) all the servers
+
+[alias "puku"]
+cmd = run //third_party/binary:puku --
+positionallabels = true
+subcommand = fmt
+subcommand = licences
+subcommand = lint
+subcommand = migrate
+subcommand = sync
+subcommand = version
+subcommand = watch
