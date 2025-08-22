@@ -14,9 +14,11 @@ go_library(
         "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
         "///third_party/go/github.com_peterebden_go-sri//:go-sri",
         "///third_party/go/github.com_prometheus_client_golang//prometheus",
+        "///third_party/go/github.com_sirupsen_logrus//:logrus",
         "///third_party/go/google.golang.org_genproto_googleapis_rpc//status",
+        "///third_party/go/google.golang.org_grpc//codes",
+        "///third_party/go/google.golang.org_grpc//status",
         "//grpcutil",
         "//rexclient",
-        "//third_party/go:grpc",
     ],
 )

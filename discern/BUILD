@@ -8,9 +8,9 @@ go_binary(
         "///third_party/go/github.com_bazelbuild_remote-apis//build/bazel/remote/execution/v2",
         "///third_party/go/github.com_dustin_go-humanize//:go-humanize",
         "///third_party/go/github.com_peterebden_go-cli-init_v4//logging",
+        "///third_party/go/google.golang.org_protobuf//proto",
         "//cli",
         "//purity/gc",
         "//rexclient",
-        "//third_party/go:golang-protobuf",
     ],
 )
