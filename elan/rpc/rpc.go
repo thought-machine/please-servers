@@ -36,6 +36,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	"golang.org/x/exp/slices"
@@ -64,6 +65,7 @@ const (
 const DefaultMaxSize int64 = 200 * 1012 // 200 Kelly-Bootle standard units
 
 var log = logging.MustGetLogger()
+var logr = logrus.New()
 
 // emptyHash is the sha256 hash of the empty file.
 var emptyHash = digest.Empty.Hash
@@ -293,7 +295,9 @@ func (s *server) UpdateActionResult(ctx context.Context, req *pb.UpdateActionRes
 			InstanceName: req.InstanceName,
 			ActionDigest: req.ActionDigest,
 		}); err == nil {
-			log.Debug("Returning existing action result for UpdateActionResult request for %s", req.ActionDigest.Hash)
+			logr.WithFields(logrus.Fields{
+				"hash": req.ActionDigest.Hash,
+			}).Debug("Returning existing action result for UpdateActionResult request")
 			return ar, nil
 		}
 	}
@@ -403,14 +407,18 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 				rr.Status.Message = fmt.Sprintf("Blob sizes do not match (%d / %d)", len(r.Data), r.Digest.SizeBytes)
 				blobSizeMismatches.Inc()
 			} else if s.blobExists(ctx, "cas", r.Digest, compressed, true) {
-				log.Debug("Blob %s already exists remotely", r.Digest.Hash)
+				logr.WithFields(logrus.Fields{
+					"hash": r.Digest.Hash,
+				}).Debug("Blob already exists remotely")
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
 				log.Errorf("Error writing blob %s: %s", r.Digest, err)
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 				blobsReceived.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Inc()
 			} else {
-				log.Debug("Stored blob with digest %s", r.Digest.Hash)
+				logr.WithFields(logrus.Fields{
+					"hash": r.Digest.Hash,
+				}).Debug("Stored blob")
 			}
 			wg.Done()
 			bytesReceived.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Add(float64(r.Digest.SizeBytes))
@@ -496,12 +504,17 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("Received ByteStream.Read request for %s", digest.Hash)
+	logr.WithFields(logrus.Fields{
+		"hash": digest.Hash,
+	}).Debug("Received ByteStream.Read request")
 	if req.ReadOffset < 0 || req.ReadOffset > digest.SizeBytes {
 		return status.Errorf(codes.OutOfRange, "Invalid Read() request; offset %d is outside the range of blob %s which is %d bytes long", req.ReadOffset, digest.Hash, digest.SizeBytes)
 	} else if req.ReadOffset == digest.SizeBytes {
 		// We know there is nothing left to read, just return immediately.
-		log.Debug("Completed ByteStream.Read request immediately at final byte %d of %s", digest.SizeBytes, digest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash":  digest.Hash,
+			"bytes": digest.SizeBytes,
+		}).Debug("Completed ByteStream.Read request immediately at final byte")
 		return nil
 	} else if req.ReadLimit == 0 || req.ReadOffset+req.ReadLimit >= digest.SizeBytes {
 		req.ReadLimit = -1
@@ -524,7 +537,12 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 		return err
 	}
 	bytesServed.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(n))
-	log.Debug("Completed ByteStream.Read request of %d bytes (starting at %d) for %s in %s", n, req.ReadOffset, digest.Hash, time.Since(start))
+	logr.WithFields(logrus.Fields{
+		"hash":       digest.Hash,
+		"bytes":      n,
+		"readOffset": req.ReadOffset,
+		"duration":   time.Since(start),
+	}).Debug("Completed ByteStream.Read request (starting at readOffset)")
 	return nil
 }
 
@@ -587,13 +605,17 @@ func (s *server) Write(srv bs.ByteStream_WriteServer) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("Received ByteStream.Write request for %s", digest.Hash)
+	logr.WithFields(logrus.Fields{
+		"hash": digest.Hash,
+	}).Debug("Received ByteStream.Write request")
 	r := &bytestreamReader{stream: srv, buf: req.Data}
 	if err := s.writeBlob(ctx, "cas", digest, bufio.NewReaderSize(r, 65536), compressed); err != nil {
 		return err
 	}
 	bytesReceived.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Add(float64(r.TotalSize))
-	log.Debug("Stored blob with hash %s", digest.Hash)
+	logr.WithFields(logrus.Fields{
+		"hash": digest.Hash,
+	}).Debug("Stored blob with hash")
 	blobsReceived.WithLabelValues(batchLabel(false, true), compressorLabel(compressed)).Inc()
 	return srv.SendAndClose(&bs.WriteResponse{
 		CommittedSize: r.TotalSize,

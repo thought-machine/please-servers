@@ -12,6 +12,7 @@ import (
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/uploadinfo"
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -37,14 +38,20 @@ func (c *collector) markReferencedBlobs(ar *ppb.ActionResult) error {
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	log.Debugf("marking input blobs for %s: %v", ar.Hash, inputBlobs)
+	logr.WithFields(logrus.Fields{
+		"hash":       ar.Hash,
+		"inputBlobs": inputBlobs,
+	}).Debug("marking input blobs")
 	var inputSize int64
 	for _, b := range inputBlobs {
 		c.referencedBlobs[b.Hash] = struct{}{}
 		inputSize += b.SizeBytes
 	}
 	c.inputSizes[ar.Hash] = int(inputSize)
-	log.Debugf("marking output blobs for %s: %v", ar.Hash, outputBlobs)
+	logr.WithFields(logrus.Fields{
+		"hash":        ar.Hash,
+		"outputBlobs": outputBlobs,
+	}).Debug("marking output blobs")
 	var outputSize int64
 	for _, b := range outputBlobs {
 		c.referencedBlobs[b.Hash] = struct{}{}
@@ -64,7 +71,9 @@ func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 	// like any other blob with the same digest as the AR.
 	blob, present := c.allBlobs[dg.Hash]
 	if !present {
-		log.Errorf("missing action for %s", dg.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash": dg.Hash,
+		}).Error("missing action")
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
@@ -74,14 +83,18 @@ func (c *collector) inputBlobs(ar *ppb.ActionResult) []*pb.Digest {
 		Hash: dg.Hash,
 		Size: blob.SizeBytes,
 	}, action); err != nil {
-		log.Errorf("Failed to read action %s: %v", dg.Hash, err)
+		logr.WithFields(logrus.Fields{
+			"hash": dg.Hash,
+		}).WithError(err).Error("Failed to read action")
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
 
 	digests, err := c.blobsForAction(action)
 	if err != nil {
-		log.Errorf("Failed to get blobs for action %s: %v", dg.Hash, err)
+		logr.WithFields(logrus.Fields{
+			"hash": dg.Hash,
+		}).WithError(err).Error("Failed to get blobs for action")
 		atomic.AddInt64(&c.missingInputs, 1)
 		return nil
 	}
@@ -143,7 +156,9 @@ func (c *collector) outputBlobs(ar *ppb.ActionResult) ([]*pb.Digest, error) {
 		BlobDigests:  outputBlobs,
 	})
 	if err != nil {
-		log.Warning("Failed to check blob digests for %s: %s", ar.Hash, err)
+		logr.WithFields(logrus.Fields{
+			"hash": ar.Hash,
+		}).WithError(err).Warn("Failed to check blob digests")
 	}
 	if resp != nil && len(resp.MissingBlobDigests) > 0 {
 		digests := make([]string, len(resp.MissingBlobDigests))

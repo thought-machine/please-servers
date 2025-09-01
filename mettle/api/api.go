@@ -19,6 +19,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	clilogging "github.com/peterebden/go-cli-init/v4/logging"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	bpb "github.com/thought-machine/please-servers/proto/mettle"
 	"gocloud.dev/pubsub"
 	"google.golang.org/genproto/googleapis/longrunning"
@@ -34,6 +35,7 @@ import (
 )
 
 var log = clilogging.MustGetLogger()
+var logr = logrus.New()
 
 const timeout = 10 * time.Second
 
@@ -302,9 +304,17 @@ func (s *server) Execute(req *pb.ExecuteRequest, stream pb.Execution_ExecuteServ
 		return err
 	}
 	if md := s.contextMetadata(stream.Context()); md != nil {
-		log.Debug("Received an ExecuteRequest for %s. Tool: %s %s Action id: %s Correlation ID: %s", req.ActionDigest.Hash, md.ToolDetails.ToolName, md.ToolDetails.ToolVersion, md.ActionId, md.CorrelatedInvocationsId)
+		logr.WithFields(logrus.Fields{
+			"hash":          req.ActionDigest.Hash,
+			"toolName":      md.ToolDetails.ToolName,
+			"toolVersion":   md.ToolDetails.ToolVersion,
+			"actionID":      md.ActionId,
+			"correlationID": md.CorrelatedInvocationsId,
+		}).Debug("Received an ExecuteRequest")
 	} else {
-		log.Debug("Received an ExecuteRequest for %s", req.ActionDigest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash": req.ActionDigest.Hash,
+		}).Debug("Received an ExecuteRequest")
 	}
 
 	// If we're allowed to check the cache, see if this one has already been done.
@@ -389,14 +399,18 @@ func (s *server) streamEvents(digest *pb.Digest, ch <-chan *longrunning.Operatio
 	for op := range ch {
 		op.Name = digest.Hash
 		if err := stream.Send(op); err != nil {
-			log.Warning("Failed to forward event for %s: %s", digest.Hash, err)
+			logr.WithFields(logrus.Fields{
+				"hash": digest.Hash,
+			}).WithError(err).Warn("Failed to forward event")
 			return err
 		}
 		if op.Done {
 			break
 		}
 	}
-	log.Debug("Completed stream for %s", digest.Hash)
+	logr.WithFields(logrus.Fields{
+		"hash": digest.Hash,
+	}).Debug("Completed stream")
 	return nil
 }
 
@@ -420,7 +434,9 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 			LastUpdate: time.Now(),
 		}
 		s.jobs[digest.Hash] = j
-		log.Debug("Created job for %s", digest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash": digest.Hash,
+		}).Debug("Created job")
 		totalRequests.Inc()
 		created = true
 	} else if create && time.Since(j.LastUpdate) >= resumptionTime {
@@ -432,7 +448,9 @@ func (s *server) eventStream(digest *pb.Digest, create bool) (<-chan *longrunnin
 		j.Done = false
 		created = true
 	} else {
-		log.Debug("Resuming existing job for %s", digest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash": digest.Hash,
+		}).Debug("Resuming existing job")
 	}
 	ch := make(chan *longrunning.Operation, 100)
 	if !created && j.Current != nil {
@@ -456,7 +474,9 @@ func (s *server) stopStream(digest *pb.Digest, ch <-chan *longrunning.Operation)
 	defer s.mutex.Unlock()
 	job, present := s.jobs[digest.Hash]
 	if !present {
-		log.Warning("stopStream for non-existent job %s", digest.Hash)
+		logr.WithFields(logrus.Fields{
+			"hash": digest.Hash,
+		}).Warn("stopStream for non-existent job")
 		return
 	}
 	job.Streams = slices.DeleteFunc(job.Streams, func(stream chan *longrunning.Operation) bool {

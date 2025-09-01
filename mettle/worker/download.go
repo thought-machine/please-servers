@@ -18,6 +18,7 @@ import (
 	pb "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/klauspost/compress/zstd"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -88,7 +89,11 @@ func (w *worker) createDirectory(dirs map[string]*pb.Directory, files map[sdkdig
 	}
 	if usePacks {
 		if dg := rexclient.PackDigest(dir); dg.Hash != "" {
-			log.Debug("Replacing dir %s with pack digest %s/%d", root, dg.Hash, dg.Size)
+			logr.WithFields(logrus.Fields{
+				"hash": dg.Hash,
+				"root": root,
+				"size": dg.Size,
+			}).Debug("Replacing dir with pack digest")
 			packs[dg] = append(packs[dg], root)
 			return nil
 		}
