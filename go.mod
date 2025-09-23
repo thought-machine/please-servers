@@ -12,8 +12,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/protobuf v1.5.3
-	github.com/golang/snappy v0.0.4 // This is a required dep that Go mod tidy gets rid of. This breaks Please if it gets removed though.
-	github.com/google/go-cmp v0.6.0 // This is a required dep that Go mod tidy gets rid of. This breaks Please if it gets removed though.
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.1
 	github.com/hashicorp/go-multierror v1.1.1
@@ -31,7 +29,7 @@ require (
 	github.com/thought-machine/http-admin v1.1.1
 	go.uber.org/automaxprocs v1.5.3
 	gocloud.dev v0.36.0
-	golang.org/x/crypto v0.17.0
+	golang.org/x/crypto v0.21.0
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	golang.org/x/sync v0.6.0
 	golang.org/x/time v0.5.0
@@ -85,10 +83,10 @@ require (
 	go.opentelemetry.io/otel v1.21.0 // indirect
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
-	golang.org/x/net v0.19.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/term v0.16.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
