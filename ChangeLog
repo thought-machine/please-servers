@@ -1,6 +1,6 @@
 Version 11.15.0
 ---------------
-    * Use logrus library for structured logs when they contain hashes
+    * Use logrus library for structured logs when they contain hashes (#330)
 
 Version 11.14.0
 ---------------
