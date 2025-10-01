@@ -411,7 +411,9 @@ func (s *server) BatchUpdateBlobs(ctx context.Context, req *pb.BatchUpdateBlobsR
 					"hash": r.Digest.Hash,
 				}).Debug("Blob already exists remotely")
 			} else if err := s.writeAll(ctx, r.Digest, r.Data, compressed); err != nil {
-				log.Errorf("Error writing blob %s: %s", r.Digest, err)
+				logr.WithFields(logrus.Fields{
+					"hash": r.Digest.Hash,
+				}).WithError(err).Error("Error writing blob")
 				rr.Status.Code = int32(status.Code(err))
 				rr.Status.Message = err.Error()
 				blobsReceived.WithLabelValues(batchLabel(true, false), compressorLabel(compressed)).Inc()
