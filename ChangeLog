@@ -1,3 +1,7 @@
+Version 11.16.0
+---------------
+    * Remove the whole digest of some elan logs and only add the hash using structured logs
+
 Version 11.15.0
 ---------------
     * Use logrus library for structured logs when they contain hashes (#330)
