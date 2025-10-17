@@ -20,6 +20,7 @@ import (
 	"time"
 
 	psraw "cloud.google.com/go/pubsub/apiv1"
+	apicmd "github.com/bazelbuild/remote-apis-sdks/go/api/command"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/client"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/command"
 	"github.com/bazelbuild/remote-apis-sdks/go/pkg/filemetadata"
@@ -121,6 +122,9 @@ var nackedMessages = prometheus.NewCounter(prometheus.CounterOpts{
 
 // ErrTimeout is returned when the build action exceeds the action timeout
 var ErrTimeout = errors.New("action execution timed out")
+
+// nodePropName is the name we mark node properties with to identify the action they come from
+const nodePropName = "build.please.mettle.actiondigest"
 
 var metrics = []prometheus.Collector{
 	totalBuilds,
@@ -1122,8 +1126,20 @@ func (w *worker) collectOutputs(ar *pb.ActionResult, cmd *pb.Command) error {
 			return err
 		}
 	}
+	// Mark these outputs with the hash of this action to aid later debugging
+	props := &apicmd.NodeProperties{
+		Properties: []*apicmd.NodeProperty{{
+			Name: nodePropName,
+			Value: fmt.Sprintf("%s/%d", w.actionDigest.Hash, w.actionDigest.SizeBytes),
+		}},
+	}
+	propMap := make(map[string]*apicmd.NodeProperties, len(cmd.OutputPaths))
+	for _, path := range cmd.OutputPaths {
+		propMap[path] = props
+	}
 
-	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, ".", cmd.OutputPaths, filemetadata.NewNoopCache(), command.PreserveSymlink)
+
+	m, ar2, err := w.rclient.ComputeOutputsToUpload(w.dir, ".", cmd.OutputPaths, filemetadata.NewNoopCache(), command.PreserveSymlink, cmd.OutputDirectoryFormat, propMap)
 	if err != nil {
 		return err
 	}

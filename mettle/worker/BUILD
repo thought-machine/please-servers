@@ -4,6 +4,7 @@ go_library(
     visibility = ["//mettle/..."],
     deps = [
         "///third_party/go/cloud.google.com_go_pubsub//apiv1",
+        "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/api/command",
         "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/client",
         "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/command",
         "///third_party/go/github.com_bazelbuild_remote-apis-sdks//go/pkg/digest",
