@@ -1,6 +1,6 @@
 Version 11.16.1
 ---------------
-    * Add timeout value in action timout logs
+    * Add timeout metric + timeout value in action timout logs
 
 Version 11.16.0
 ---------------
