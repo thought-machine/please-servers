@@ -124,7 +124,6 @@ var actionTimeout  = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "action_timeout",
 })
 
-
 // ErrTimeout is returned when the build action exceeds the action timeout
 var ErrTimeout = errors.New("action execution timed out")
 
