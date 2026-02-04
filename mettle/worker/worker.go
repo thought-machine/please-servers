@@ -119,6 +119,12 @@ var nackedMessages = prometheus.NewCounter(prometheus.CounterOpts{
 	Name:      "nacked_messages_total",
 })
 
+var actionTimeout  = prometheus.NewCounter(prometheus.CounterOpts{
+	Namespace: "mettle",
+	Name:      "action_timeout",
+})
+
+
 // ErrTimeout is returned when the build action exceeds the action timeout
 var ErrTimeout = errors.New("action execution timed out")
 
@@ -141,6 +147,7 @@ var metrics = []prometheus.Collector{
 	packBytesRead,
 	collectOutputErrors,
 	nackedMessages,
+	actionTimeout,
 }
 
 func init() {
@@ -559,12 +566,12 @@ func (w *worker) runTaskRequest(req *pb.ExecuteRequest) *pb.ExecuteResponse {
 // forceShutdown sends any shutdown reports and calls log.Fatal() to shut down the worker
 func (w *worker) forceShutdown(shutdownMsg string) {
 	w.Report(false, false, false, "%s", shutdownMsg)
-	log.Info("Force shutting down worker")
+	log.Debug("Force shutting down worker")
 	if w.currentMsg != nil {
 		if w.actionDigest != nil {
 			logr.WithFields(logrus.Fields{
 				"hash": w.actionDigest.Hash,
-			}).Info("Nacking action")
+			}).Debug("Nacking action")
 		} else {
 			log.Error("Nacking action but action digest is nil")
 		}
@@ -942,9 +949,9 @@ func (w *worker) runCommand(cmd *exec.Cmd, timeout time.Duration) error {
 	case <-time.After(timeout):
 		logr.WithFields(logrus.Fields{
 			"hash": w.actionDigest.Hash,
-		}).Warn("Terminating process due to timeout")
+		}).Warnf("Terminating process due to timeout: %s", timeout)
 		cmd.Process.Signal(os.Signal(syscall.SIGTERM))
-
+		actionTimeout.Inc()
 		select {
 		case <-ch:
 			return ErrTimeout

@@ -1,3 +1,7 @@
+Version 11.16.1
+---------------
+    * Add timeout value in action timout logs
+
 Version 11.16.0
 ---------------
     * Remove the whole digest of some elan logs and only add the hash using structured logs
