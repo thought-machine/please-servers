@@ -740,7 +740,12 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 
 	cmd := exec.CommandContext(ctx, commandPath(command), command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
-	cmd.SysProcAttr = sysProcAttr()
+
+	if cmd.SysProcAttr = sysProcAttr(); cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+
 	cmd.Dir = path.Join(w.dir, command.WorkingDirectory)
 	cmd.Env = make([]string, len(command.EnvironmentVariables))
 	for i, v := range command.EnvironmentVariables {
@@ -928,7 +933,6 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 	cmd.Stderr = &w.stderr
 	gracePeriod := 5 * time.Second
 	cmd.WaitDelay = gracePeriod
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	cmd.Cancel = func() error {
 		if cmd.Process == nil || cmd.Process.Pid <= 0 {
@@ -936,7 +940,6 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		}
 
 		// send SIGTERM to the entire group (-PID) created by Setpgid
-		// where parent AND all children holding the pipes
 		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 
 		// If the group doesn't exist yet or already gone, ignore the error
@@ -946,20 +949,40 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		return err
 	}
 
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
 
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		actionTimeout.Inc()
+	pid := cmd.Process.Pid
 
-		// fetch processes that didn't exit on SIGTERM
+	// make a snapshot of processes if context.DeadlineExceeded
+	go func(pid int) {
+		<-ctx.Done()
+		// early exit if no timeout
+		if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return
+		}
+
+		pgid, _ := syscall.Getpgid(pid)
 		var processTree string
-		if cmd.Process != nil {
-			args := []string{"-g", fmt.Sprintf("%d", cmd.Process.Pid), "-o", "pid,ppid,state,%cpu,%mem,start,time,command"}
+		if pgid > 0 {
+			args := []string{"-g", fmt.Sprintf("%d", pgid), "-o", "pid,ppid,pgid,state,etime,wchan,%cpu,%mem,command"}
 			if psOut, psErr := exec.Command("ps", args...).Output(); psErr == nil {
 				processTree = string(psOut)
 			}
 		}
-		logr.WithField("hangingProcessTree", processTree).Debug("Timeout reached: Analyzing hanging group")
+		logr.WithFields(logrus.Fields{
+			"hash":               w.actionDigest.Hash,
+			"pid":                pid,
+			"pgid":               pgid,
+			"hangingProcessTree": processTree,
+		}).Debug("Deadline exceeded: Analyzing hanging group")
+	}(pid)
+
+	err := cmd.Wait()
+
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		actionTimeout.Inc()
 
 		forceKilled := false
 		if ps := cmd.ProcessState; ps != nil {
@@ -980,6 +1003,27 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 			"gracePeriod": gracePeriod.String(),
 			"forceKilled": forceKilled,
 		}).Warn(msg)
+
+		// log last line
+		lastLine := func(s string) string {
+			s = strings.TrimRight(s, "\n")
+			if s == "" {
+				return ""
+			}
+			if i := strings.LastIndexByte(s, '\n'); i >= 0 {
+				return s[i+1:]
+			}
+			return s
+		}
+		stdoutStr := w.stdout.String()
+		stderrStr := w.stderr.String()
+		logr.WithFields(logrus.Fields{
+			"hash":         w.actionDigest.Hash,
+			"stdout_bytes": len(stdoutStr),
+			"stderr_bytes": len(stderrStr),
+			"stdout_last":  lastLine(stdoutStr),
+			"stderr_last":  lastLine(stderrStr),
+		}).Debug("Output summary at timeout")
 
 		return ErrTimeout
 	}

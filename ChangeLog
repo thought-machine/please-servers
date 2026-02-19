@@ -1,3 +1,7 @@
+Version 11.16.5
+---------------
+    * Improve runCommand timeout diagnostics (process snapshot + output summary)
+    
 Version 11.16.4
 ---------------
     * Kill parent and all child processes via process group on worker timeout. Log hanging processes
