@@ -1032,6 +1032,8 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 // logProcOnTimeout logs /proc diagnostics for the timed-out pid and its process group.
 // It does not rely on `ps` existing in the container.
 func (w *worker) logProcOnTimeout(pid int) {
+	const maxFDs = 200
+	const maxTargetLen = 256
 	p := strconv.Itoa(pid)
 	base := filepath.Join("/proc", p)
 
@@ -1049,14 +1051,19 @@ func (w *worker) logProcOnTimeout(pid int) {
 
 	var fds []string
 	if entries, err := os.ReadDir(filepath.Join(base, "fd")); err == nil {
-		fds = make([]string, 0, len(entries))
-		for _, e := range entries {
-			name := e.Name()
-			target, err := os.Readlink(filepath.Join(base, "fd", name))
+		for i, e := range entries {
+			if i >= maxFDs {
+				fds = append(fds, "...truncated")
+				break
+			}
+			target, err := os.Readlink(filepath.Join(base, "fd", e.Name()))
 			if err != nil {
 				continue
 			}
-			fds = append(fds, name+" -> "+target)
+			if len(target) > maxTargetLen {
+				target = target[:maxTargetLen] + "…"
+			}
+			fds = append(fds, e.Name()+" -> "+target)
 		}
 	}
 
