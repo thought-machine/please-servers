@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -732,11 +733,22 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 	duration, _ := ptypes.Duration(action.Timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
+
 	logr.WithFields(logrus.Fields{
 		"hash":    w.actionDigest.Hash,
 		"stage":   "exec_action",
 		"timeout": duration.String(),
+		"argv0":   command.Arguments[0],
+		"argc":    len(command.Arguments),
 	}).Debug("Executing action - started")
+
+	logr.WithFields(logrus.Fields{
+		"hash":          w.actionDigest.Hash,
+		"sandbox":       w.sandbox,
+		"altSandbox":    w.altSandbox,
+		"shouldSandbox": w.shouldSandbox(command),
+		"argv0":         command.Arguments[0],
+	}).Debug("Sandbox selection")
 
 	cmd := exec.CommandContext(ctx, commandPath(command), command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
@@ -962,21 +974,8 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return
 		}
-
-		pgid, _ := syscall.Getpgid(pid)
-		var processTree string
-		if pgid > 0 {
-			args := []string{"-g", fmt.Sprintf("%d", pgid), "-o", "pid,ppid,pgid,state,etime,wchan,%cpu,%mem,command"}
-			if psOut, psErr := exec.Command("ps", args...).Output(); psErr == nil {
-				processTree = string(psOut)
-			}
-		}
-		logr.WithFields(logrus.Fields{
-			"hash":               w.actionDigest.Hash,
-			"pid":                pid,
-			"pgid":               pgid,
-			"hangingProcessTree": processTree,
-		}).Debug("Deadline exceeded: Analyzing hanging group")
+		// # TODO(INFRA-130229): Revert this temporary change mettle timeouts investigations are completed
+		w.logProcOnTimeout(pid)
 	}(pid)
 
 	err := cmd.Wait()
@@ -1028,6 +1027,53 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		return ErrTimeout
 	}
 	return err
+}
+
+// logProcOnTimeout logs /proc diagnostics for the timed-out pid and its process group.
+// It does not rely on `ps` existing in the container.
+func (w *worker) logProcOnTimeout(pid int) {
+	const maxFDs = 200
+	const maxTargetLen = 256
+	p := strconv.Itoa(pid)
+	base := filepath.Join("/proc", p)
+
+	cmdlineBytes, err := os.ReadFile(filepath.Join(base, "cmdline"))
+	cmdline := ""
+	if err == nil && len(cmdlineBytes) > 0 {
+		cmdline = strings.TrimSpace(strings.ReplaceAll(string(cmdlineBytes), "\x00", " "))
+	}
+
+	wchanBytes, err := os.ReadFile(filepath.Join(base, "wchan"))
+	wchan := ""
+	if err == nil && len(wchanBytes) > 0 {
+		wchan = strings.TrimSpace(string(wchanBytes))
+	}
+
+	var fds []string
+	if entries, err := os.ReadDir(filepath.Join(base, "fd")); err == nil {
+		for i, e := range entries {
+			if i >= maxFDs {
+				fds = append(fds, "...truncated")
+				break
+			}
+			target, err := os.Readlink(filepath.Join(base, "fd", e.Name()))
+			if err != nil {
+				continue
+			}
+			if len(target) > maxTargetLen {
+				target = target[:maxTargetLen] + "…"
+			}
+			fds = append(fds, e.Name()+" -> "+target)
+		}
+	}
+
+	logr.WithFields(logrus.Fields{
+		"hash":    w.actionDigest.Hash,
+		"pid":     pid,
+		"cmdline": cmdline,
+		"wchan":   wchan,
+		"fds":     fds,
+	}).Debug("Deadline exceeded: /proc snapshot")
 }
 
 // writeUncachedResult attempts to write an uncached action result proto.

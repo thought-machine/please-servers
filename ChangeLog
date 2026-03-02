@@ -1,3 +1,7 @@
+Version 11.16.6
+---------------
+    * Improve runCommand timeout diagnostics with logProcOnTimeout()
+
 Version 11.16.5
 ---------------
     * Improve runCommand timeout diagnostics (process snapshot + output summary)
