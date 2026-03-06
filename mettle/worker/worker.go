@@ -742,6 +742,14 @@ func (w *worker) execute(req *pb.ExecuteRequest, action *pb.Action, command *pb.
 		"argc":    len(command.Arguments),
 	}).Debug("Executing action - started")
 
+	logr.WithFields(logrus.Fields{
+		"hash":          w.actionDigest.Hash,
+		"sandbox":       w.sandbox,
+		"altSandbox":    w.altSandbox,
+		"shouldSandbox": w.shouldSandbox(command),
+		"argv0":         command.Arguments[0],
+	}).Debug("Sandbox selection")
+
 	cmd := exec.CommandContext(ctx, commandPath(command), command.Arguments[1:]...)
 	// Setting Pdeathsig should ideally make subprocesses get kill signals if we die.
 
