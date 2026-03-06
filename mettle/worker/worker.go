@@ -976,6 +976,7 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		}
 		// # TODO(INFRA-130229): Revert this temporary change mettle timeouts investigations are completed
 		w.logProcOnTimeout(pid)
+		w.logProcChain(pid)
 	}(pid)
 
 	err := cmd.Wait()
@@ -1074,6 +1075,102 @@ func (w *worker) logProcOnTimeout(pid int) {
 		"wchan":   wchan,
 		"fds":     fds,
 	}).Debug("Deadline exceeded: /proc snapshot")
+}
+
+// logProcChain logs a compact parent→child execution chain for the given PID
+// This helps quickly identify which subprocess is still running when the worker
+// times out
+func (w *worker) logProcChain(pid int) {
+	const maxDepth = 10
+
+	readTrim := func(path string) string {
+		b, err := os.ReadFile(path)
+		if err != nil || len(b) == 0 {
+			return ""
+		}
+		return strings.TrimSpace(string(b))
+	}
+
+	name := func(p int) string {
+		n := readTrim(filepath.Join("/proc", strconv.Itoa(p), "comm"))
+		if n == "" {
+			return "?"
+		}
+		return n
+	}
+
+	firstChild := func(p int) int {
+		b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(p), "task", strconv.Itoa(p), "children"))
+		if err != nil || len(b) == 0 {
+			return 0
+		}
+		f := strings.Fields(string(b))
+		if len(f) == 0 {
+			return 0
+		}
+		n, _ := strconv.Atoi(f[0])
+		return n
+	}
+
+	state := func(p int) string {
+		b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(p), "status"))
+		if err != nil {
+			return ""
+		}
+		for _, ln := range strings.Split(string(b), "\n") {
+			k, v, ok := strings.Cut(ln, ":")
+			if ok && strings.TrimSpace(k) == "State" {
+				if f := strings.Fields(strings.TrimSpace(v)); len(f) > 0 {
+					return f[0]
+				}
+			}
+		}
+		return ""
+	}
+
+	cur := pid
+	parts := []string{fmt.Sprintf("%d:%s", cur, name(cur))}
+
+	for i := 0; i < maxDepth; i++ {
+		c := firstChild(cur)
+		if c == 0 {
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%d:%s", c, name(c)))
+		cur = c
+	}
+
+	tailPID := cur
+	tailState := state(tailPID)
+
+	logr.WithFields(logrus.Fields{
+		"hash":               w.actionDigest.Hash,
+		"pid":                pid,
+		"chain":              strings.Join(parts, " -> "),
+		"tail_pid":           tailPID,
+		"tail_name":          name(tailPID),
+		"tail_state":         tailState,
+		"tail_state_comment": stateComment(tailState),
+		"tail_wchan":         readTrim(filepath.Join("/proc", strconv.Itoa(tailPID), "wchan")),
+	}).Debug("Timeout: process chain")
+}
+
+// stateComment is a helper to translate tail_state code into text
+func stateComment(s string) string {
+	switch s {
+	case "R":
+		return "running (executing on CPU)"
+	case "S":
+		return "sleeping (waiting on event / lock / pipe)"
+	case "D":
+		return "uninterruptible sleep (kernel I/O or filesystem wait)"
+	case "T":
+		return "stopped (signal or debugger)"
+	case "Z":
+		return "zombie (process exited but parent has not reaped it)"
+	default:
+		return "unknown process state"
+	}
 }
 
 // writeUncachedResult attempts to write an uncached action result proto.
