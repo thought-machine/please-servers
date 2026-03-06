@@ -1092,7 +1092,8 @@ func (w *worker) logProcChain(pid int) {
 	}
 
 	name := func(p int) string {
-		n := readTrim(filepath.Join("/proc", strconv.Itoa(p), "comm"))
+		pidStr := strconv.Itoa(p)
+		n := readTrim(filepath.Join("/proc", pidStr, "comm"))
 		if n == "" {
 			return "?"
 		}
@@ -1100,7 +1101,8 @@ func (w *worker) logProcChain(pid int) {
 	}
 
 	firstChild := func(p int) int {
-		b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(p), "task", strconv.Itoa(p), "children"))
+		pidStr := strconv.Itoa(p)
+		b, err := os.ReadFile(filepath.Join("/proc", pidStr, "task", pidStr, "children"))
 		if err != nil || len(b) == 0 {
 			return 0
 		}
@@ -1108,12 +1110,16 @@ func (w *worker) logProcChain(pid int) {
 		if len(f) == 0 {
 			return 0
 		}
-		n, _ := strconv.Atoi(f[0])
+		n, err := strconv.Atoi(f[0])
+		if err != nil {
+			return 0
+		}
 		return n
 	}
 
 	state := func(p int) string {
-		b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(p), "status"))
+		pidStr := strconv.Itoa(p)
+		b, err := os.ReadFile(filepath.Join("/proc", pidStr, "status"))
 		if err != nil {
 			return ""
 		}
@@ -1129,7 +1135,8 @@ func (w *worker) logProcChain(pid int) {
 	}
 
 	cur := pid
-	parts := []string{fmt.Sprintf("%d:%s", cur, name(cur))}
+	parts := make([]string, 0, maxDepth+1)
+	parts = append(parts, fmt.Sprintf("%d:%s", cur, name(cur)))
 
 	for i := 0; i < maxDepth; i++ {
 		c := firstChild(cur)
