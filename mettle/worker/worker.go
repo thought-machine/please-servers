@@ -1080,86 +1080,122 @@ func (w *worker) logProcOnTimeout(pid int) {
 // logProcChain logs a compact parent→child execution chain for the given PID
 // This helps quickly identify which subprocess is still running when the worker
 // times out
+// If multiple children exist, they are listed instead.
 func (w *worker) logProcChain(pid int) {
 	const maxDepth = 10
 
-	readTrim := func(path string) string {
-		b, err := os.ReadFile(path)
-		if err != nil || len(b) == 0 {
-			return ""
-		}
-		return strings.TrimSpace(string(b))
-	}
-
-	name := func(p int) string {
-		pidStr := strconv.Itoa(p)
-		n := readTrim(filepath.Join("/proc", pidStr, "comm"))
-		if n == "" {
-			return "?"
-		}
-		return n
-	}
-
-	firstChild := func(p int) int {
-		pidStr := strconv.Itoa(p)
-		b, err := os.ReadFile(filepath.Join("/proc", pidStr, "task", pidStr, "children"))
-		if err != nil || len(b) == 0 {
-			return 0
-		}
-		f := strings.Fields(string(b))
-		if len(f) == 0 {
-			return 0
-		}
-		n, err := strconv.Atoi(f[0])
-		if err != nil {
-			return 0
-		}
-		return n
-	}
-
-	state := func(p int) string {
-		pidStr := strconv.Itoa(p)
-		b, err := os.ReadFile(filepath.Join("/proc", pidStr, "status"))
-		if err != nil {
-			return ""
-		}
-		for _, ln := range strings.Split(string(b), "\n") {
-			k, v, ok := strings.Cut(ln, ":")
-			if ok && strings.TrimSpace(k) == "State" {
-				if f := strings.Fields(strings.TrimSpace(v)); len(f) > 0 {
-					return f[0]
-				}
-			}
-		}
-		return ""
-	}
-
 	cur := pid
 	parts := make([]string, 0, maxDepth+1)
-	parts = append(parts, fmt.Sprintf("%d:%s", cur, name(cur)))
+	parts = append(parts, fmt.Sprintf("%d:%s", cur, procName(cur)))
+
+	var childrenSummary string
 
 	for i := 0; i < maxDepth; i++ {
-		c := firstChild(cur)
-		if c == 0 {
+		children := childPIDs(cur)
+
+		if len(children) == 0 {
 			break
 		}
-		parts = append(parts, fmt.Sprintf("%d:%s", c, name(c)))
-		cur = c
+
+		if len(children) > 1 {
+			items := make([]string, 0, len(children))
+			for _, c := range children {
+				state := procState(c)
+				items = append(items,
+					fmt.Sprintf("%d:%s:%s(%s)",
+						c,
+						procName(c),
+						state,
+						stateComment(state),
+					),
+				)
+			}
+			childrenSummary = strings.Join(items, " | ")
+			break
+		}
+
+		cur = children[0]
+		parts = append(parts, fmt.Sprintf("%d:%s", cur, procName(cur)))
 	}
 
-	tailPID := cur
-	tailState := state(tailPID)
+	tailState := procState(cur)
 
-	logr.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"hash":               w.actionDigest.Hash,
 		"pid":                pid,
 		"chain":              strings.Join(parts, " -> "),
-		"tail_pid":           tailPID,
-		"tail_name":          name(tailPID),
+		"tail_pid":           cur,
+		"tail_name":          procName(cur),
 		"tail_state":         tailState,
 		"tail_state_comment": stateComment(tailState),
-		"tail_wchan":         readTrim(filepath.Join("/proc", strconv.Itoa(tailPID), "wchan")),
-	}).Debug("Timeout: process chain")
+		"tail_wchan":         readTrim(filepath.Join(procBase(cur), "wchan")),
+	}
+
+	if childrenSummary != "" {
+		fields["children"] = childrenSummary
+	} else {
+		fields["children"] = "none"
+	}
+
+	logr.WithFields(fields).Debug("Deadline exceeded: process chain")
+}
+
+// procBase returns the /proc path for a pid
+func procBase(pid int) string {
+	return filepath.Join("/proc", strconv.Itoa(pid))
+}
+
+// readTrim reads a file and returns trimmed content, or "" on error/empty content
+func readTrim(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// procName returns the process name from /proc/<pid>/comm, or "?" if unavailable
+func procName(pid int) string {
+	name := readTrim(filepath.Join(procBase(pid), "comm"))
+	if name == "" {
+		return "?"
+	}
+	return name
+}
+
+// procState returns the Linux process state code from /proc/<pid>/status
+func procState(pid int) string {
+	b, err := os.ReadFile(filepath.Join(procBase(pid), "status"))
+	if err != nil {
+		return ""
+	}
+	for _, ln := range strings.Split(string(b), "\n") {
+		k, v, ok := strings.Cut(ln, ":")
+		if !ok || strings.TrimSpace(k) != "State" {
+			continue
+		}
+		if f := strings.Fields(strings.TrimSpace(v)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	return ""
+}
+
+// childPIDs returns direct children of pid from /proc/<pid>/task/<pid>/children
+func childPIDs(pid int) []int {
+	b, err := os.ReadFile(filepath.Join(procBase(pid), "task", strconv.Itoa(pid), "children"))
+	if err != nil || len(b) == 0 {
+		return nil
+	}
+	out := make([]int, 0, 4)
+	for _, s := range strings.Fields(string(b)) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n > 0 {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // stateComment is a helper to translate tail_state code into text
@@ -1171,6 +1207,8 @@ func stateComment(s string) string {
 		return "sleeping (waiting on event / lock / pipe)"
 	case "D":
 		return "uninterruptible sleep (kernel I/O or filesystem wait)"
+	case "I":
+		return "idle kernel thread (not doing work)"
 	case "T":
 		return "stopped (signal or debugger)"
 	case "Z":
