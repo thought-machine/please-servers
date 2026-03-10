@@ -1077,67 +1077,66 @@ func (w *worker) logProcOnTimeout(pid int) {
 	}).Debug("Deadline exceeded: /proc snapshot")
 }
 
-// logProcChain logs a compact parent→child execution chain for the given PID
-// This helps quickly identify which subprocess is still running when the worker
-// times out
-// If multiple children exist, they are listed instead.
+// logProcTree logs a bounded process subtree starting from pid.
+// Example:
+//
+// 24877:bash[S - sleeping/waiting]{do_wait} -> 24890:test_binary[D - io_wait)]{tcp_recvmsg}
+// 24877:bash[S - sleeping/waiting]{do_wait} -> 24891:tee[S - sleeping/waitin]{pipe_read}
 func (w *worker) logProcChain(pid int) {
-	const maxDepth = 10
+	const (
+		maxDepth = 6
+		maxNodes = 40
+	)
 
-	cur := pid
-	parts := make([]string, 0, maxDepth+1)
-	parts = append(parts, fmt.Sprintf("%d:%s", cur, procName(cur)))
+	lines := make([]string, 0, maxNodes)
+	nodes := 0
 
-	var childrenSummary string
+	var walk func(pid, depth int, path []string)
+	walk = func(pid, depth int, path []string) {
+		if depth > maxDepth || nodes >= maxNodes {
+			return
+		}
 
-	for i := 0; i < maxDepth; i++ {
-		children := childPIDs(cur)
+		current := formatProc(pid)
+		path = append(path, current)
 
+		children := childPIDs(pid)
 		if len(children) == 0 {
-			break
+			lines = append(lines, strings.Join(path, " -> "))
+			nodes++
+			return
 		}
 
-		if len(children) > 1 {
-			items := make([]string, 0, len(children))
-			for _, c := range children {
-				state := procState(c)
-				items = append(items,
-					fmt.Sprintf("%d:%s:%s(%s)",
-						c,
-						procName(c),
-						state,
-						stateComment(state),
-					),
-				)
+		for _, c := range children {
+			if nodes >= maxNodes {
+				return
 			}
-			childrenSummary = strings.Join(items, " | ")
-			break
+			walk(c, depth+1, path)
 		}
-
-		cur = children[0]
-		parts = append(parts, fmt.Sprintf("%d:%s", cur, procName(cur)))
 	}
+	startDepth := 0
+	walk(pid, startDepth, nil)
 
-	tailState := procState(cur)
+	logr.WithFields(logrus.Fields{
+		"hash": w.actionDigest.Hash,
+		"pid":  pid,
+		"tree": strings.Join(lines, "\n"),
+	}).Debug("Deadline exceeded: process tree")
+}
 
-	fields := logrus.Fields{
-		"hash":               w.actionDigest.Hash,
-		"pid":                pid,
-		"chain":              strings.Join(parts, " -> "),
-		"tail_pid":           cur,
-		"tail_name":          procName(cur),
-		"tail_state":         tailState,
-		"tail_state_comment": stateComment(tailState),
-		"tail_wchan":         readTrim(filepath.Join(procBase(cur), "wchan")),
-	}
+// formatProc creates formatted log line
+func formatProc(pid int) string {
+	state := procState(pid)
+	wchan := readTrim(filepath.Join(procBase(pid), "wchan"))
 
-	if childrenSummary != "" {
-		fields["children"] = childrenSummary
-	} else {
-		fields["children"] = "none"
-	}
-
-	logr.WithFields(fields).Debug("Deadline exceeded: process chain")
+	return fmt.Sprintf(
+		"%d:%s[%s - %s]{%s}",
+		pid,
+		procName(pid),
+		state,
+		stateComment(state),
+		wchan,
+	)
 }
 
 // procBase returns the /proc path for a pid
@@ -1188,10 +1187,9 @@ func childPIDs(pid int) []int {
 	if err != nil || len(b) == 0 {
 		return nil
 	}
-	out := make([]int, 0, 4)
+	var out []int
 	for _, s := range strings.Fields(string(b)) {
-		n, err := strconv.Atoi(s)
-		if err == nil && n > 0 {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
 			out = append(out, n)
 		}
 	}
@@ -1202,19 +1200,19 @@ func childPIDs(pid int) []int {
 func stateComment(s string) string {
 	switch s {
 	case "R":
-		return "running (executing on CPU)"
+		return "running"
 	case "S":
-		return "sleeping (waiting on event / lock / pipe)"
+		return "sleeping/waiting"
 	case "D":
-		return "uninterruptible sleep (kernel I/O or filesystem wait)"
+		return "io_wait"
 	case "I":
-		return "idle kernel thread (not doing work)"
+		return "idle"
 	case "T":
-		return "stopped (signal or debugger)"
+		return "stopped"
 	case "Z":
-		return "zombie (process exited but parent has not reaped it)"
+		return "zombie"
 	default:
-		return "unknown process state"
+		return "unknown"
 	}
 }
 
