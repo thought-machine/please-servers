@@ -1087,10 +1087,8 @@ func (w *worker) logProcChain(pid int) {
 		maxDepth = 6
 		maxNodes = 40
 	)
-
 	lines := make([]string, 0, maxNodes)
 	nodes := 0
-
 	var walk func(pid, depth int, path []string)
 	walk = func(pid, depth int, path []string) {
 		if depth > maxDepth || nodes >= maxNodes {
@@ -1106,7 +1104,6 @@ func (w *worker) logProcChain(pid int) {
 			nodes++
 			return
 		}
-
 		for _, c := range children {
 			if nodes >= maxNodes {
 				return
@@ -1114,6 +1111,7 @@ func (w *worker) logProcChain(pid int) {
 			walk(c, depth+1, path)
 		}
 	}
+
 	startDepth := 0
 	walk(pid, startDepth, nil)
 
