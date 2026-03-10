@@ -1037,21 +1037,29 @@ func (w *worker) logProcOnTimeout(pid int) {
 	const maxTargetLen = 256
 	p := strconv.Itoa(pid)
 	base := filepath.Join("/proc", p)
+	var errs []string
 
 	cmdlineBytes, err := os.ReadFile(filepath.Join(base, "cmdline"))
 	cmdline := ""
-	if err == nil && len(cmdlineBytes) > 0 {
+	if err != nil {
+		errs = append(errs, "cmdline")
+	} else if len(cmdlineBytes) > 0 {
 		cmdline = strings.TrimSpace(strings.ReplaceAll(string(cmdlineBytes), "\x00", " "))
 	}
 
 	wchanBytes, err := os.ReadFile(filepath.Join(base, "wchan"))
 	wchan := ""
-	if err == nil && len(wchanBytes) > 0 {
+	if err != nil {
+		errs = append(errs, "wchan")
+	} else if len(wchanBytes) > 0 {
 		wchan = strings.TrimSpace(string(wchanBytes))
 	}
 
 	var fds []string
-	if entries, err := os.ReadDir(filepath.Join(base, "fd")); err == nil {
+	entries, err := os.ReadDir(filepath.Join(base, "fd"))
+	if err != nil {
+		errs = append(errs, "fd")
+	} else {
 		for i, e := range entries {
 			if i >= maxFDs {
 				fds = append(fds, "...truncated")
@@ -1068,12 +1076,18 @@ func (w *worker) logProcOnTimeout(pid int) {
 		}
 	}
 
+	errSummary := ""
+	if len(errs) > 0 {
+		errSummary = strings.Join(errs, ",")
+	}
+
 	logr.WithFields(logrus.Fields{
-		"hash":    w.actionDigest.Hash,
-		"pid":     pid,
-		"cmdline": cmdline,
-		"wchan":   wchan,
-		"fds":     fds,
+		"hash":     w.actionDigest.Hash,
+		"pid":      pid,
+		"cmdline":  cmdline,
+		"wchan":    wchan,
+		"fds":      fds,
+		"proc_err": errSummary,
 	}).Debug("Deadline exceeded: /proc snapshot")
 }
 
@@ -1119,7 +1133,7 @@ func (w *worker) logProcChain(pid int) {
 		"hash": w.actionDigest.Hash,
 		"pid":  pid,
 		"tree": strings.Join(lines, "\n"),
-	}).Debug("Deadline exceeded: process tree")
+	}).Debug("Deadline exceeded: /proc process tree")
 }
 
 // formatProc creates formatted log line
