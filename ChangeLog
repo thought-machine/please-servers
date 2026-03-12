@@ -1,3 +1,7 @@
+Version 11.16.7
+---------------
+    * Improve runCommand timeout diagnostics with logProcChain() with child processes
+
 Version 11.16.6
 ---------------
     * Improve runCommand timeout diagnostics with logProcOnTimeout()

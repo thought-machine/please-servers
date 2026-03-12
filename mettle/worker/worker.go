@@ -976,6 +976,7 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		}
 		// # TODO(INFRA-130229): Revert this temporary change mettle timeouts investigations are completed
 		w.logProcOnTimeout(pid)
+		w.logProcChain(pid)
 	}(pid)
 
 	err := cmd.Wait()
@@ -1036,21 +1037,29 @@ func (w *worker) logProcOnTimeout(pid int) {
 	const maxTargetLen = 256
 	p := strconv.Itoa(pid)
 	base := filepath.Join("/proc", p)
+	var errs []error
 
 	cmdlineBytes, err := os.ReadFile(filepath.Join(base, "cmdline"))
 	cmdline := ""
-	if err == nil && len(cmdlineBytes) > 0 {
+	if err != nil {
+		errs = append(errs, fmt.Errorf("cmdline: %v", err))
+	} else if len(cmdlineBytes) > 0 {
 		cmdline = strings.TrimSpace(strings.ReplaceAll(string(cmdlineBytes), "\x00", " "))
 	}
 
 	wchanBytes, err := os.ReadFile(filepath.Join(base, "wchan"))
 	wchan := ""
-	if err == nil && len(wchanBytes) > 0 {
+	if err != nil {
+		errs = append(errs, fmt.Errorf("wchan: %v", err))
+	} else if len(wchanBytes) > 0 {
 		wchan = strings.TrimSpace(string(wchanBytes))
 	}
 
 	var fds []string
-	if entries, err := os.ReadDir(filepath.Join(base, "fd")); err == nil {
+	entries, err := os.ReadDir(filepath.Join(base, "fd"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("fd: %v", err))
+	} else {
 		for i, e := range entries {
 			if i >= maxFDs {
 				fds = append(fds, "...truncated")
@@ -1067,13 +1076,159 @@ func (w *worker) logProcOnTimeout(pid int) {
 		}
 	}
 
+	var errSummary string
+	if len(errs) > 0 {
+		s := make([]string, len(errs))
+		for i, e := range errs {
+			s[i] = e.Error()
+		}
+		errSummary = strings.Join(s, ", ")
+	}
+
 	logr.WithFields(logrus.Fields{
-		"hash":    w.actionDigest.Hash,
-		"pid":     pid,
-		"cmdline": cmdline,
-		"wchan":   wchan,
-		"fds":     fds,
+		"hash":     w.actionDigest.Hash,
+		"pid":      pid,
+		"cmdline":  cmdline,
+		"wchan":    wchan,
+		"fds":      fds,
+		"proc_err": errSummary,
 	}).Debug("Deadline exceeded: /proc snapshot")
+}
+
+// logProcTree logs a bounded process subtree starting from pid.
+// Example:
+//
+// 24877:bash[S - sleeping/waiting]{do_wait} -> 24890:test_binary[D - io_wait)]{tcp_recvmsg}
+// 24877:bash[S - sleeping/waiting]{do_wait} -> 24891:tee[S - sleeping/waitin]{pipe_read}
+func (w *worker) logProcChain(pid int) {
+	const (
+		maxDepth = 6
+		maxNodes = 40
+	)
+	lines := make([]string, 0, maxNodes)
+	nodes := 0
+	var walk func(pid, depth int, path []string)
+	walk = func(pid, depth int, path []string) {
+		if depth > maxDepth || nodes >= maxNodes {
+			return
+		}
+
+		current := formatProc(pid)
+		path = append(path, current)
+
+		children := childPIDs(pid)
+		if len(children) == 0 {
+			lines = append(lines, strings.Join(path, " -> "))
+			nodes++
+			return
+		}
+		for _, c := range children {
+			if nodes >= maxNodes {
+				return
+			}
+			walk(c, depth+1, path)
+		}
+	}
+
+	walk(pid, 0, nil)
+
+	logr.WithFields(logrus.Fields{
+		"hash": w.actionDigest.Hash,
+		"pid":  pid,
+		"tree": strings.Join(lines, "\n"),
+	}).Debug("Deadline exceeded: /proc process tree")
+}
+
+// formatProc creates formatted log line
+func formatProc(pid int) string {
+	state := procState(pid)
+	wchan := readTrim(filepath.Join(procBase(pid), "wchan"))
+
+	return fmt.Sprintf(
+		"%d:%s[%s - %s]{%s}",
+		pid,
+		procName(pid),
+		state,
+		stateComment(state),
+		wchan,
+	)
+}
+
+// procBase returns the /proc path for a pid
+func procBase(pid int) string {
+	return filepath.Join("/proc", strconv.Itoa(pid))
+}
+
+// readTrim reads a file and returns trimmed content, or "" on error/empty content
+func readTrim(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// procName returns the process name from /proc/<pid>/comm, or "?" if unavailable
+func procName(pid int) string {
+	name := readTrim(filepath.Join(procBase(pid), "comm"))
+	if name == "" {
+		return "?"
+	}
+	return name
+}
+
+// procState returns the Linux process state code from /proc/<pid>/status
+func procState(pid int) string {
+	b, err := os.ReadFile(filepath.Join(procBase(pid), "status"))
+	if err != nil {
+		return ""
+	}
+	for _, ln := range strings.Split(string(b), "\n") {
+		k, v, ok := strings.Cut(ln, ":")
+		if !ok || strings.TrimSpace(k) != "State" {
+			continue
+		}
+		if f := strings.Fields(strings.TrimSpace(v)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	return ""
+}
+
+// childPIDs returns direct children of pid from /proc/<pid>/task/<pid>/children
+func childPIDs(pid int) []int {
+	b, err := os.ReadFile(filepath.Join(procBase(pid), "task", strconv.Itoa(pid), "children"))
+	if err != nil || len(b) == 0 {
+		return nil
+	}
+	var out []int
+	for _, s := range strings.Fields(string(b)) {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// stateComment is a helper to translate tail_state code into text
+func stateComment(s string) string {
+	switch s {
+	case "R":
+		return "running"
+	case "S":
+		return "sleeping/waiting"
+	case "D":
+		return "io_wait"
+	case "I":
+		return "idle"
+	case "T":
+		return "stopped"
+	case "Z":
+		return "zombie"
+	default:
+		return "unknown"
+	}
 }
 
 // writeUncachedResult attempts to write an uncached action result proto.
