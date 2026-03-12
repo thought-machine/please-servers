@@ -1037,12 +1037,12 @@ func (w *worker) logProcOnTimeout(pid int) {
 	const maxTargetLen = 256
 	p := strconv.Itoa(pid)
 	base := filepath.Join("/proc", p)
-	var errs []string
+	var errs []error
 
 	cmdlineBytes, err := os.ReadFile(filepath.Join(base, "cmdline"))
 	cmdline := ""
 	if err != nil {
-		errs = append(errs, "cmdline")
+		errs = append(errs, fmt.Errorf("cmdline: %v", err))
 	} else if len(cmdlineBytes) > 0 {
 		cmdline = strings.TrimSpace(strings.ReplaceAll(string(cmdlineBytes), "\x00", " "))
 	}
@@ -1050,7 +1050,7 @@ func (w *worker) logProcOnTimeout(pid int) {
 	wchanBytes, err := os.ReadFile(filepath.Join(base, "wchan"))
 	wchan := ""
 	if err != nil {
-		errs = append(errs, "wchan")
+		errs = append(errs, fmt.Errorf("wchan: %v", err))
 	} else if len(wchanBytes) > 0 {
 		wchan = strings.TrimSpace(string(wchanBytes))
 	}
@@ -1058,7 +1058,7 @@ func (w *worker) logProcOnTimeout(pid int) {
 	var fds []string
 	entries, err := os.ReadDir(filepath.Join(base, "fd"))
 	if err != nil {
-		errs = append(errs, "fd")
+		errs = append(errs, fmt.Errorf("fd: %v", err))
 	} else {
 		for i, e := range entries {
 			if i >= maxFDs {
@@ -1076,9 +1076,13 @@ func (w *worker) logProcOnTimeout(pid int) {
 		}
 	}
 
-	errSummary := ""
+	var errSummary string
 	if len(errs) > 0 {
-		errSummary = strings.Join(errs, ",")
+		s := make([]string, len(errs))
+		for i, e := range errs {
+			s[i] = e.Error()
+		}
+		errSummary = strings.Join(s, ", ")
 	}
 
 	logr.WithFields(logrus.Fields{
@@ -1126,8 +1130,7 @@ func (w *worker) logProcChain(pid int) {
 		}
 	}
 
-	startDepth := 0
-	walk(pid, startDepth, nil)
+	walk(pid, 0, nil)
 
 	logr.WithFields(logrus.Fields{
 		"hash": w.actionDigest.Hash,
