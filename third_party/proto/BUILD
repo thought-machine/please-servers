@@ -1,5 +1,5 @@
 protoc_binary(
     name = "protoc",
-    version = "3.11.4",
+    version = "21.12",
     visibility = ["PUBLIC"],
 )
