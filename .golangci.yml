@@ -27,17 +27,29 @@ linters:
       - tests/
     rules:
       - text: SA1019  # Upstream packages seem not to be ready to update protobuf yet
+        linters: [staticcheck]
       - text: SA4006  # Too many false positives :(
+        linters: [staticcheck]
       - text: SA5008  # Warns for duplicate struct tags which are meaningful to go-flags
+        linters: [staticcheck]
       - text: unslice  # This may be useful in some places.
+        linters: [gocritic]
       - text: ifElseChain  # Generally don't agree.
+        linters: [gocritic]
       - text: indent-error-flow # Similar to above, seems to be making questionable choices
+        linters: [gocritic]
       - text: appendAssign
+        linters: [gocritic]
       - text: halp  # Make misspell be quiet about this.
+        linters: [misspell]
       - text: exitAfterDefer # Potentially useful but not in any cases it fires right now.
+        linters: [gocritic]
       - text: unused-parameter # Quite a few of these, some legit, many are fulfilling interfaces
+        linters: [gocritic]
       - text: redefines-builtin # Not really a big issue
+        linters: [gocritic]
       - text: empty-block # Only came up once and was a false positive. This should be easily handled by review.
+        linters: [gocritic]
       - path: _test\.go
         linters:
           - errcheck
