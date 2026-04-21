@@ -32,6 +32,8 @@ linters:
         linters: [staticcheck]
       - text: SA5008  # Warns for duplicate struct tags which are meaningful to go-flags
         linters: [staticcheck]
+      - text: QF1001|QF1003|ST1005  # Keep existing style debt suppressed for now.
+        linters: [staticcheck]
       - text: unslice  # This may be useful in some places.
         linters: [gocritic]
       - text: ifElseChain  # Generally don't agree.
@@ -50,6 +52,12 @@ linters:
         linters: [gocritic]
       - text: empty-block # Only came up once and was a false positive. This should be easily handled by review.
         linters: [gocritic]
+      - text: exported|unused-parameter|redefines-builtin-id|empty-block|indent-error-flow|package-comments
+        linters: [revive]
+      - text: Consider preallocating
+        linters: [prealloc]
+      - text: unnecessary conversion
+        linters: [unconvert]
       - path: _test\.go
         linters:
           - errcheck
