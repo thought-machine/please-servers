@@ -32,7 +32,6 @@ linters:
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
     - asciicheck
     - bodyclose
