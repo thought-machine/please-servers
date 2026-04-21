@@ -3,32 +3,9 @@ version: "2"
 run:
   timeout: 5m
 
-issues:
-  exclude:
-    - SA1019  # Upstream packages seem not to be ready to update protobuf yet
-    - SA4006  # Too many false positives :(
-    - SA5008  # Warns for duplicate struct tags which are meaningful to go-flags
-    - unslice  # This may be useful in some places.
-    - ifElseChain  # Generally don't agree.
-    - indent-error-flow # Similar to above, seems to be making questionable choices
-    - appendAssign
-    - halp  # Make misspell be quiet about this.
-    - exitAfterDefer # Potentially useful but not in any cases it fires right now.
-    - unused-parameter # Quite a few of these, some legit, many are fulfilling interfaces
-    - redefines-builtin # Not really a big issue
-    - empty-block # Only came up once and was a false positive. This should be easily handled by review.
-  exclude-dirs:
-    - plz-out/
-    - tests/
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - dupl
 linters:
-  disable-all: true
+  default: none
   enable:
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
@@ -39,14 +16,37 @@ linters:
     - dupl
     - copyloopvar
     - gocritic
-    - gofmt
     - revive
     - misspell
     - prealloc
     - unconvert
     - whitespace
+  exclusions:
+    paths:
+      - plz-out/
+      - tests/
+    rules:
+      - text: SA1019  # Upstream packages seem not to be ready to update protobuf yet
+      - text: SA4006  # Too many false positives :(
+      - text: SA5008  # Warns for duplicate struct tags which are meaningful to go-flags
+      - text: unslice  # This may be useful in some places.
+      - text: ifElseChain  # Generally don't agree.
+      - text: indent-error-flow # Similar to above, seems to be making questionable choices
+      - text: appendAssign
+      - text: halp  # Make misspell be quiet about this.
+      - text: exitAfterDefer # Potentially useful but not in any cases it fires right now.
+      - text: unused-parameter # Quite a few of these, some legit, many are fulfilling interfaces
+      - text: redefines-builtin # Not really a big issue
+      - text: empty-block # Only came up once and was a false positive. This should be easily handled by review.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - dupl
 
-    # To consider enabling in future (once we fix errors etc):
-    # - maligned
-    # - errcheck
-    # - scopelint
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - plz-out/
+      - tests/
