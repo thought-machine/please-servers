@@ -61,7 +61,7 @@ genrule(
     name = "test_data",
     cmd = [
         'for i in `seq 1 10000`; do echo "$i ----------------------------------------- $i" >> "tmp.txt"; done',
-        'HASH="`sha256sum tmp.txt | cut -c -64`"',
+        'HASH="`(command -v sha256sum >/dev/null 2>&1 && sha256sum tmp.txt || shasum -a 256 tmp.txt) | cut -c -64`"',
         'PREFIX="${HASH:0:2}"',
         'mkdir -p "data/cas/${PREFIX}" "data/zstd_cas/${PREFIX}"',
         'cat tmp.txt | "$TOOL" > "data/zstd_cas/${PREFIX}/${HASH}"',
