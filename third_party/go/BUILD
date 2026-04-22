@@ -770,6 +770,11 @@ go_repo(
 
 go_repo(
     module = "github.com/coreos/etcd",
+    strip = [
+        "build",
+        "contrib/systemd/etcd2-backup-coreos/build",
+        "functional/build",
+    ],
     version = "v3.3.13+incompatible",
 )
 
@@ -2855,6 +2860,7 @@ go_repo(
 
 go_repo(
     module = "github.com/coreos/go-iptables",
+    strip = ["build"],
     version = "v0.6.0",
 )
 
