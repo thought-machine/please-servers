@@ -1,6 +1,6 @@
 module github.com/thought-machine/please-servers
 
-go 1.22
+go 1.24
 
 require (
 	cloud.google.com/go/profiler v0.4.0

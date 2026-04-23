@@ -179,6 +179,7 @@ func createServer(storage string, parallelism int, maxDirCacheSize, maxKnownBlob
 		decompressor:   dec,
 		readRedis:      readRedis,
 		largeBlobSize:  largeBlobSize,
+		inflight:       newInflightWrites(),
 	}
 }
 
@@ -222,6 +223,7 @@ type server struct {
 	decompressor             *zstd.Decoder
 	readRedis                *redis.Client
 	largeBlobSize            int64
+	inflight                 *inflightWrites
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
@@ -549,6 +551,7 @@ func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 }
 
 func (s *server) readCompressed(ctx context.Context, prefix string, digest *pb.Digest, compressed bool, offset, limit int64) (io.ReadCloser, bool, error) {
+	s.inflight.waitForWrite(digest.Hash)
 	if prefix != "cas" {
 		if compressed {
 			return nil, false, fmt.Errorf("Attempted to do a compressed read for non-CAS prefix %s", prefix) // This is a programming error and shouldn't happen.
@@ -687,6 +690,7 @@ func (s *server) readAllBlobBatched(ctx context.Context, prefix string, digest *
 }
 
 func (s *server) readAllBlobCompressed(ctx context.Context, digest *pb.Digest, key string, batched, compressed bool) ([]byte, error) {
+	s.inflight.waitForWrite(digest.Hash)
 	if digest.SizeBytes > s.largeBlobSize {
 		s.limiter <- struct{}{}
 		defer func() { <-s.limiter }()
@@ -724,6 +728,8 @@ func (s *server) compressedKey(prefix string, digest *pb.Digest, compressed bool
 }
 
 func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest, r io.Reader, compressed bool) error {
+	_, done := s.inflight.startWrite(ctx, digest.Hash)
+	defer done()
 	key := s.compressedKey(prefix, digest, compressed)
 	if s.isEmpty(digest) || s.blobExists(ctx, prefix, digest, compressed, true) {
 		// Read and discard entire content; there is no need to update.
@@ -774,6 +780,8 @@ func (s *server) writeBlob(ctx context.Context, prefix string, digest *pb.Digest
 }
 
 func (s *server) writeAll(ctx context.Context, digest *pb.Digest, data []byte, compressed bool) error {
+	_, done := s.inflight.startWrite(ctx, digest.Hash)
+	defer done()
 	if digest.SizeBytes > s.largeBlobSize {
 		s.limiter <- struct{}{}
 		defer func() { <-s.limiter }()

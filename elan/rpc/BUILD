@@ -57,6 +57,15 @@ go_test(
     ],
 )
 
+go_test(
+    name = "inflight_test",
+    srcs = ["inflight_test.go"],
+    deps = [
+        ":rpc",
+        "///third_party/go/github.com_stretchr_testify//require",
+    ],
+)
+
 genrule(
     name = "test_data",
     cmd = [
