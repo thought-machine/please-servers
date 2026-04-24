@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	bs "google.golang.org/genproto/googleapis/bytestream"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
 	hpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -62,7 +63,7 @@ func ServeForever(opts grpcutil.Opts, casReplicator, assetReplicator, executorRe
 		pb.RegisterExecutionServer(s, srv)
 	}
 	ppb.RegisterGCServer(s, srv)
-	hpb.RegisterHealthServer(s, srv)
+	hpb.RegisterHealthServer(s, health.NewServer())
 	grpcutil.ServeForever(lis, s)
 }
 
@@ -71,23 +72,6 @@ type server struct {
 	replicator, assetReplicator, exeReplicator *trie.Replicator
 	bytestreamRe                               *regexp.Regexp
 	timeout                                    time.Duration
-}
-
-func (s *server) Check(context.Context, *hpb.HealthCheckRequest) (*hpb.HealthCheckResponse, error) {
-	for _, r := range []*trie.Replicator{s.replicator, s.assetReplicator, s.exeReplicator} {
-		if r != nil {
-			if err := r.Healthcheck(); err != nil {
-				log.Error("Failed healthcheck: %s", err)
-				return &hpb.HealthCheckResponse{Status: hpb.HealthCheckResponse_NOT_SERVING}, nil
-			}
-		}
-	}
-	log.Debug("Passed healthcheck, all ranges serving")
-	return &hpb.HealthCheckResponse{Status: hpb.HealthCheckResponse_SERVING}, nil
-}
-
-func (s *server) Watch(*hpb.HealthCheckRequest, hpb.Health_WatchServer) error {
-	return status.Errorf(codes.Unimplemented, "grpc_health_v1.Watch not implemented")
 }
 
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {

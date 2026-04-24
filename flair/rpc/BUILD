@@ -14,6 +14,7 @@ go_library(
         "///third_party/go/golang.org_x_sync//errgroup",
         "///third_party/go/google.golang.org_genproto_googleapis_bytestream//:bytestream",
         "///third_party/go/google.golang.org_grpc//codes",
+        "///third_party/go/google.golang.org_grpc//health",
         "///third_party/go/google.golang.org_grpc//health/grpc_health_v1",
         "///third_party/go/google.golang.org_grpc//metadata",
         "///third_party/go/google.golang.org_grpc//status",
