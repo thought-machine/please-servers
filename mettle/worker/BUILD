@@ -1,6 +1,9 @@
 go_library(
     name = "worker",
-    srcs = glob(["*.go"]),
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
     visibility = ["//mettle/..."],
     deps = [
         "///third_party/go/cloud.google.com_go_pubsub//apiv1",
@@ -41,5 +44,14 @@ go_library(
         "//rexclient",
         "//third_party/proto/cas",
         "//third_party/proto/resourceusage",
+    ],
+)
+
+go_test(
+    name = "worker_test",
+    srcs = glob(["*_test.go"]),
+    deps = [
+        ":worker",
+        "///third_party/go/github.com_stretchr_testify//assert",
     ],
 )
