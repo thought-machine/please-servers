@@ -96,10 +96,6 @@ func (s *healthServer) Check(context.Context, *hpb.HealthCheckRequest) (*hpb.Hea
 	return &hpb.HealthCheckResponse{Status: hpb.HealthCheckResponse_SERVING}, nil
 }
 
-func (s *healthServer) Watch(*hpb.HealthCheckRequest, hpb.Health_WatchServer) error {
-	return status.Errorf(codes.Unimplemented, "grpc_health_v1.Watch not implemented")
-}
-
 func (s *server) GetCapabilities(ctx context.Context, req *pb.GetCapabilitiesRequest) (*pb.ServerCapabilities, error) {
 	// This always does the same thing as Elan.
 	// We might consider upping some of the size limits though since it will multiplex batch requests so will be more
