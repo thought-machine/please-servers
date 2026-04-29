@@ -78,6 +78,9 @@ type server struct {
 	timeout                                    time.Duration
 }
 
+// healthServer is a separate struct (rather than embedding hpb.UnimplementedHealthServer into server)
+// because ppb.UnimplementedGCServer and hpb.UnimplementedHealthServer both define a List method with
+// different signatures, which would cause a compile-time conflict.
 type healthServer struct {
 	hpb.UnimplementedHealthServer
 	replicator, assetReplicator, exeReplicator *trie.Replicator
