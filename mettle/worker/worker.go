@@ -964,17 +964,6 @@ func (w *worker) runCommand(ctx context.Context, cmd *exec.Cmd, timeout time.Dur
 		return err
 	}
 
-	pid := cmd.Process.Pid
-
-	// make a snapshot of processes if context.DeadlineExceeded
-	go func(pid int) {
-		<-ctx.Done()
-		// early exit if no timeout
-		if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return
-		}
-	}(pid)
-
 	err := cmd.Wait()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
