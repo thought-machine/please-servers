@@ -1,7 +1,3 @@
-Version 11.16.9
----------------
-    * Rollback of commit that broke mettle deployment
-
 Version 11.16.8
 ---------------
     * This change removes the temporary logging that was added to help investigate the hanging processes.
