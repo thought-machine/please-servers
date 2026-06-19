@@ -1,6 +1,6 @@
 Version 11.16.9
 ---------------
-    * Rollback of commit that broke mettle deployment
+    * Apply defaultstatic = true to fix Mettle broken deployment
 
 Version 11.16.8
 ---------------
