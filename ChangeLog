@@ -1,3 +1,7 @@
+Version 11.16.9
+---------------
+    * Apply defaultstatic = true to fix Mettle broken deployment
+
 Version 11.16.8
 ---------------
     * This change removes the temporary logging that was added to help investigate the hanging processes.
