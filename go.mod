@@ -27,7 +27,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	github.com/thought-machine/http-admin v1.1.1
-	go.uber.org/automaxprocs v1.5.3
+	go.uber.org/automaxprocs v1.6.0
 	gocloud.dev v0.36.0
 	golang.org/x/crypto v0.46.0
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
