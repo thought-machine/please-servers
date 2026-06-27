@@ -16,15 +16,15 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.7
-	github.com/klauspost/compress v1.17.4
-	github.com/mostynb/go-grpc-compression v1.2.2
+	github.com/klauspost/compress v1.17.8
+	github.com/mostynb/go-grpc-compression v1.2.3
 	github.com/peterebden/go-cli-init/v4 v4.0.2
 	github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c
 	github.com/peterebden/go-sri v1.1.1
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/common v0.45.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	github.com/thought-machine/http-admin v1.1.1
 	go.uber.org/automaxprocs v1.5.3
@@ -38,7 +38,7 @@ require (
 	google.golang.org/genproto/googleapis/bytestream v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
 	google.golang.org/grpc v1.79.3
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 )
 
