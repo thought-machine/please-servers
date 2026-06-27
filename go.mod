@@ -32,7 +32,7 @@ require (
 	golang.org/x/crypto v0.53.0
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976
 	golang.org/x/sync v0.21.0
-	golang.org/x/time v0.5.0
+	golang.org/x/time v0.15.0
 	google.golang.org/api v0.155.0
 	google.golang.org/genproto v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/genproto/googleapis/bytestream v0.0.0-20240102182953-50ed04b92917
