@@ -1,6 +1,6 @@
 module github.com/thought-machine/please-servers
 
-go 1.24.0
+go 1.25.0
 
 require (
 	cloud.google.com/go/profiler v0.4.0
@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/storage v1.36.0
 	github.com/bazelbuild/remote-apis v0.0.0-20230411132548-35aee1c4a425
 	github.com/bazelbuild/remote-apis-sdks v0.0.0-20230419185642-269815af5db1
-	github.com/dgraph-io/ristretto v0.1.1
+	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/protobuf v1.5.4
@@ -16,29 +16,29 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.7
-	github.com/klauspost/compress v1.17.4
-	github.com/mostynb/go-grpc-compression v1.2.2
+	github.com/klauspost/compress v1.18.6
+	github.com/mostynb/go-grpc-compression v1.2.3
 	github.com/peterebden/go-cli-init/v4 v4.0.2
 	github.com/peterebden/go-copyfile v0.0.0-20200424115000-bc0baf74909c
 	github.com/peterebden/go-sri v1.1.1
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/common v0.45.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	github.com/thought-machine/http-admin v1.1.1
-	go.uber.org/automaxprocs v1.5.3
+	go.uber.org/automaxprocs v1.6.0
 	gocloud.dev v0.36.0
-	golang.org/x/crypto v0.46.0
-	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
-	golang.org/x/sync v0.19.0
-	golang.org/x/time v0.5.0
+	golang.org/x/crypto v0.53.0
+	golang.org/x/exp v0.0.0-20260611194520-c48552f49976
+	golang.org/x/sync v0.21.0
+	golang.org/x/time v0.15.0
 	google.golang.org/api v0.155.0
 	google.golang.org/genproto v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/genproto/googleapis/bytestream v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
 	google.golang.org/grpc v1.79.3
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 )
 
@@ -83,11 +83,11 @@ require (
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
