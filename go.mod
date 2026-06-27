@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/storage v1.36.0
 	github.com/bazelbuild/remote-apis v0.0.0-20230411132548-35aee1c4a425
 	github.com/bazelbuild/remote-apis-sdks v0.0.0-20230419185642-269815af5db1
-	github.com/dgraph-io/ristretto v0.1.1
+	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/protobuf v1.5.4
