@@ -3,5 +3,3 @@ plz-out
 .plzconfig.local
 .idea
 *.sw?
-
-*.pb.go
