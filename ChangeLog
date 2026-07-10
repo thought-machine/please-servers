@@ -1,3 +1,7 @@
+Version 11.17.0
+---------------
+    * Upgrade Go toolchain, packages and Please plugin
+
 Version 11.16.9
 ---------------
     * Apply defaultstatic = true to fix Mettle broken deployment

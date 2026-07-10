@@ -20,9 +20,9 @@ var bsClient bs.ByteStreamClient
 
 const (
 	// These are determined empirically from the generated test files.
-	hash  = "5201263d9a7365629360c09a9ab780a1c15f94aaf3b38874d41500df3e0be87f"
-	size  = 517788
-	ssize = "517788"
+	hash  = "2e2595aaffe0987a183d3ba9a3c5d81c79d29f3f6e2b2dd47e628d6bf9b12725"
+	size  = 5377790
+	ssize = "5377790"
 	name  = "blobs/" + hash + "/" + ssize
 	cname = "compressed-blobs/zstd/" + hash + "/" + ssize
 )

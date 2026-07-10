@@ -630,6 +630,14 @@ func (s *server) QueryWriteStatus(ctx context.Context, req *bs.QueryWriteStatusR
 	return nil, status.Errorf(codes.NotFound, "write %s not found", req.ResourceName)
 }
 
+func (s *server) SpliceBlob(ctx context.Context, req *pb.SpliceBlobRequest) (*pb.SpliceBlobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "not implemented")
+}
+
+func (s *server) SplitBlob(ctx context.Context, req *pb.SplitBlobRequest) (*pb.SplitBlobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "not implemented")
+}
+
 func (s *server) readBlob(ctx context.Context, key string, offset, length int64) (io.ReadCloser, error) {
 	if length == 0 || strings.Contains(key, digest.Empty.Hash) {
 		// Special case any empty read request
