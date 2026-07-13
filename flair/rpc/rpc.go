@@ -406,6 +406,14 @@ func (s *server) GetTree(req *pb.GetTreeRequest, srv pb.ContentAddressableStorag
 	return srv.Send(r)
 }
 
+func (s *server) SpliceBlob(ctx context.Context, req *pb.SpliceBlobRequest) (*pb.SpliceBlobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "not implemented")
+}
+
+func (s *server) SplitBlob(ctx context.Context, req *pb.SplitBlobRequest) (*pb.SplitBlobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "not implemented")
+}
+
 func (s *server) Read(req *bs.ReadRequest, srv bs.ByteStream_ReadServer) error {
 	hash, err := s.bytestreamBlobName(req.ResourceName)
 	if err != nil {
