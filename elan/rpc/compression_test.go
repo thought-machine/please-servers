@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -152,11 +151,11 @@ func testMain(m *testing.M) int {
 	bsClient = bs.NewByteStreamClient(conn)
 	defer conn.Close()
 
-	expectedData, err = ioutil.ReadFile(path.Join("elan/rpc/cas", hash[:2], hash))
+	expectedData, err = os.ReadFile(path.Join("elan/rpc/cas", hash[:2], hash))
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
-	compressedData, err = ioutil.ReadFile(path.Join("elan/rpc/zstd_cas", hash[:2], hash))
+	compressedData, err = os.ReadFile(path.Join("elan/rpc/zstd_cas", hash[:2], hash))
 	if err != nil {
 		log.Fatalf("%s", err)
 	}

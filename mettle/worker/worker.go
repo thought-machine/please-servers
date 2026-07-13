@@ -369,7 +369,7 @@ func initialiseWorker(instanceName, requestQueue, responseQueue, name, storage, 
 	}
 	// Load the version file if given
 	if versionFile != "" {
-		if b, err := ioutil.ReadFile(versionFile); err != nil {
+		if b, err := os.ReadFile(versionFile); err != nil {
 			log.Errorf("Failed to read version file: %s", err)
 		} else {
 			w.version = strings.TrimSpace(string(b))
@@ -712,7 +712,7 @@ func (w *worker) createTempDir() error {
 		}
 	}
 	log.Warning("Failed to create work dir: %s. Falling back to temp dir", err)
-	dir, err = ioutil.TempDir(w.rootDir, "mettle_")
+	dir, err = os.MkdirTemp(w.rootDir, "mettle_")
 	w.dir = dir
 	return err
 }
